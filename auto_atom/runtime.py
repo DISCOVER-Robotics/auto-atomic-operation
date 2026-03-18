@@ -1,0 +1,494 @@
+"""YAML-driven task runner built from primitive pose and end-effector controls."""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Protocol
+
+import yaml
+
+from .framework import (
+    AutoAtomConfig,
+    EefControlConfig,
+    Operation,
+    PoseControlConfig,
+    StageConfig,
+    StageControlConfig,
+    TaskFileConfig,
+)
+
+
+class BackendFactory(Protocol):
+    """Callable used to build a simulator backend from validated task file."""
+
+    def __call__(self, task_file: TaskFileConfig) -> "SimulatorBackend":
+        ...
+
+
+class StageExecutionStatus(str, Enum):
+    """High-level stage status returned to users."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class ControlSignal(str, Enum):
+    """Low-level controller signal returned by primitive operator commands."""
+
+    RUNNING = "running"
+    REACHED = "reached"
+    TIMED_OUT = "timed_out"
+    FAILED = "failed"
+
+
+@dataclass
+class ObjectHandler:
+    """Opaque object handle resolved by the simulator backend."""
+
+    name: str
+
+
+@dataclass
+class ControlResult:
+    """Incremental low-level control result."""
+
+    signal: ControlSignal
+    details: Dict[str, Any] = field(default_factory=dict)
+
+
+class OperatorHandler(ABC):
+    """Operator exposes only primitive pose and end-effector controls."""
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Operator name used by stage configs."""
+
+    @abstractmethod
+    def move_to_pose(
+        self,
+        pose: PoseControlConfig,
+        simulator: "SimulatorBackend",
+        target: Optional[ObjectHandler],
+    ) -> ControlResult:
+        """Advance motion toward the desired pose."""
+
+    @abstractmethod
+    def control_eef(
+        self,
+        eef: EefControlConfig,
+        simulator: "SimulatorBackend",
+    ) -> ControlResult:
+        """Advance the end-effector toward the desired state."""
+
+
+class SimulatorBackend(ABC):
+    """Abstract simulator backend used by the task runner."""
+
+    @abstractmethod
+    def setup(self, config: AutoAtomConfig) -> None:
+        """Prepare backend resources for this task."""
+
+    @abstractmethod
+    def reset(self) -> None:
+        """Reset simulator state for a new run."""
+
+    @abstractmethod
+    def teardown(self) -> None:
+        """Release backend resources after execution."""
+
+    @abstractmethod
+    def get_operator_handler(self, name: str) -> OperatorHandler:
+        """Resolve an operator handler by name."""
+
+    @abstractmethod
+    def get_object_handler(self, name: str) -> Optional[ObjectHandler]:
+        """Resolve an object handler by name. Empty names may return None."""
+
+
+@dataclass
+class PrimitiveAction:
+    """Single primitive control action derived from a stage."""
+
+    kind: str
+    pose: Optional[PoseControlConfig] = None
+    eef: Optional[EefControlConfig] = None
+
+
+@dataclass
+class ExecutionRecord:
+    """Final record for one completed or failed stage."""
+
+    stage_index: int
+    stage_name: str
+    operator: str
+    operation: str
+    target_object: str
+    blocking: bool
+    status: StageExecutionStatus
+    details: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ExecutionContext:
+    """Mutable runtime context shared across the task lifecycle."""
+
+    config: AutoAtomConfig
+    backend: SimulatorBackend
+    task_file: TaskFileConfig
+
+
+@dataclass
+class StageExecutionPlan:
+    """Validated executable stage plan."""
+
+    stage_index: int
+    stage: StageConfig
+    operator_name: str
+
+    @property
+    def stage_name(self) -> str:
+        return self.stage.name or f"stage_{self.stage_index}"
+
+
+@dataclass
+class TaskUpdate:
+    """User-facing task progress returned by ``TaskRunner.update``."""
+
+    stage_index: Optional[int]
+    stage_name: str
+    status: StageExecutionStatus
+    done: bool
+    success: Optional[bool]
+    details: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ActiveStageState:
+    """Internal state for the currently active stage."""
+
+    plan: StageExecutionPlan
+    operator: OperatorHandler
+    target: Optional[ObjectHandler]
+    actions: List[PrimitiveAction]
+    action_index: int = 0
+
+
+class ComponentRegistry:
+    """Registry mapping simulator names to backend factories."""
+
+    def __init__(self) -> None:
+        self._backend_factories: Dict[str, BackendFactory] = {}
+
+    def register_backend(self, name: str, factory: BackendFactory) -> None:
+        self._backend_factories[name] = factory
+
+    def create_backend(self, task_file: TaskFileConfig) -> SimulatorBackend:
+        try:
+            factory = self._backend_factories[task_file.task.simulator]
+        except KeyError as exc:
+            known = ", ".join(sorted(self._backend_factories)) or "<empty>"
+            raise KeyError(
+                f"Simulator backend '{task_file.task.simulator}' is not registered. "
+                f"Available backends: {known}"
+            ) from exc
+        return factory(task_file)
+
+
+class TaskFlowBuilder:
+    """Build stage plans and primitive action lists from validated config."""
+
+    def build(self, context: ExecutionContext) -> List[StageExecutionPlan]:
+        plans: List[StageExecutionPlan] = []
+        for index, stage in enumerate(context.config.stages):
+            operator_name = self._select_operator(stage, context.backend)
+            self.build_actions(stage)
+            plans.append(
+                StageExecutionPlan(
+                    stage_index=index,
+                    stage=stage,
+                    operator_name=operator_name,
+                )
+            )
+        return plans
+
+    @staticmethod
+    def _select_operator(stage: StageConfig, backend: SimulatorBackend) -> str:
+        if not stage.operator:
+            raise ValueError("Stage did not specify an operator.")
+        backend.get_operator_handler(stage.operator)
+        return stage.operator
+
+    @staticmethod
+    def build_actions(stage: StageConfig) -> List[PrimitiveAction]:
+        control = TaskFlowBuilder._normalize_control(stage)
+        if stage.operation in {Operation.MOVE, Operation.PUSH}:
+            return [PrimitiveAction(kind="pose", pose=TaskFlowBuilder._require_pose(stage, control))]
+        if stage.operation == Operation.GRASP:
+            return [PrimitiveAction(kind="eef", eef=TaskFlowBuilder._grasp_eef(control))]
+        if stage.operation == Operation.RELEASE:
+            return [PrimitiveAction(kind="eef", eef=TaskFlowBuilder._release_eef(control))]
+        if stage.operation in {Operation.PICK, Operation.PULL}:
+            return [
+                PrimitiveAction(kind="pose", pose=TaskFlowBuilder._require_pose(stage, control)),
+                PrimitiveAction(kind="eef", eef=TaskFlowBuilder._grasp_eef(control)),
+            ]
+        if stage.operation == Operation.PLACE:
+            return [
+                PrimitiveAction(kind="pose", pose=TaskFlowBuilder._require_pose(stage, control)),
+                PrimitiveAction(kind="eef", eef=TaskFlowBuilder._release_eef(control)),
+            ]
+        raise NotImplementedError(f"Unsupported operation '{stage.operation.value}'.")
+
+    @staticmethod
+    def _normalize_control(stage: StageConfig) -> StageControlConfig:
+        if isinstance(stage.param, StageControlConfig):
+            return stage.param
+        if isinstance(stage.param, PoseControlConfig):
+            return StageControlConfig(pose=stage.param)
+        if isinstance(stage.param, EefControlConfig):
+            return StageControlConfig(eef=stage.param)
+        raise TypeError(
+            f"Stage '{stage.name or stage.operation.value}' has unsupported param type "
+            f"'{type(stage.param).__name__}'."
+        )
+
+    @staticmethod
+    def _require_pose(stage: StageConfig, control: StageControlConfig) -> PoseControlConfig:
+        if control.pose is None:
+            raise ValueError(f"Stage '{stage.name or stage.operation.value}' requires a pose target.")
+        return control.pose
+
+    @staticmethod
+    def _grasp_eef(control: StageControlConfig) -> EefControlConfig:
+        return control.eef or EefControlConfig(close=True)
+
+    @staticmethod
+    def _release_eef(control: StageControlConfig) -> EefControlConfig:
+        return control.eef or EefControlConfig(close=False)
+
+
+class TaskRunner:
+    """Stateful task executor controlled by ``reset`` and repeated ``update`` calls."""
+
+    def __init__(
+        self,
+        registry: ComponentRegistry,
+        builder: Optional[TaskFlowBuilder] = None,
+    ) -> None:
+        self.registry = registry
+        self.builder = builder or TaskFlowBuilder()
+        self._context: Optional[ExecutionContext] = None
+        self._plan: List[StageExecutionPlan] = []
+        self._active_stage: Optional[ActiveStageState] = None
+        self._stage_index = 0
+        self._records: List[ExecutionRecord] = []
+
+    @property
+    def records(self) -> List[ExecutionRecord]:
+        return list(self._records)
+
+    def from_yaml(self, path: str | Path) -> "TaskRunner":
+        task_file = load_task_file(path)
+        backend = self.registry.create_backend(task_file)
+        self._context = ExecutionContext(
+            config=task_file.task,
+            backend=backend,
+            task_file=task_file,
+        )
+        self._plan = self.builder.build(self._context)
+        self._context.backend.setup(self._context.config)
+        self._stage_index = 0
+        self._active_stage = None
+        self._records = []
+        return self
+
+    def reset(self) -> TaskUpdate:
+        context = self._require_context()
+        context.backend.reset()
+        self._stage_index = 0
+        self._active_stage = None
+        self._records = []
+        return self._build_pending_update()
+
+    def update(self) -> TaskUpdate:
+        context = self._require_context()
+        if self._stage_index >= len(self._plan):
+            return TaskUpdate(
+                stage_index=None,
+                stage_name="",
+                status=StageExecutionStatus.SUCCEEDED,
+                done=True,
+                success=True,
+            )
+
+        if self._active_stage is None:
+            self._active_stage = self._start_stage(context, self._plan[self._stage_index])
+
+        active = self._active_stage
+        action = active.actions[active.action_index]
+        result = self._run_action(active.operator, action, context.backend, active.target)
+        details = {
+            "action": action.kind,
+            "action_index": active.action_index,
+            **result.details,
+        }
+
+        if result.signal == ControlSignal.RUNNING:
+            return self._build_update(
+                plan=active.plan,
+                status=StageExecutionStatus.RUNNING,
+                details=details,
+                done=False,
+                success=None,
+            )
+
+        if result.signal == ControlSignal.REACHED:
+            active.action_index += 1
+            if active.action_index < len(active.actions):
+                return self._build_update(
+                    plan=active.plan,
+                    status=StageExecutionStatus.RUNNING,
+                    details=details,
+                    done=False,
+                    success=None,
+                )
+            self._records.append(
+                ExecutionRecord(
+                    stage_index=active.plan.stage_index,
+                    stage_name=active.plan.stage_name,
+                    operator=active.operator.name,
+                    operation=active.plan.stage.operation.value,
+                    target_object=active.plan.stage.object,
+                    blocking=active.plan.stage.blocking,
+                    status=StageExecutionStatus.SUCCEEDED,
+                    details=details,
+                )
+            )
+            self._stage_index += 1
+            self._active_stage = None
+            return self._build_update(
+                plan=active.plan,
+                status=StageExecutionStatus.SUCCEEDED,
+                details=details,
+                done=self._stage_index >= len(self._plan),
+                success=True if self._stage_index >= len(self._plan) else None,
+            )
+
+        self._records.append(
+            ExecutionRecord(
+                stage_index=active.plan.stage_index,
+                stage_name=active.plan.stage_name,
+                operator=active.operator.name,
+                operation=active.plan.stage.operation.value,
+                target_object=active.plan.stage.object,
+                blocking=active.plan.stage.blocking,
+                status=StageExecutionStatus.FAILED,
+                details=details,
+            )
+        )
+        self._active_stage = None
+        return self._build_update(
+            plan=active.plan,
+            status=StageExecutionStatus.FAILED,
+            details=details,
+            done=True,
+            success=False,
+        )
+
+    def close(self) -> None:
+        if self._context is None:
+            return
+        self._context.backend.teardown()
+        self._context = None
+        self._plan = []
+        self._active_stage = None
+
+    def _start_stage(
+        self,
+        context: ExecutionContext,
+        plan: StageExecutionPlan,
+    ) -> ActiveStageState:
+        operator = context.backend.get_operator_handler(plan.operator_name)
+        target = context.backend.get_object_handler(plan.stage.object)
+        return ActiveStageState(
+            plan=plan,
+            operator=operator,
+            target=target,
+            actions=self.builder.build_actions(plan.stage),
+        )
+
+    @staticmethod
+    def _run_action(
+        operator: OperatorHandler,
+        action: PrimitiveAction,
+        backend: SimulatorBackend,
+        target: Optional[ObjectHandler],
+    ) -> ControlResult:
+        if action.kind == "pose" and action.pose is not None:
+            return operator.move_to_pose(action.pose, backend, target)
+        if action.kind == "eef" and action.eef is not None:
+            return operator.control_eef(action.eef, backend)
+        raise RuntimeError(f"Invalid primitive action '{action.kind}'.")
+
+    def _build_pending_update(self) -> TaskUpdate:
+        if not self._plan:
+            return TaskUpdate(
+                stage_index=None,
+                stage_name="",
+                status=StageExecutionStatus.SUCCEEDED,
+                done=True,
+                success=True,
+            )
+        return self._build_update(
+            plan=self._plan[self._stage_index],
+            status=StageExecutionStatus.PENDING,
+            details={},
+            done=False,
+            success=None,
+        )
+
+    @staticmethod
+    def _build_update(
+        plan: StageExecutionPlan,
+        status: StageExecutionStatus,
+        details: Dict[str, Any],
+        done: bool,
+        success: Optional[bool],
+    ) -> TaskUpdate:
+        return TaskUpdate(
+            stage_index=plan.stage_index,
+            stage_name=plan.stage_name,
+            status=status,
+            done=done,
+            success=success,
+            details=details,
+        )
+
+    def _require_context(self) -> ExecutionContext:
+        if self._context is None:
+            raise RuntimeError("TaskRunner is not initialized. Call from_yaml() first.")
+        return self._context
+
+
+def load_yaml(path: str | Path) -> Dict[str, Any]:
+    yaml_path = Path(path)
+    with yaml_path.open("r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle) or {}
+    if not isinstance(data, dict):
+        raise TypeError(f"YAML root must be a mapping: {yaml_path}")
+    return data
+
+
+def load_config(path: str | Path) -> AutoAtomConfig:
+    return load_task_file(path).task
+
+
+def load_task_file(path: str | Path) -> TaskFileConfig:
+    raw = load_yaml(path)
+    return TaskFileConfig.model_validate(raw)
