@@ -651,13 +651,8 @@ class UnifiedMujocoEnv:
 
     def get_info(self) -> dict[str, Any]:
         mujoco.mj_forward(self.model, self.data)
-        info: dict[str, Any] = {
-            "model_path": str(self.config.model_path),
-            "arm_mode": self.config.arm_mode,
-            "enabled_sensors": [s.value for s in self.config.enabled_sensors],
-            "cameras": {},
-        }
-
+        info: dict[str, Any] = self.config.model_dump(mode="json", exclude={"cameras"})
+        info["cameras"] = {}
         for cam_name, cam_id in self._camera_ids.items():
             spec = self._camera_specs[cam_name]
             fovy_deg = float(self.model.cam_fovy[cam_id])
