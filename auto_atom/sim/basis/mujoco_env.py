@@ -367,6 +367,23 @@ class UnifiedMujocoEnv:
         quat = self._rotmat_to_quat_xyzw(self.data.site_xmat[site_id])
         return pos, quat
 
+    def get_body_pose(self, body_name: str) -> tuple[np.ndarray, np.ndarray]:
+        body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, body_name)
+        if body_id < 0:
+            raise ValueError(f"Body '{body_name}' not found in the Mujoco model.")
+        pos = np.asarray(self.data.xpos[body_id], dtype=np.float32)
+        quat_wxyz = np.asarray(self.data.xquat[body_id], dtype=np.float32)
+        quat_xyzw = self._mujoco_quat_wxyz_to_xyzw(quat_wxyz)
+        return pos, quat_xyzw
+
+    def get_site_pose(self, site_name: str) -> tuple[np.ndarray, np.ndarray]:
+        site_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE, site_name)
+        if site_id < 0:
+            raise ValueError(f"Site '{site_name}' not found in the Mujoco model.")
+        pos = np.asarray(self.data.site_xpos[site_id], dtype=np.float32)
+        quat = self._rotmat_to_quat_xyzw(self.data.site_xmat[site_id])
+        return pos, quat
+
     def _quats_equivalent_xyzw(
         self, quat_a: np.ndarray, quat_b: np.ndarray, atol: float = 1e-5
     ) -> bool:

@@ -1,0 +1,67 @@
+task:
+  env_path: third_party/xml/scene_pick_place_demo.xml
+  simulator: mujoco
+  seed: 0
+  stages:
+    - name: move_above_source
+      object: source_block
+      operation: move
+      operator: arm
+      param:
+        pose:
+          position: [0.0, 0.0, 0.12]
+          orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+          reference: object_world
+    - name: pick_source
+      object: source_block
+      operation: pick
+      operator: arm
+      param:
+        pose:
+          position: [0.0, 0.0, 0.006]
+          orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+          reference: object_world
+        eef:
+          close: true
+    - name: lift_source
+      object: ""
+      operation: move
+      operator: arm
+      param:
+        pose:
+          position: [1.0, -5.6, 0.98]
+          orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+          reference: world
+    - name: move_above_target
+      object: target_pedestal
+      operation: move
+      operator: arm
+      param:
+        pose:
+          position: [0.0, 0.0, 0.12]
+          orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+          reference: object_world
+    - name: place_source
+      object: target_pedestal
+      operation: place
+      operator: arm
+      param:
+        pose:
+          position: [0.0, 0.0, 0.058]
+          orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+          reference: object_world
+        eef:
+          close: false
+    - name: retreat
+      object: target_pedestal
+      operation: move
+      operator: arm
+      param:
+        pose:
+          position: [0.0, 0.0, 0.16]
+          orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+          reference: object_world
+
+operators:
+  - type: mujoco
+    name: arm

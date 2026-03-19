@@ -10,6 +10,7 @@ import numpy as np
 from ..framework import Orientation, PoseControlConfig, Position, Rotation
 from .transformations import (
     concatenate_matrices,
+    euler_from_matrix,
     quaternion_from_euler,
     quaternion_inverse,
     quaternion_matrix,
@@ -64,6 +65,13 @@ def euler_to_quaternion(rotation: Rotation) -> Orientation:
     """Convert rpy Euler angles to a normalized xyzw quaternion."""
     quat = quaternion_from_euler(*rotation, axes="sxyz")
     return normalize_quaternion(tuple(float(v) for v in quat))
+
+
+def quaternion_to_rpy(quat: Orientation) -> Rotation:
+    """Convert an xyzw quaternion to rpy Euler angles."""
+    matrix = quaternion_matrix(normalize_quaternion(quat))
+    rpy = euler_from_matrix(matrix, axes="sxyz")
+    return tuple(float(v) for v in rpy)
 
 
 def rotate_vector(quat: Orientation, vec: Tuple[float, float, float]) -> Position:
