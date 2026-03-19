@@ -25,8 +25,8 @@ def main():
             cameras=[
                 CameraSpec(
                     name="hand_cam",
-                    width=128,
-                    height=96,
+                    width=1280,
+                    height=720,
                     enable_color=False,
                     enable_depth=False,
                     enable_mask=True,
@@ -58,10 +58,10 @@ def main():
         print("channel_sum:", channel_sum.tolist())
         print("tactile:", obs["arm_eef_left/tactile/point_cloud2"]["data"].keys())
 
-        assert mask.shape == (96, 128)
+        assert mask.shape == (720, 1280)
         assert mask.dtype == np.uint8
         assert int(mask.sum()) > 0
-        assert heat_map.shape == (96, 128, len(env.config.operations))
+        assert heat_map.shape == (720, 1280, len(env.config.operations))
         assert heat_map.dtype == np.uint8
         assert channel_sum[0] > 0, "floor_1_room_main should activate the grasp channel"
         assert channel_sum[2] > 0, "left_follower should activate the place channel"

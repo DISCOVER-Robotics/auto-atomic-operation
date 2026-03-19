@@ -84,6 +84,12 @@ class UnifiedMujocoEnv:
 
         if DataType.CAMERA in config.enabled_sensors:
             logger.info(f"Setting up cameras: {list(self._camera_specs.keys())}")
+            max_w = max((s.width for s in config.cameras), default=0)
+            max_h = max((s.height for s in config.cameras), default=0)
+            if max_w > self.model.vis.global_.offwidth:
+                self.model.vis.global_.offwidth = max_w
+            if max_h > self.model.vis.global_.offheight:
+                self.model.vis.global_.offheight = max_h
             for name, spec in self._camera_specs.items():
                 cam_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, name)
                 if cam_id < 0:
