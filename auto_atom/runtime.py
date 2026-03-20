@@ -259,6 +259,10 @@ class ComponentRegistry:
             ) from exc
 
     @classmethod
+    def has_env(cls, name: str) -> bool:
+        return name in cls._env_instances
+
+    @classmethod
     def clear(cls) -> None:
         cls._env_instances.clear()
 
@@ -725,7 +729,10 @@ class TaskRunner:
         target: Optional[ObjectHandler],
     ) -> ControlResult:
         if action.kind == "pose" and action.pose is not None:
-            if action.pose.reference == PoseReference.EEF_WORLD and action.resolved_pose is not None:
+            if (
+                action.pose.reference == PoseReference.EEF_WORLD
+                and action.resolved_pose is not None
+            ):
                 resolved_pose = action.resolved_pose
             else:
                 resolved_pose = TaskRunner._resolve_pose_command(

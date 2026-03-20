@@ -8,6 +8,15 @@ from auto_atom.sim.basis.mujoco_env import (
 
 
 def main():
+    cam_spec = CameraSpec(
+        name="hand_cam",
+        width=1280,
+        height=720,
+        enable_color=False,
+        enable_depth=False,
+        enable_mask=True,
+        enable_heat_map=True,
+    )
     env = UnifiedMujocoEnv(
         EnvConfig(
             model_path="third_party/xml/scene_pick_place_demo.xml",
@@ -22,15 +31,9 @@ def main():
                 # DataType.IMU
             ],
             cameras=[
-                CameraSpec(
-                    name="hand_cam",
-                    width=1280,
-                    height=720,
-                    enable_color=False,
-                    enable_depth=False,
-                    enable_mask=True,
-                    enable_heat_map=True,
-                )
+                cam_spec,
+                cam_spec.model_copy(update={"name": "front_cam"}),
+                cam_spec.model_copy(update={"name": "side_cam"}),
             ],
             mask_objects=["source_block", "target_pedestal"],
             operations=["pick", "place", "push", "pull", "press"],
