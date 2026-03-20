@@ -8,13 +8,19 @@ from typing import Any, Dict, List, Optional
 import mujoco
 import numpy as np
 
-from ...framework import AutoAtomConfig, EefControlConfig, OperatorConfig, PoseControlConfig
+from ...framework import (
+    AutoAtomConfig,
+    EefControlConfig,
+    OperatorConfig,
+    PoseControlConfig,
+)
 from ...runtime import (
     ComponentRegistry,
     ControlResult,
     ControlSignal,
     ObjectHandler,
     OperatorHandler,
+    PoseRandomRange,
     SimulatorBackend,
 )
 from ...utils.pose import PoseState, compose_pose, inverse_pose, quaternion_to_rpy
@@ -34,7 +40,33 @@ class MujocoObjectHandler(ObjectHandler):
 
     def get_pose(self) -> PoseState:
         pos, quat = self.env.get_body_pose(self.body_name)
-        return PoseState(position=tuple(float(v) for v in pos), orientation=tuple(float(v) for v in quat))
+        return PoseState(
+            position=tuple(float(v) for v in pos),
+            orientation=tuple(float(v) for v in quat),
+        )
+
+    def set_pose(self, pose: PoseState) -> None:
+        """Force-set the object world pose via its free joint.
+
+        No-op when the object has no free joint (i.e. it is a static body).
+        After writing qpos the method calls ``mj_forward`` so that derived
+        quantities (xpos, xquat, …) are immediately consistent.
+        """
+        if self.freejoint_name is None:
+            return
+        jid = mujoco.mj_name2id(
+            self.env.model, mujoco.mjtObj.mjOBJ_JOINT, self.freejoint_name
+        )
+        if jid < 0:
+            return
+        qpos_adr = int(self.env.model.jnt_qposadr[jid])
+        dof_adr = int(self.env.model.jnt_dofadr[jid])
+        x, y, z = pose.position
+        qx, qy, qz, qw = pose.orientation  # xyzw → mujoco wxyz
+        self.env.data.qpos[qpos_adr : qpos_adr + 7] = [x, y, z, qw, qx, qy, qz]
+        self.env.data.qvel[dof_adr : dof_adr + 6] = 0.0
+        mujoco.mj_forward(self.env.model, self.env.data)
+
 
 @dataclass
 class MujocoOperatorHandler(OperatorHandler):
@@ -72,7 +104,11 @@ class MujocoOperatorHandler(OperatorHandler):
     """The number of simulation steps consumed by the active pose command."""
     _eef_steps: int = 0
     """The number of simulation steps consumed by the active eef command."""
-    _home_ctrl: np.ndarray = field(default_factory=lambda: np.asarray([0.0, -0.25, 0.35, 0.0, 0.0, 0.0, 0.0], dtype=np.float64))
+    _home_ctrl: np.ndarray = field(
+        default_factory=lambda: np.asarray(
+            [0.0, -0.25, 0.35, 0.0, 0.0, 0.0, 0.0], dtype=np.float64
+        )
+    )
     """The nominal home control vector used to settle the operator at reset time."""
 
     @property
@@ -95,8 +131,12 @@ class MujocoOperatorHandler(OperatorHandler):
         if isinstance(target, MujocoObjectHandler):
             self._last_target = target
 
-        desired_eef_pose = PoseState(position=pose.position, orientation=pose.orientation)
-        desired_base_pose = compose_pose(desired_eef_pose, inverse_pose(self._tool_pose_in_base))
+        desired_eef_pose = PoseState(
+            position=pose.position, orientation=pose.orientation
+        )
+        desired_base_pose = compose_pose(
+            desired_eef_pose, inverse_pose(self._tool_pose_in_base)
+        )
         roll, pitch, yaw = quaternion_to_rpy(desired_base_pose.orientation)
 
         ctrl = np.asarray(self.env.data.ctrl, dtype=np.float64).copy()
@@ -116,20 +156,36 @@ class MujocoOperatorHandler(OperatorHandler):
         self._move_steps += 1
 
         current_pose = self.get_end_effector_pose(simulator)
-        pos_error = float(np.linalg.norm(np.asarray(current_pose.position) - np.asarray(pose.position)))
-        quat_dot = abs(float(np.dot(np.asarray(current_pose.orientation), np.asarray(pose.orientation))))
+        pos_error = float(
+            np.linalg.norm(
+                np.asarray(current_pose.position) - np.asarray(pose.position)
+            )
+        )
+        quat_dot = abs(
+            float(
+                np.dot(
+                    np.asarray(current_pose.orientation), np.asarray(pose.orientation)
+                )
+            )
+        )
         quat_dot = min(1.0, max(-1.0, quat_dot))
         ori_error = 2.0 * np.arccos(quat_dot)
 
         details = {
-            "event": "moving" if pos_error > self.position_tolerance or ori_error > self.orientation_tolerance else "pose_reached",
+            "event": "moving"
+            if pos_error > self.position_tolerance
+            or ori_error > self.orientation_tolerance
+            else "pose_reached",
             "operator": self.name,
             "target": target.name if target else "",
             "pose": pose.model_dump(mode="json"),
             "position_error": pos_error,
             "orientation_error": float(ori_error),
         }
-        if pos_error <= self.position_tolerance and ori_error <= self.orientation_tolerance:
+        if (
+            pos_error <= self.position_tolerance
+            and ori_error <= self.orientation_tolerance
+        ):
             return ControlResult(signal=ControlSignal.REACHED, details=details)
         if self._move_steps >= self.command_timeout_steps:
             details["event"] = "move_timeout"
@@ -191,11 +247,17 @@ class MujocoOperatorHandler(OperatorHandler):
 
     def get_end_effector_pose(self, simulator: SimulatorBackend) -> PoseState:
         pos, quat = self.env.get_site_pose(self.eef_site_name)
-        return PoseState(position=tuple(float(v) for v in pos), orientation=tuple(float(v) for v in quat))
+        return PoseState(
+            position=tuple(float(v) for v in pos),
+            orientation=tuple(float(v) for v in quat),
+        )
 
     def get_base_pose(self, simulator: SimulatorBackend) -> PoseState:
         pos, quat = self.env.get_body_pose(self.root_body_name)
-        return PoseState(position=tuple(float(v) for v in pos), orientation=tuple(float(v) for v in quat))
+        return PoseState(
+            position=tuple(float(v) for v in pos),
+            orientation=tuple(float(v) for v in quat),
+        )
 
     def reset_state(self) -> None:
         self._last_move_key = None
@@ -227,6 +289,47 @@ class MujocoOperatorHandler(OperatorHandler):
             self.env.data.qvel[all_vidx] = 0.0
         mujoco.mj_forward(self.env.model, self.env.data)
 
+    def set_pose(self, pose: PoseState) -> None:
+        """Force-set the operator base world pose in one step.
+
+        Writes the desired position and orientation directly into both the
+        control vector and the corresponding qpos entries, zeros velocities,
+        and calls ``mj_forward`` so the simulation state is immediately
+        consistent.  The controller state is reset so the next ``move_to_pose``
+        call starts fresh.
+
+        ``pose`` is interpreted as the desired **base-body** world pose, which
+        is the same frame returned by ``get_base_pose``.
+        """
+        roll, pitch, yaw = quaternion_to_rpy(pose.orientation)
+        arm_qidx, _, arm_vidx, eef_vidx, arm_aidx, _ = (
+            self.env._split_component_joint_state_indices(self.component)
+        )
+        n = min(len(self._home_ctrl), self.env.model.nu)
+        new_ctrl = np.asarray(self.env.data.ctrl, dtype=np.float64).copy()
+        # ctrl layout: [x, y, z, yaw, pitch, roll, gripper, ...]
+        target = np.asarray(
+            [pose.position[0], pose.position[1], pose.position[2], yaw, pitch, roll],
+            dtype=np.float64,
+        )
+        n_arm = min(len(arm_aidx), len(target))
+        for i in range(n_arm):
+            aidx = int(arm_aidx[i])
+            if aidx < n:
+                new_ctrl[aidx] = target[i]
+        low = self.env.model.actuator_ctrlrange[:n, 0]
+        high = self.env.model.actuator_ctrlrange[:n, 1]
+        new_ctrl[:n] = np.clip(new_ctrl[:n], low, high)
+        self.env.data.ctrl[:n] = new_ctrl[:n]
+        for i, aidx in enumerate(arm_aidx):
+            if i < len(arm_qidx) and int(aidx) < n:
+                self.env.data.qpos[arm_qidx[i]] = new_ctrl[int(aidx)]
+        all_vidx = np.concatenate([arm_vidx, eef_vidx])
+        if len(all_vidx) > 0:
+            self.env.data.qvel[all_vidx] = 0.0
+        mujoco.mj_forward(self.env.model, self.env.data)
+        self.reset_state()
+
     def _compute_tool_pose_in_base(self) -> PoseState:
         base_pose = self.get_base_pose(None)  # type: ignore[arg-type]
         eef_pose = self.get_end_effector_pose(None)  # type: ignore[arg-type]
@@ -248,15 +351,36 @@ class MujocoTaskBackend(SimulatorBackend):
     """The operator handlers available to execute task stages."""
     object_handlers: Dict[str, MujocoObjectHandler]
     """The object handlers available for stage target lookup and state queries."""
+    randomization: Dict[str, PoseRandomRange] = field(default_factory=dict)
+    """Per-entity randomization ranges keyed by object or operator name.
+
+    Applied at the end of every ``reset()`` call.  Each key must match a name
+    in ``object_handlers`` or ``operator_handlers``.  Unknown keys are ignored
+    with a warning.
+    """
+    random_seed: Optional[int] = None
+    """Seed for the internal NumPy random generator.  ``None`` means non-deterministic."""
+    _rng: np.random.Generator = field(init=False, repr=False)
+    _default_poses: Dict[str, PoseState] = field(
+        init=False, repr=False, default_factory=dict
+    )
+
+    def __post_init__(self) -> None:
+        self._rng = np.random.default_rng(self.random_seed)
 
     def setup(self, config: AutoAtomConfig) -> None:
         for operator in self.operator_handlers.values():
             operator.home()
+        self._record_default_poses()
 
     def reset(self) -> None:
         self.env.reset()
         for operator in self.operator_handlers.values():
             operator.home()
+        if not self._default_poses:
+            self._record_default_poses()
+        if self.randomization:
+            self._apply_randomization()
 
     def teardown(self) -> None:
         self.env.close()
@@ -266,7 +390,9 @@ class MujocoTaskBackend(SimulatorBackend):
             return self.operator_handlers[name]
         except KeyError as exc:
             known = ", ".join(sorted(self.operator_handlers)) or "<empty>"
-            raise KeyError(f"Unknown operator '{name}'. Known operators: {known}") from exc
+            raise KeyError(
+                f"Unknown operator '{name}'. Known operators: {known}"
+            ) from exc
 
     def get_object_handler(self, name: str) -> Optional[MujocoObjectHandler]:
         if not name:
@@ -283,7 +409,9 @@ class MujocoTaskBackend(SimulatorBackend):
         if target is None:
             return False
 
-        target_body_id = mujoco.mj_name2id(self.env.model, mujoco.mjtObj.mjOBJ_BODY, target.body_name)
+        target_body_id = mujoco.mj_name2id(
+            self.env.model, mujoco.mjtObj.mjOBJ_BODY, target.body_name
+        )
         if target_body_id < 0:
             return False
 
@@ -298,7 +426,10 @@ class MujocoTaskBackend(SimulatorBackend):
             if target_body_id not in {body1, body2}:
                 continue
             other_geom = geom2 if body1 == target_body_id else geom1
-            other_name = mujoco.mj_id2name(self.env.model, mujoco.mjtObj.mjOBJ_GEOM, other_geom) or ""
+            other_name = (
+                mujoco.mj_id2name(self.env.model, mujoco.mjtObj.mjOBJ_GEOM, other_geom)
+                or ""
+            )
             if other_name.startswith("left_"):
                 left_contact = True
             if other_name.startswith("right_"):
@@ -344,9 +475,15 @@ def build_mujoco_backend(
     task: AutoAtomConfig | Dict[str, Any],
     operators: List[OperatorConfig] | List[Dict[str, Any]],
 ) -> MujocoTaskBackend:
-    config = task if isinstance(task, AutoAtomConfig) else AutoAtomConfig.model_validate(task)
+    config = (
+        task
+        if isinstance(task, AutoAtomConfig)
+        else AutoAtomConfig.model_validate(task)
+    )
     operator_configs = [
-        item if isinstance(item, OperatorConfig) else OperatorConfig.model_validate(item)
+        item
+        if isinstance(item, OperatorConfig)
+        else OperatorConfig.model_validate(item)
         for item in operators
     ]
     env = ComponentRegistry.get_env(config.env_name)
@@ -365,8 +502,18 @@ def build_mujoco_backend(
             name=object_name,
             env=env,
             body_name=object_name,
-            freejoint_name=f"{object_name}_joint" if mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, f"{object_name}_joint") >= 0 else (
-                f"{object_name}_joint0" if mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_JOINT, f"{object_name}_joint0") >= 0 else None
+            freejoint_name=f"{object_name}_joint"
+            if mujoco.mj_name2id(
+                env.model, mujoco.mjtObj.mjOBJ_JOINT, f"{object_name}_joint"
+            )
+            >= 0
+            else (
+                f"{object_name}_joint0"
+                if mujoco.mj_name2id(
+                    env.model, mujoco.mjtObj.mjOBJ_JOINT, f"{object_name}_joint0"
+                )
+                >= 0
+                else None
             ),
         )
         for object_name in object_names
@@ -375,4 +522,6 @@ def build_mujoco_backend(
         env=env,
         operator_handlers=operator_handlers,
         object_handlers=object_handlers,
+        randomization=dict(config.randomization),
+        random_seed=config.seed if config.seed != 0 else None,
     )

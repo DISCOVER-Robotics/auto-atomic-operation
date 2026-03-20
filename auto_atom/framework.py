@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from pydantic import BaseModel, ConfigDict, ImportString, Field
 
 
@@ -143,6 +143,41 @@ class StageConfig(BaseModel):
     """Whether the agent should wait for the completion of the operation before proceeding to the next stage. If set to False, the agent will proceed to the next stage immediately after initiating the operation. However, if the operator in the next stage is the same as the current stage, the agent will still wait for the completion of the operation to avoid conflicts."""
 
 
+class PoseRandomRange(BaseModel):
+    """Per-entity pose randomization bounds relative to its default pose.
+
+    Each translation axis specifies a ``[min_offset, max_offset]`` range in
+    world-frame metres.  Each rotation axis specifies a ``[min_offset,
+    max_offset]`` range in radians applied as an additive RPY increment.
+
+    Example YAML entry::
+
+        randomization:
+          source_block:
+            x: [-0.03, 0.03]
+            y: [-0.03, 0.03]
+            yaw: [-0.524, 0.524]
+            collision_radius: 0.04
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    x: Tuple[float, float] = (0.0, 0.0)
+    """[min, max] displacement along the world X axis (metres)."""
+    y: Tuple[float, float] = (0.0, 0.0)
+    """[min, max] displacement along the world Y axis (metres)."""
+    z: Tuple[float, float] = (0.0, 0.0)
+    """[min, max] displacement along the world Z axis (metres)."""
+    roll: Tuple[float, float] = (0.0, 0.0)
+    """[min, max] roll offset added to the default roll (radians)."""
+    pitch: Tuple[float, float] = (0.0, 0.0)
+    """[min, max] pitch offset added to the default pitch (radians)."""
+    yaw: Tuple[float, float] = (0.0, 0.0)
+    """[min, max] yaw offset added to the default yaw (radians)."""
+    collision_radius: float = 0.05
+    """Approximate bounding radius used for pairwise collision rejection (metres)."""
+
+
 class AutoAtomConfig(BaseModel):
     """Configuration for the AutoAtom agent."""
 
@@ -156,6 +191,8 @@ class AutoAtomConfig(BaseModel):
     """The name of the simulator to be used by the AutoAtom agent. The simulator should be compatible with the environment model."""
     seed: int = 0
     """The random seed for the AutoAtom agent. This is used to ensure reproducibility of the agent's behavior."""
+    randomization: Dict[str, PoseRandomRange] = Field(default_factory=dict)
+    """Per-entity pose randomization applied at each reset.  Keys are object or operator names; values define the randomization range."""
 
 
 class OperatorConfig(BaseModel):

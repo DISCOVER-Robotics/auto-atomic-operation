@@ -141,6 +141,8 @@ class UnifiedMujocoEnv:
         self._camera_specs = {c.name: c for c in config.cameras}
         self._renderers: Dict[str, mujoco.Renderer] = {}
         self._camera_ids = {}
+        self._renderer_scene_option = mujoco.MjvOption()
+        self._renderer_scene_option.sitegroup[:] = 0
         self._interest_object_operations: dict[str, str] = {}
         self._mask_object_pairs = self._build_mask_object_pairs(config.mask_objects)
 
@@ -208,6 +210,7 @@ class UnifiedMujocoEnv:
         import mujoco.viewer as _mj_viewer
 
         self._viewer = _mj_viewer.launch_passive(self.model, self.data)
+        # self._viewer.opt.sitegroup[:] = 0
         cfg = self.config.viewer
         if cfg.lookat is not None:
             self._viewer.cam.lookat[:] = cfg.lookat
@@ -668,7 +671,11 @@ class UnifiedMujocoEnv:
             for cam_name, renderer in self._renderers.items():
                 cam_id = self._camera_ids[cam_name]
                 spec = self._camera_specs[cam_name]
-                renderer.update_scene(self.data, camera=cam_id)
+                renderer.update_scene(
+                    self.data,
+                    camera=cam_id,
+                    scene_option=self._renderer_scene_option,
+                )
                 renderer.disable_depth_rendering()
                 renderer.disable_segmentation_rendering()
                 if spec.enable_color:

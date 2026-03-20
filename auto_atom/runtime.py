@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional
 
+import numpy as np
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 
@@ -19,12 +21,20 @@ from .framework import (
     OperationConditionType,
     OperationConstraint,
     PoseControlConfig,
+    PoseRandomRange,
     PoseReference,
     StageConfig,
     StageControlConfig,
     TaskFileConfig,
 )
-from .utils.pose import PoseState, compose_pose, inverse_pose, pose_config_to_pose_state
+from .utils.pose import (
+    PoseState,
+    compose_pose,
+    euler_to_quaternion,
+    inverse_pose,
+    pose_config_to_pose_state,
+    quaternion_to_rpy,
+)
 
 
 class StageExecutionStatus(str, Enum):
@@ -54,6 +64,10 @@ class ObjectHandler:
 
     def get_pose(self) -> "PoseState":
         """Return the current world pose of the object."""
+        raise NotImplementedError
+
+    def set_pose(self, pose: "PoseState") -> None:  # noqa: ARG002
+        """Force-set the object world pose in one step (no physics integration)."""
         raise NotImplementedError
 
 
@@ -100,6 +114,10 @@ class OperatorHandler(ABC):
     def get_base_pose(self, simulator: "SimulatorBackend") -> PoseState:
         """Return the current world pose of the operator base."""
 
+    def set_pose(self, pose: PoseState) -> None:  # noqa: ARG002
+        """Force-set the operator base world pose in one step (no physics integration)."""
+        raise NotImplementedError
+
 
 class SimulatorBackend(ABC):
     """Abstract simulator backend used by the task runner."""
@@ -138,6 +156,154 @@ class SimulatorBackend(ABC):
         operation_names: List[str],
     ) -> None:
         """Notify the backend about the current task-focus objects and operations."""
+
+    # ------------------------------------------------------------------
+    # Randomization helpers  (shared by all concrete backend subclasses)
+    # ------------------------------------------------------------------
+    #
+    # Concrete backends that support randomization must expose these
+    # instance attributes (e.g. as dataclass fields):
+    #
+    #   randomization  : Dict[str, PoseRandomRange]
+    #   _rng           : np.random.Generator
+    #   _default_poses : Dict[str, PoseState]
+    #
+    # and call ``_record_default_poses()`` from ``setup()`` / ``reset()``
+    # and ``_apply_randomization()`` at the end of ``reset()``.
+    # ------------------------------------------------------------------
+
+    def _record_default_poses(self) -> None:
+        """Snapshot the current pose of every entity listed in ``self.randomization``.
+
+        Call this once after the simulation has been reset to its canonical
+        initial state (i.e. after ``env.reset()`` and operator ``home()``).
+        """
+        randomization: Dict[str, "PoseRandomRange"] = getattr(self, "randomization", {})
+        default_poses: Dict[str, PoseState] = getattr(self, "_default_poses", {})
+        for name in randomization:
+            kind, handler = self._resolve_randomization_handler(name)
+            if handler is None:
+                continue
+            if kind == "object":
+                default_poses[name] = handler.get_pose()
+            else:
+                default_poses[name] = handler.get_base_pose(self)
+        # Ensure the attribute is updated in case it was a local default.
+        try:
+            self._default_poses = default_poses  # type: ignore[attr-defined]
+        except AttributeError:
+            pass
+
+    def _apply_randomization(self) -> None:
+        """Sample random pose offsets for all configured entities and apply them.
+
+        Pairwise collision rejection is performed: if any two entities' sampled
+        centres are closer than the sum of their ``collision_radius`` values the
+        sample is discarded and redrawn.  After ``_MAX_RANDOMIZATION_RETRIES``
+        failed attempts the last sample is applied with a warning.
+        """
+        randomization: Dict[str, "PoseRandomRange"] = getattr(self, "randomization", {})
+        rng: np.random.Generator = getattr(self, "_rng", np.random.default_rng())
+        default_poses: Dict[str, PoseState] = getattr(self, "_default_poses", {})
+
+        entries = []
+        for name, rand_range in randomization.items():
+            kind, handler = self._resolve_randomization_handler(name)
+            if handler is None:
+                warnings.warn(
+                    f"{type(self).__name__}: randomization key '{name}' does not match "
+                    "any known object or operator — skipping.",
+                    stacklevel=3,
+                )
+                continue
+            entries.append((name, kind, handler, rand_range))
+
+        if not entries:
+            return
+
+        last_poses: Dict[str, PoseState] = {}
+        for _ in range(_MAX_RANDOMIZATION_RETRIES):
+            sampled: Dict[str, PoseState] = {}
+            for name, _kind, _handler, rand_range in entries:
+                default = default_poses.get(name, PoseState())
+                sampled[name] = self._sample_random_pose(rng, default, rand_range)
+
+            # Pairwise collision check based on Euclidean distance.
+            collision = False
+            names = list(sampled)
+            for i in range(len(names)):
+                for j in range(i + 1, len(names)):
+                    ni, nj = names[i], names[j]
+                    ri = randomization[ni].collision_radius
+                    rj = randomization[nj].collision_radius
+                    pi = np.asarray(sampled[ni].position, dtype=np.float64)
+                    pj = np.asarray(sampled[nj].position, dtype=np.float64)
+                    if float(np.linalg.norm(pi - pj)) < ri + rj:
+                        collision = True
+                        break
+                if collision:
+                    break
+
+            last_poses = sampled
+            if not collision:
+                break
+        else:
+            warnings.warn(
+                f"{type(self).__name__}: could not find a collision-free randomization "
+                f"after {_MAX_RANDOMIZATION_RETRIES} attempts — applying last sample.",
+                stacklevel=3,
+            )
+
+        for name, _kind, handler, _rand_range in entries:
+            handler.set_pose(last_poses[name])
+
+    @staticmethod
+    def _sample_random_pose(
+        rng: np.random.Generator,
+        default: PoseState,
+        rand_range: "PoseRandomRange",
+    ) -> PoseState:
+        """Return a new pose sampled uniformly within *rand_range* around *default*."""
+        dx = float(rng.uniform(rand_range.x[0], rand_range.x[1]))
+        dy = float(rng.uniform(rand_range.y[0], rand_range.y[1]))
+        dz = float(rng.uniform(rand_range.z[0], rand_range.z[1]))
+        d_roll = float(rng.uniform(rand_range.roll[0], rand_range.roll[1]))
+        d_pitch = float(rng.uniform(rand_range.pitch[0], rand_range.pitch[1]))
+        d_yaw = float(rng.uniform(rand_range.yaw[0], rand_range.yaw[1]))
+        new_pos = (
+            default.position[0] + dx,
+            default.position[1] + dy,
+            default.position[2] + dz,
+        )
+        default_rpy = quaternion_to_rpy(default.orientation)
+        new_rpy = (
+            default_rpy[0] + d_roll,
+            default_rpy[1] + d_pitch,
+            default_rpy[2] + d_yaw,
+        )
+        return PoseState(position=new_pos, orientation=euler_to_quaternion(new_rpy))
+
+    def _resolve_randomization_handler(
+        self, name: str
+    ) -> "tuple[str, Optional[ObjectHandler | OperatorHandler]]":
+        """Return ``(kind, handler)`` for *name*, trying objects then operators.
+
+        Returns ``(kind, None)`` when the name is not found in either registry.
+        ``kind`` is ``'object'`` or ``'operator'``.
+        """
+        try:
+            obj = self.get_object_handler(name)
+            if obj is not None:
+                return "object", obj
+        except (KeyError, NotImplementedError):
+            pass
+        try:
+            return "operator", self.get_operator_handler(name)
+        except (KeyError, NotImplementedError):
+            return "operator", None
+
+
+_MAX_RANDOMIZATION_RETRIES = 100
 
 
 @dataclass

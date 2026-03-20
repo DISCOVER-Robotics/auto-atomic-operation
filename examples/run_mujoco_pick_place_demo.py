@@ -1,6 +1,11 @@
-"""Run a simple pick-and-place demo using the Mujoco backend."""
+"""Run a simple pick-and-place demo using the Mujoco backend.
+
+Pose randomization is configured in mujoco_pick_place_demo.yaml under
+``task.randomization`` and requires no code changes to adjust.
+"""
 
 from pathlib import Path
+
 from auto_atom.runtime import ComponentRegistry, TaskRunner
 
 
@@ -10,8 +15,13 @@ def main() -> None:
     runner = TaskRunner().from_yaml(config_path)
 
     try:
-        print("Reset task")
+        print("Reset task (randomization loaded from YAML)")
         print(runner.reset())
+        print()
+
+        backend = runner._require_context().backend
+        source_pose = backend.get_object_handler("source_block").get_pose()
+        print(f"source_block pose after reset: {source_pose}")
         print()
 
         while True:
@@ -20,7 +30,6 @@ def main() -> None:
             if update.done:
                 break
 
-        backend = runner._require_context().backend
         source_pose = backend.get_object_handler("source_block").get_pose()
         target_pose = backend.get_object_handler("target_pedestal").get_pose()
 
