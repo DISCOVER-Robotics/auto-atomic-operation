@@ -204,14 +204,28 @@ class MujocoOperatorHandler(OperatorHandler):
         self._move_steps = 0
         self._eef_steps = 0
 
-    def home(self, settle_steps: int = 200) -> None:
+    def home(self) -> None:
         self.reset_state()
-        self.env._viewer_sync_paused = True
-        try:
-            for _ in range(settle_steps):
-                self.env.step(self._home_ctrl)
-        finally:
-            self.env._viewer_sync_paused = False
+        arm_qidx, eef_qidx, arm_vidx, eef_vidx, arm_aidx, eef_aidx = (
+            self.env._split_component_joint_state_indices(self.component)
+        )
+        n = min(len(self._home_ctrl), self.env.model.nu)
+        ctrl = np.asarray(self.env.data.ctrl, dtype=np.float64).copy()
+        ctrl[:n] = self._home_ctrl[:n]
+        low = self.env.model.actuator_ctrlrange[:n, 0]
+        high = self.env.model.actuator_ctrlrange[:n, 1]
+        ctrl[:n] = np.clip(ctrl[:n], low, high)
+        self.env.data.ctrl[:n] = ctrl[:n]
+        for i, aidx in enumerate(arm_aidx):
+            if i < len(arm_qidx) and int(aidx) < n:
+                self.env.data.qpos[arm_qidx[i]] = ctrl[int(aidx)]
+        for i, aidx in enumerate(eef_aidx):
+            if i < len(eef_qidx) and int(aidx) < n:
+                self.env.data.qpos[eef_qidx[i]] = ctrl[int(aidx)]
+        all_vidx = np.concatenate([arm_vidx, eef_vidx])
+        if len(all_vidx) > 0:
+            self.env.data.qvel[all_vidx] = 0.0
+        mujoco.mj_forward(self.env.model, self.env.data)
 
     def _compute_tool_pose_in_base(self) -> PoseState:
         base_pose = self.get_base_pose(None)  # type: ignore[arg-type]
@@ -237,12 +251,12 @@ class MujocoTaskBackend(SimulatorBackend):
 
     def setup(self, config: AutoAtomConfig) -> None:
         for operator in self.operator_handlers.values():
-            operator.home(settle_steps=120)
+            operator.home()
 
     def reset(self) -> None:
         self.env.reset()
         for operator in self.operator_handlers.values():
-            operator.home(settle_steps=120)
+            operator.home()
 
     def teardown(self) -> None:
         self.env.close()

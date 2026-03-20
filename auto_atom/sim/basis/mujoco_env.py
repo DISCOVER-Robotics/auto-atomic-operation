@@ -201,7 +201,6 @@ class UnifiedMujocoEnv:
         self._last_time = None
 
         self._viewer = None
-        self._viewer_sync_paused = False
         if config.viewer is not None:
             self._launch_viewer()
 
@@ -712,7 +711,7 @@ class UnifiedMujocoEnv:
     def update(self):
         for _ in range(self._n_substeps):
             mujoco.mj_step(self.model, self.data)
-        if self._viewer_running() and not self._viewer_sync_paused:
+        if self._viewer_running():
             self._sync_viewer()
             if self.config.viewer.step_delay > 0.0:
                 time.sleep(self.config.viewer.step_delay)
