@@ -260,30 +260,34 @@ class TaskFlowBuilder:
     @staticmethod
     def build_actions(stage: StageConfig) -> List[PrimitiveAction]:
         control = TaskFlowBuilder._normalize_control(stage)
+
         if stage.operation in {Operation.MOVE, Operation.PUSH}:
-            return [PrimitiveAction(kind="pose", pose=TaskFlowBuilder._require_pose(stage, control))]
+            actions: List[PrimitiveAction] = TaskFlowBuilder._build_pose_actions(
+                TaskFlowBuilder._require_moves(stage, control, "pre_move")
+            )
+        else:
+            actions = TaskFlowBuilder._build_pose_actions(control.pre_move)
+
         if stage.operation == Operation.GRASP:
-            return [PrimitiveAction(kind="eef", eef=TaskFlowBuilder._grasp_eef(control))]
-        if stage.operation == Operation.RELEASE:
-            return [PrimitiveAction(kind="eef", eef=TaskFlowBuilder._release_eef(control))]
-        if stage.operation in {Operation.PICK, Operation.PULL}:
-            return [
-                PrimitiveAction(kind="pose", pose=TaskFlowBuilder._require_pose(stage, control)),
-                PrimitiveAction(kind="eef", eef=TaskFlowBuilder._grasp_eef(control)),
-            ]
-        if stage.operation == Operation.PLACE:
-            return [
-                PrimitiveAction(kind="pose", pose=TaskFlowBuilder._require_pose(stage, control)),
-                PrimitiveAction(kind="eef", eef=TaskFlowBuilder._release_eef(control)),
-            ]
-        raise NotImplementedError(f"Unsupported operation '{stage.operation.value}'.")
+            actions.append(PrimitiveAction(kind="eef", eef=TaskFlowBuilder._grasp_eef(control)))
+        elif stage.operation == Operation.RELEASE:
+            actions.append(PrimitiveAction(kind="eef", eef=TaskFlowBuilder._release_eef(control)))
+        elif stage.operation in {Operation.PICK, Operation.PULL}:
+            actions.append(PrimitiveAction(kind="eef", eef=TaskFlowBuilder._grasp_eef(control)))
+        elif stage.operation == Operation.PLACE:
+            actions.append(PrimitiveAction(kind="eef", eef=TaskFlowBuilder._release_eef(control)))
+        elif stage.operation not in {Operation.MOVE, Operation.PUSH}:
+            raise NotImplementedError(f"Unsupported operation '{stage.operation.value}'.")
+
+        actions.extend(TaskFlowBuilder._build_pose_actions(control.post_move))
+        return actions
 
     @staticmethod
     def _normalize_control(stage: StageConfig) -> StageControlConfig:
         if isinstance(stage.param, StageControlConfig):
             return stage.param
         if isinstance(stage.param, PoseControlConfig):
-            return StageControlConfig(pose=stage.param)
+            return StageControlConfig(pre_move=[stage.param])
         if isinstance(stage.param, EefControlConfig):
             return StageControlConfig(eef=stage.param)
         raise TypeError(
@@ -292,10 +296,21 @@ class TaskFlowBuilder:
         )
 
     @staticmethod
-    def _require_pose(stage: StageConfig, control: StageControlConfig) -> PoseControlConfig:
-        if control.pose is None:
-            raise ValueError(f"Stage '{stage.name or stage.operation.value}' requires a pose target.")
-        return control.pose
+    def _build_pose_actions(poses: List[PoseControlConfig]) -> List[PrimitiveAction]:
+        return [PrimitiveAction(kind="pose", pose=pose) for pose in poses]
+
+    @staticmethod
+    def _require_moves(
+        stage: StageConfig,
+        control: StageControlConfig,
+        field_name: str,
+    ) -> List[PoseControlConfig]:
+        poses = getattr(control, field_name)
+        if not poses:
+            raise ValueError(
+                f"Stage '{stage.name or stage.operation.value}' requires at least one pose target in '{field_name}'."
+            )
+        return poses
 
     @staticmethod
     def _grasp_eef(control: StageControlConfig) -> EefControlConfig:

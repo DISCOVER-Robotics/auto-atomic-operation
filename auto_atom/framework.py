@@ -115,8 +115,10 @@ class StageControlConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    pose: Optional[PoseControlConfig] = None
-    """The configuration for the pose control in this stage. If not specified, no pose control will be performed in this stage."""
+    pre_move: List[PoseControlConfig] = Field(default_factory=list)
+    """Optional pose controls to execute before the main stage action."""
+    post_move: List[PoseControlConfig] = Field(default_factory=list)
+    """Optional pose controls to execute after the main stage action."""
     eef: Optional[EefControlConfig] = None
     """The configuration for the end-effector control in this stage. If not specified, no end-effector control will be performed in this stage."""
 
