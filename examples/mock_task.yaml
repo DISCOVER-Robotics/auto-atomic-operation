@@ -5,10 +5,7 @@ env:
     _target_: auto_atom.mock.create_mock_env
     kind: mock_env
 
-backend:
-  _target_: auto_atom.mock.build_mock_backend
-  task: ${task}
-  operators: ${operators}
+backend: auto_atom.mock.build_mock_backend
 
 task:
   env_name: mock_single_arm

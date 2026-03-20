@@ -384,7 +384,7 @@ class TaskRunner:
         return self.from_config(task_file)
 
     def from_config(self, config: TaskFileConfig) -> "TaskRunner":
-        backend = config.backend
+        backend = config.backend(config.task, config.operators)
         if not isinstance(backend, SimulatorBackend):
             raise TypeError(
                 "Task file backend must be an instantiated SimulatorBackend. "
@@ -822,9 +822,6 @@ def load_task_file(path: str | Path) -> TaskFileConfig:
     if not isinstance(raw, dict):
         raise TypeError(f"YAML root must be a mapping: {config_path}")
 
-    instantiated_raw = dict(raw)
     if "env" in config and config.env is not None:
-        instantiated_raw["env"] = instantiate(config.env)
-    if "backend" in config and config.backend is not None:
-        instantiated_raw["backend"] = instantiate(config.backend)
-    return TaskFileConfig.model_validate(instantiated_raw)
+        instantiate(config.env)
+    return TaskFileConfig.model_validate(raw)

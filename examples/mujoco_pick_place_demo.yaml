@@ -11,10 +11,7 @@ env:
         - pose
         - joint_position
 
-backend:
-  _target_: auto_atom.sim.backend.mujoco_backend.build_mujoco_backend
-  task: ${task}
-  operators: ${operators}
+backend: auto_atom.sim.backend.mujoco_backend.build_mujoco_backend
 
 task:
   env_name: mujoco_pick_place_demo
