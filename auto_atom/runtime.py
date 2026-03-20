@@ -135,6 +135,13 @@ class SimulatorBackend(ABC):
     def is_operator_grasping(self, operator_name: str) -> bool:
         """Return whether the operator is currently grasping any object."""
 
+    def set_interest_objects_and_operations(
+        self,
+        object_names: List[str],
+        operation_names: List[str],
+    ) -> None:
+        """Notify the backend about the current task-focus objects and operations."""
+
 
 @dataclass
 class PrimitiveAction:
@@ -337,6 +344,7 @@ class TaskRunner:
     def reset(self) -> TaskUpdate:
         context = self._require_context()
         context.backend.reset()
+        context.backend.set_interest_objects_and_operations([], [])
         self._stage_index = 0
         self._active_stage = None
         self._records = []
@@ -380,6 +388,10 @@ class TaskRunner:
                     done=True,
                     success=False,
                 )
+            context.backend.set_interest_objects_and_operations(
+                [plan.stage.object] if plan.stage.object else [],
+                [plan.stage.operation.value] if plan.stage.object else [],
+            )
             self._active_stage = self._start_stage(context, plan)
 
         active = self._active_stage
@@ -429,6 +441,7 @@ class TaskRunner:
                     )
                 )
                 self._active_stage = None
+                context.backend.set_interest_objects_and_operations([], [])
                 return self._build_update(
                     plan=active.plan,
                     status=StageExecutionStatus.FAILED,
@@ -450,6 +463,8 @@ class TaskRunner:
             )
             self._stage_index += 1
             self._active_stage = None
+            if self._stage_index >= len(self._plan):
+                context.backend.set_interest_objects_and_operations([], [])
             return self._build_update(
                 plan=active.plan,
                 status=StageExecutionStatus.SUCCEEDED,
@@ -475,6 +490,7 @@ class TaskRunner:
             )
         )
         self._active_stage = None
+        context.backend.set_interest_objects_and_operations([], [])
         return self._build_update(
             plan=active.plan,
             status=StageExecutionStatus.FAILED,

@@ -281,6 +281,14 @@ class MujocoTaskBackend(SimulatorBackend):
                 return True
         return False
 
+    def set_interest_objects_and_operations(
+        self,
+        object_names: List[str],
+        operation_names: List[str],
+    ) -> None:
+        """Not implemented now"""
+        # self.env.set_interest_objects_and_operations(object_names, operation_names)
+
 
 def build_mujoco_backend(task_file: TaskFileConfig) -> MujocoTaskBackend:
     config = task_file.task

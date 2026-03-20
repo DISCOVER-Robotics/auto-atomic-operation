@@ -128,6 +128,7 @@ class MockSimulatorBackend(SimulatorBackend):
     operators: Dict[str, MockOperatorHandler] = field(default_factory=dict)
     objects: Dict[str, MockObjectHandler] = field(default_factory=dict)
     lifecycle_events: List[str] = field(default_factory=list)
+    interest_updates: List[Dict[str, List[str]]] = field(default_factory=list)
 
     def setup(self, config: AutoAtomConfig) -> None:
         self.lifecycle_events.append(
@@ -167,6 +168,18 @@ class MockSimulatorBackend(SimulatorBackend):
     def is_operator_grasping(self, operator_name: str) -> bool:
         _ = self.get_operator_handler(operator_name)
         return False
+
+    def set_interest_objects_and_operations(
+        self,
+        object_names: List[str],
+        operation_names: List[str],
+    ) -> None:
+        self.interest_updates.append(
+            {
+                "objects": list(object_names),
+                "operations": list(operation_names),
+            }
+        )
 
 
 def build_mock_backend(task_file: TaskFileConfig) -> MockSimulatorBackend:
