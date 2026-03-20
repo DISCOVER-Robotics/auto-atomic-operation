@@ -36,6 +36,8 @@ class CameraSpec(BaseModel, frozen=True):
     """Whether to include RGB images in the captured observation."""
     enable_depth: bool = True
     """Whether to include depth images in the captured observation."""
+    depth_max: float = 5.0
+    """Maximum valid depth in metres; pixels beyond this distance are set to 0."""
     enable_mask: bool = False
     """Whether to include a binary segmentation mask for configured objects."""
     enable_heat_map: bool = False
@@ -685,10 +687,11 @@ class UnifiedMujocoEnv:
                     }
                 if spec.enable_depth:
                     renderer.enable_depth_rendering()
-                    depth = renderer.render()
+                    depth = np.asarray(renderer.render(), dtype=np.float32)
                     renderer.disable_depth_rendering()
+                    depth[depth > spec.depth_max] = 0.0
                     obs[f"{cam_name}/aligned_depth_to_color/image_raw"] = {
-                        "data": np.asarray(depth, dtype=np.float32),
+                        "data": depth,
                         "t": t,
                     }
                 if spec.enable_mask or spec.enable_heat_map:
