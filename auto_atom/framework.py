@@ -193,6 +193,8 @@ class AutoAtomConfig(BaseModel):
     """The random seed for the AutoAtom agent. This is used to ensure reproducibility of the agent's behavior."""
     randomization: Dict[str, PoseRandomRange] = Field(default_factory=dict)
     """Per-entity pose randomization applied at each reset.  Keys are object or operator names; values define the randomization range."""
+    randomization_debug: bool = False
+    """When True the first N resets cycle through extreme poses (each axis at its min/max, then all-min and all-max) before switching to random sampling.  Use this to verify that configured ranges are not too large."""
 
 
 class OperatorConfig(BaseModel):

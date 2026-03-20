@@ -104,18 +104,22 @@ class MujocoOperatorHandler(OperatorHandler):
     """The number of simulation steps consumed by the active pose command."""
     _eef_steps: int = 0
     """The number of simulation steps consumed by the active eef command."""
-    _home_ctrl: np.ndarray = field(
-        default_factory=lambda: np.asarray(
-            [0.0, -0.25, 0.35, 0.0, 0.0, 0.0, 0.0], dtype=np.float64
-        )
-    )
-    """The nominal home control vector used to settle the operator at reset time."""
+    _home_ctrl: np.ndarray = field(init=False, repr=False)
+    """The nominal home control vector used to settle the operator at reset time.
+    Initialised from the environment's current ctrl state (i.e. the keyframe)
+    so that home() always returns the arm to the scene-defined initial pose."""
 
     @property
     def name(self) -> str:
         return self.operator_name
 
     def __post_init__(self) -> None:
+        # Snapshot the env ctrl at construction time (env has already applied the
+        # keyframe in its __init__).  This ensures home() brings the arm back to
+        # the scene-defined initial position rather than a hard-coded constant.
+        self._home_ctrl = np.asarray(
+            self.env.data.ctrl[: self.env.model.nu], dtype=np.float64
+        ).copy()
         self._tool_pose_in_base = self._compute_tool_pose_in_base()
 
     def move_to_pose(
@@ -360,10 +364,16 @@ class MujocoTaskBackend(SimulatorBackend):
     """
     random_seed: Optional[int] = None
     """Seed for the internal NumPy random generator.  ``None`` means non-deterministic."""
+    randomization_debug: bool = False
+    """When True the first resets cycle through extreme poses for debugging."""
     _rng: np.random.Generator = field(init=False, repr=False)
     _default_poses: Dict[str, PoseState] = field(
         init=False, repr=False, default_factory=dict
     )
+    _debug_extreme_queue: Optional[List[Any]] = field(
+        init=False, repr=False, default=None
+    )
+    _debug_extreme_index: int = field(init=False, repr=False, default=0)
 
     def __post_init__(self) -> None:
         self._rng = np.random.default_rng(self.random_seed)
@@ -524,4 +534,5 @@ def build_mujoco_backend(
         object_handlers=object_handlers,
         randomization=dict(config.randomization),
         random_seed=config.seed if config.seed != 0 else None,
+        randomization_debug=config.randomization_debug,
     )

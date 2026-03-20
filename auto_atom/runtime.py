@@ -221,6 +221,40 @@ class SimulatorBackend(ABC):
         if not entries:
             return
 
+        # Debug mode: consume the pre-built extreme queue before going random.
+        if getattr(self, "randomization_debug", False):
+            queue = getattr(self, "_debug_extreme_queue", None)
+            if queue is None:
+                queue = self._build_debug_extreme_queue()
+                try:
+                    self._debug_extreme_queue = queue  # type: ignore[attr-defined]
+                except AttributeError:
+                    pass
+            idx: int = getattr(self, "_debug_extreme_index", 0)
+            if idx < len(queue):
+                poses, label = queue[idx]
+                try:
+                    self._debug_extreme_index = idx + 1  # type: ignore[attr-defined]
+                except AttributeError:
+                    pass
+                print(
+                    f"[DEBUG randomization] extreme {idx + 1}/{len(queue)}: {label}"
+                )
+                name_to_handler = {n: h for n, _, h, _ in entries}
+                for name, pose in poses.items():
+                    if name in name_to_handler:
+                        name_to_handler[name].set_pose(pose)
+                return
+            if idx == len(queue):
+                print(
+                    f"[DEBUG randomization] all {len(queue)} extreme cases exhausted"
+                    " — switching to random sampling"
+                )
+                try:
+                    self._debug_extreme_index = idx + 1  # type: ignore[attr-defined]
+                except AttributeError:
+                    pass
+
         last_poses: Dict[str, PoseState] = {}
         for _ in range(_MAX_RANDOMIZATION_RETRIES):
             sampled: Dict[str, PoseState] = {}
@@ -258,30 +292,96 @@ class SimulatorBackend(ABC):
             handler.set_pose(last_poses[name])
 
     @staticmethod
+    def _delta_pose(
+        default: PoseState,
+        dx: float = 0.0,
+        dy: float = 0.0,
+        dz: float = 0.0,
+        d_roll: float = 0.0,
+        d_pitch: float = 0.0,
+        d_yaw: float = 0.0,
+    ) -> PoseState:
+        """Return *default* displaced by the given world-frame deltas."""
+        new_pos = (
+            default.position[0] + dx,
+            default.position[1] + dy,
+            default.position[2] + dz,
+        )
+        r, p, y = quaternion_to_rpy(default.orientation)
+        return PoseState(
+            position=new_pos,
+            orientation=euler_to_quaternion((r + d_roll, p + d_pitch, y + d_yaw)),
+        )
+
+    @staticmethod
     def _sample_random_pose(
         rng: np.random.Generator,
         default: PoseState,
         rand_range: "PoseRandomRange",
     ) -> PoseState:
         """Return a new pose sampled uniformly within *rand_range* around *default*."""
-        dx = float(rng.uniform(rand_range.x[0], rand_range.x[1]))
-        dy = float(rng.uniform(rand_range.y[0], rand_range.y[1]))
-        dz = float(rng.uniform(rand_range.z[0], rand_range.z[1]))
-        d_roll = float(rng.uniform(rand_range.roll[0], rand_range.roll[1]))
-        d_pitch = float(rng.uniform(rand_range.pitch[0], rand_range.pitch[1]))
-        d_yaw = float(rng.uniform(rand_range.yaw[0], rand_range.yaw[1]))
-        new_pos = (
-            default.position[0] + dx,
-            default.position[1] + dy,
-            default.position[2] + dz,
+        return SimulatorBackend._delta_pose(
+            default,
+            dx=float(rng.uniform(*rand_range.x)),
+            dy=float(rng.uniform(*rand_range.y)),
+            dz=float(rng.uniform(*rand_range.z)),
+            d_roll=float(rng.uniform(*rand_range.roll)),
+            d_pitch=float(rng.uniform(*rand_range.pitch)),
+            d_yaw=float(rng.uniform(*rand_range.yaw)),
         )
-        default_rpy = quaternion_to_rpy(default.orientation)
-        new_rpy = (
-            default_rpy[0] + d_roll,
-            default_rpy[1] + d_pitch,
-            default_rpy[2] + d_yaw,
-        )
-        return PoseState(position=new_pos, orientation=euler_to_quaternion(new_rpy))
+
+    def _build_debug_extreme_queue(
+        self,
+    ) -> "List[tuple[Dict[str, PoseState], str]]":
+        """Build an ordered list of extreme-case pose configurations.
+
+        The sequence is:
+        1. All entities at all-axis minimum simultaneously.
+        2. All entities at all-axis maximum simultaneously.
+        3. For each entity, for each non-trivial axis (lo != hi):
+           - one case at the axis minimum (all other axes at default for that entity,
+             all other entities at their defaults)
+           - one case at the axis maximum (same)
+        """
+        _AXES = ("x", "y", "z", "roll", "pitch", "yaw")
+        _KWARG = {"x": "dx", "y": "dy", "z": "dz",
+                  "roll": "d_roll", "pitch": "d_pitch", "yaw": "d_yaw"}
+        _UNIT = {"x": "m", "y": "m", "z": "m",
+                 "roll": "rad", "pitch": "rad", "yaw": "rad"}
+
+        randomization: Dict[str, "PoseRandomRange"] = getattr(self, "randomization", {})
+        default_poses: Dict[str, PoseState] = getattr(self, "_default_poses", {})
+
+        def _defaults() -> Dict[str, PoseState]:
+            return {n: default_poses.get(n, PoseState()) for n in randomization}
+
+        cases: "List[tuple[Dict[str, PoseState], str]]" = []
+
+        # All entities at all-min simultaneously, then all-max.
+        for tag, eidx in (("all_min", 0), ("all_max", 1)):
+            c: Dict[str, PoseState] = {}
+            parts = []
+            for name, rand_range in randomization.items():
+                default = default_poses.get(name, PoseState())
+                kwargs = {_KWARG[ax]: getattr(rand_range, ax)[eidx] for ax in _AXES}
+                c[name] = self._delta_pose(default, **kwargs)
+                parts.append(name)
+            cases.append((c, f"{tag}: " + ", ".join(parts)))
+
+        # Per-entity, per-axis min / max (all other entities stay at default).
+        for name, rand_range in randomization.items():
+            default = default_poses.get(name, PoseState())
+            for axis in _AXES:
+                lo, hi = getattr(rand_range, axis)
+                if lo == hi:
+                    continue
+                for val, tag in ((lo, "min"), (hi, "max")):
+                    c = _defaults()
+                    c[name] = self._delta_pose(default, **{_KWARG[axis]: val})
+                    label = f"{name}.{axis}={val:.4g} {_UNIT[axis]} ({tag})"
+                    cases.append((c, label))
+
+        return cases
 
     def _resolve_randomization_handler(
         self, name: str

@@ -8,12 +8,42 @@ env:
       model_path: third_party/xml/scene_pick_place_demo.xml
       arm_mode: single
       enabled_sensors:
+        - camera
         - pose
+        - tactile
         - joint_position
+        - joint_velocity
+        - joint_effort
       sim_freq: 500
       update_freq: 20
+      mask_objects: ["source_block", "target_pedestal"]
+      operations: ["pick", "place", "push", "pull", "press"]
+      # interests:
+      #   - ["source_block", "target_pedestal"]
+      #   - ["pick", "place"]
+      cameras:
+        - name: hand_cam
+          width: 1280
+          height: 720
+          enable_color: true
+          enable_depth: true
+          enable_mask: false
+          enable_heat_map: true
+        - name: front_cam
+          width: 1280
+          height: 720
+          enable_color: true
+          enable_depth: true
+          enable_mask: false
+          enable_heat_map: true
+        - name: side_cam
+          width: 1280
+          height: 720
+          enable_color: true
+          enable_depth: true
+          enable_mask: false
+          enable_heat_map: true
       viewer:
-        _target_: auto_atom.sim.basis.mujoco_env.ViewerConfig
         lookat: [0.04, 0.0, 0.1]
         distance: 0.55
         azimuth: 135
@@ -27,6 +57,7 @@ task:
   env_name: mujoco_pick_place_demo
   simulator: mujoco
   seed: 42
+  # randomization_debug: true
   # Pose randomization applied at each reset.
   # source_block has a free joint so its x/y and yaw are randomised.
   # target_pedestal is a static body (no free joint) — omit it here.
@@ -34,8 +65,13 @@ task:
     source_block:
       x: [-0.03, 0.03]
       y: [-0.03, 0.03]
-      yaw: [-0.524, 0.524]   # ±30°
+      # yaw: [-0.524, 0.524]   # ±30°
       collision_radius: 0.04
+    arm:
+      x: [-0.015, 0.015]
+      y: [-0.015, 0.015]
+      # yaw: [-0.087, 0.087]   # ±5°，模拟安装误差
+      collision_radius: 0.15
   stages:
     - name: pick_source
       object: source_block
