@@ -5,12 +5,25 @@ from pathlib import Path
 import time
 import mujoco.viewer
 from auto_atom.runtime import ComponentRegistry, TaskRunner
-from auto_atom.sim.backend.mujoco_backend import build_mujoco_backend
+from auto_atom.sim.backend.mujoco_backend import build_mujoco_backend, create_mujoco_env
+from auto_atom.sim.basis.mujoco_env import DataType, EnvConfig
+
+
+ENV_NAME = "mujoco_pick_place_demo"
 
 
 def build_registry() -> ComponentRegistry:
     registry = ComponentRegistry()
     registry.register_backend("mujoco", build_mujoco_backend)
+    create_mujoco_env(
+        registry,
+        ENV_NAME,
+        EnvConfig(
+            model_path=Path(__file__).resolve().parents[1] / "third_party" / "xml" / "scene_pick_place_demo.xml",
+            arm_mode="single",
+            enabled_sensors=[DataType.POSE, DataType.JOINT_POSITION],
+        ),
+    )
     return registry
 
 
@@ -40,7 +53,7 @@ def main() -> None:
     args = parse_args()
     config_path = Path(__file__).with_name("mujoco_pick_place_demo.yaml")
     runner = TaskRunner(registry=build_registry()).from_yaml(config_path)
-    backend = runner._require_context().backend  # demo-only introspection
+    backend = runner._require_context().backend
     viewer = None
 
     try:
@@ -105,8 +118,6 @@ def _safe_sync_viewer(viewer: object) -> None:
     try:
         viewer.sync()
     except Exception:
-        # The window may have been closed externally. Swallow viewer refresh
-        # errors so the demo can finish cleanly without an X/GLX crash.
         return
 
 

@@ -1,6 +1,5 @@
 from enum import Enum
-from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -149,8 +148,8 @@ class AutoAtomConfig(BaseModel):
 
     stages: List[StageConfig]
     """A list of StageConfig objects, each representing a stage of the AutoAtom agent. The stages are executed in the order they are defined in the list."""
-    env_path: Union[str, Path]
-    """The path to the environment model file. The environment model should be defined in a format that can be loaded by the simulation environment used by the AutoAtom agent."""
+    env_name: str
+    """The registered environment name used to resolve the basis environment instance for the selected simulator."""
     simulator: str = "mujoco"
     """The name of the simulator to be used by the AutoAtom agent. The simulator should be compatible with the environment model."""
     seed: int = 0

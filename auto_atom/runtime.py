@@ -29,7 +29,11 @@ from .utils.pose import PoseState, compose_pose, inverse_pose, pose_config_to_po
 class BackendFactory(Protocol):
     """Callable used to build a simulator backend from validated task file."""
 
-    def __call__(self, task_file: TaskFileConfig) -> "SimulatorBackend":
+    def __call__(
+        self,
+        task_file: TaskFileConfig,
+        registry: "ComponentRegistry",
+    ) -> "SimulatorBackend":
         ...
 
 
@@ -213,13 +217,27 @@ class ActiveStageState:
 
 
 class ComponentRegistry:
-    """Registry mapping simulator names to backend factories."""
+    """Registry mapping simulator names to backend factories and named env instances."""
 
     def __init__(self) -> None:
         self._backend_factories: Dict[str, BackendFactory] = {}
+        self._env_instances: Dict[str, Any] = {}
 
     def register_backend(self, name: str, factory: BackendFactory) -> None:
         self._backend_factories[name] = factory
+
+    def register_env(self, name: str, env: Any) -> Any:
+        self._env_instances[name] = env
+        return env
+
+    def get_env(self, name: str) -> Any:
+        try:
+            return self._env_instances[name]
+        except KeyError as exc:
+            known = ", ".join(sorted(self._env_instances)) or "<empty>"
+            raise KeyError(
+                f"Environment '{name}' is not registered. Available environments: {known}"
+            ) from exc
 
     def create_backend(self, task_file: TaskFileConfig) -> SimulatorBackend:
         try:
@@ -230,7 +248,7 @@ class ComponentRegistry:
                 f"Simulator backend '{task_file.task.simulator}' is not registered. "
                 f"Available backends: {known}"
             ) from exc
-        return factory(task_file)
+        return factory(task_file, self)
 
 
 class TaskFlowBuilder:

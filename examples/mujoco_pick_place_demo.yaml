@@ -1,5 +1,5 @@
 task:
-  env_path: third_party/xml/scene_pick_place_demo.xml
+  env_name: mujoco_pick_place_demo
   simulator: mujoco
   seed: 0
   stages:

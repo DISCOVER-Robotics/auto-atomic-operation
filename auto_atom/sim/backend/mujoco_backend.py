@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Dict, List, Optional
 
 import mujoco
@@ -18,7 +17,7 @@ from ...runtime import (
     SimulatorBackend,
 )
 from ...utils.pose import PoseState, compose_pose, inverse_pose, quaternion_to_rpy
-from ..basis.mujoco_env import DataType, EnvConfig, UnifiedMujocoEnv
+from ..basis.mujoco_env import EnvConfig, UnifiedMujocoEnv
 
 
 @dataclass
@@ -290,15 +289,23 @@ class MujocoTaskBackend(SimulatorBackend):
         # self.env.set_interest_objects_and_operations(object_names, operation_names)
 
 
-def build_mujoco_backend(task_file: TaskFileConfig) -> MujocoTaskBackend:
+def create_mujoco_env(
+    registry,
+    env_name: str,
+    config: EnvConfig,
+) -> UnifiedMujocoEnv:
+    env = UnifiedMujocoEnv(config)
+    registry.register_env(env_name, env)
+    return env
+
+
+def build_mujoco_backend(task_file: TaskFileConfig, registry) -> MujocoTaskBackend:
     config = task_file.task
-    env = UnifiedMujocoEnv(
-        EnvConfig(
-            model_path=Path(config.env_path),
-            arm_mode="single",
-            enabled_sensors=[DataType.POSE, DataType.JOINT_POSITION],
+    env = registry.get_env(config.env_name)
+    if not isinstance(env, UnifiedMujocoEnv):
+        raise TypeError(
+            f"Registered environment '{config.env_name}' must be a UnifiedMujocoEnv, got {type(env).__name__}."
         )
-    )
 
     operator_handlers = {
         operator.name: MujocoOperatorHandler(operator_name=operator.name, env=env)

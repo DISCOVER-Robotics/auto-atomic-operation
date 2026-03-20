@@ -5,9 +5,13 @@ from auto_atom.mock import build_mock_backend
 from auto_atom.runtime import ComponentRegistry, TaskRunner
 
 
+ENV_NAME = "mock_single_arm"
+
+
 def build_registry() -> ComponentRegistry:
     registry = ComponentRegistry()
     registry.register_backend("mock", build_mock_backend)
+    registry.register_env(ENV_NAME, {"kind": "mock_env"})
     return registry
 
 

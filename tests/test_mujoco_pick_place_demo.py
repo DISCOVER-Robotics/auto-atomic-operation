@@ -6,12 +6,25 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from auto_atom.runtime import ComponentRegistry, TaskRunner
-from auto_atom.sim.backend.mujoco_backend import build_mujoco_backend
+from auto_atom.sim.backend.mujoco_backend import build_mujoco_backend, create_mujoco_env
+from auto_atom.sim.basis.mujoco_env import DataType, EnvConfig
+
+
+ENV_NAME = "mujoco_pick_place_demo"
 
 
 def build_registry() -> ComponentRegistry:
     registry = ComponentRegistry()
     registry.register_backend("mujoco", build_mujoco_backend)
+    create_mujoco_env(
+        registry,
+        ENV_NAME,
+        EnvConfig(
+            model_path=ROOT / "third_party" / "xml" / "scene_pick_place_demo.xml",
+            arm_mode="single",
+            enabled_sensors=[DataType.POSE, DataType.JOINT_POSITION],
+        ),
+    )
     return registry
 
 
@@ -21,7 +34,7 @@ def main() -> None:
 
     try:
         update = runner.reset()
-        assert update.stage_name == "move_above_source"
+        assert update.stage_name == "pick_source"
 
         while True:
             update = runner.update()
@@ -30,7 +43,7 @@ def main() -> None:
 
         assert update.success is True
 
-        backend = runner._require_context().backend  # demo verification only
+        backend = runner._require_context().backend
         source_pose = backend.get_object_handler("source_block").get_pose()
         target_pose = backend.get_object_handler("target_pedestal").get_pose()
 
