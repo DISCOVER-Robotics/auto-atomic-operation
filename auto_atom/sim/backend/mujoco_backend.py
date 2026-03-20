@@ -206,8 +206,12 @@ class MujocoOperatorHandler(OperatorHandler):
 
     def home(self, settle_steps: int = 200) -> None:
         self.reset_state()
-        for _ in range(settle_steps):
-            self.env.step(self._home_ctrl)
+        self.env._viewer_sync_paused = True
+        try:
+            for _ in range(settle_steps):
+                self.env.step(self._home_ctrl)
+        finally:
+            self.env._viewer_sync_paused = False
 
     def _compute_tool_pose_in_base(self) -> PoseState:
         base_pose = self.get_base_pose(None)  # type: ignore[arg-type]

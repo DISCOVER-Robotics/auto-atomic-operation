@@ -59,6 +59,7 @@ def main():
         print("heat_map_dtype:", heat_map.dtype)
         print("channel_sum:", channel_sum.tolist())
         print("tactile:", obs["arm_eef_left/tactile/point_cloud2"]["data"].keys())
+        # print("arm/joint_state/position:", obs["arm/joint_state/position"]["data"])
 
         assert mask.shape == (720, 1280)
         assert mask.dtype == np.uint8

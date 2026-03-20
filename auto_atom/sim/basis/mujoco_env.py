@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from auto_atom.utils.transformations import euler_from_matrix
 from auto_atom.sim.backend.tactile.tactile_sensor import TactileSensorManager
 import os
+import time
 import numpy as np
 import mujoco
 import logging
@@ -41,6 +42,23 @@ class CameraSpec(BaseModel, frozen=True):
     """Whether to include per-operation heat maps derived from object masks."""
 
 
+class ViewerConfig(BaseModel, frozen=True):
+    model_config = ConfigDict(validate_assignment=True, extra="forbid")
+
+    lookat: List[float] | None = None
+    """Camera lookat point [x, y, z]. Uses Mujoco default if None."""
+    distance: float | None = None
+    """Camera distance. Uses Mujoco default if None."""
+    azimuth: float | None = None
+    """Camera azimuth angle in degrees. Uses Mujoco default if None."""
+    elevation: float | None = None
+    """Camera elevation angle in degrees. Uses Mujoco default if None."""
+    step_delay: float = 0.0
+    """Seconds to sleep after each update step."""
+    hold_seconds: float = 0.0
+    """Seconds to keep the viewer open after close() is called."""
+
+
 class EnvConfig(BaseModel, frozen=True):
     model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
@@ -62,6 +80,8 @@ class EnvConfig(BaseModel, frozen=True):
     """Physics simulation frequency in Hz. If None, uses the timestep defined in the XML model."""
     update_freq: float | None = None
     """Control update frequency in Hz. Must be <= sim_freq. If None, defaults to sim_freq (n_substeps=1)."""
+    viewer: ViewerConfig | None = None
+    """Viewer configuration. If None, the passive viewer is not launched."""
 
     @model_validator(mode="after")
     def validate_frequencies(self):
@@ -179,6 +199,56 @@ class UnifiedMujocoEnv:
         ):
             self._init_tactile_manager()
         self._last_time = None
+
+        self._viewer = None
+        self._viewer_sync_paused = False
+        if config.viewer is not None:
+            self._launch_viewer()
+
+    def _launch_viewer(self) -> None:
+        import mujoco.viewer as _mj_viewer
+
+        self._viewer = _mj_viewer.launch_passive(self.model, self.data)
+        cfg = self.config.viewer
+        if cfg.lookat is not None:
+            self._viewer.cam.lookat[:] = cfg.lookat
+        if cfg.distance is not None:
+            self._viewer.cam.distance = cfg.distance
+        if cfg.azimuth is not None:
+            self._viewer.cam.azimuth = cfg.azimuth
+        if cfg.elevation is not None:
+            self._viewer.cam.elevation = cfg.elevation
+        self._sync_viewer()
+
+    def _viewer_running(self) -> bool:
+        if self._viewer is None:
+            return False
+        is_running = getattr(self._viewer, "is_running", None)
+        if callable(is_running):
+            try:
+                return bool(is_running())
+            except Exception:
+                return False
+        return True
+
+    def _sync_viewer(self) -> None:
+        try:
+            self._viewer.sync()
+        except Exception:
+            pass
+
+    def _shutdown_viewer(self) -> None:
+        try:
+            self._viewer.close()
+        except Exception:
+            pass
+        deadline = time.time() + 1.0
+        while time.time() < deadline:
+            if not self._viewer_running():
+                break
+            time.sleep(0.01)
+        time.sleep(0.05)
+        self._viewer = None
 
     def _build_mask_object_pairs(
         self, object_names: List[str]
@@ -642,6 +712,10 @@ class UnifiedMujocoEnv:
     def update(self):
         for _ in range(self._n_substeps):
             mujoco.mj_step(self.model, self.data)
+        if self._viewer_running() and not self._viewer_sync_paused:
+            self._sync_viewer()
+            if self.config.viewer.step_delay > 0.0:
+                time.sleep(self.config.viewer.step_delay)
 
     def _wrench_from_tactile(self, component: str) -> tuple[np.ndarray, np.ndarray]:
         if self._tactile_manager is None:
@@ -807,6 +881,14 @@ class UnifiedMujocoEnv:
             if hasattr(renderer, "close"):
                 renderer.close()
         self._renderers.clear()
+        if self._viewer is not None:
+            hold = self.config.viewer.hold_seconds
+            if hold > 0.0:
+                deadline = time.time() + hold
+                while time.time() < deadline and self._viewer_running():
+                    self._sync_viewer()
+                    time.sleep(min(0.05, hold))
+            self._shutdown_viewer()
 
     def get_logger(self) -> logging.Logger:
         return logging.getLogger(self.__class__.__name__)
