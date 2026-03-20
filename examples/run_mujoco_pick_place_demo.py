@@ -40,7 +40,7 @@ def main() -> None:
     try:
         if not args.no_viewer:
             viewer = mujoco.viewer.launch_passive(backend.env.model, backend.env.data)
-            viewer.cam.lookat[:] = [1.04, -5.6, 0.88]
+            viewer.cam.lookat[:] = [0.04, 0.0, 0.1]
             viewer.cam.distance = 0.55
             viewer.cam.azimuth = 135
             viewer.cam.elevation = -28

@@ -98,6 +98,9 @@ class UnifiedMujocoEnv:
 
         if config.sim_freq is not None:
             self.model.opt.timestep = 1.0 / config.sim_freq
+        self.get_logger().info(
+            f"Using timestep of {self.model.opt.timestep:.6f} seconds"
+        )
         self._n_substeps = (
             int(config.sim_freq / config.update_freq)
             if config.sim_freq is not None and config.update_freq is not None

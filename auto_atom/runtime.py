@@ -310,6 +310,16 @@ class TaskFlowBuilder:
             actions.append(
                 PrimitiveAction(kind="eef", eef=TaskFlowBuilder._grasp_eef(control))
             )
+            for i, pm in enumerate(control.post_move):
+                if pm.reference == PoseReference.OBJECT_WORLD or (
+                    pm.reference == PoseReference.AUTO and stage.object
+                ):
+                    raise ValueError(
+                        f"Stage '{stage.name or stage.operation.value}': post_move[{i}] uses "
+                        f"reference '{pm.reference.value}' which tracks the target object. "
+                        f"After a pick/pull, the grasped object moves with the EEF, causing "
+                        f"a runaway feedback loop. Use 'eef_world' instead."
+                    )
         elif stage.operation == Operation.PLACE:
             actions.append(
                 PrimitiveAction(kind="eef", eef=TaskFlowBuilder._release_eef(control))
@@ -476,8 +486,43 @@ class TaskRunner:
             )
 
         if result.signal == ControlSignal.REACHED:
+            completed_action = action
             active.action_index += 1
             if active.action_index < len(active.actions):
+                grasp_failed = (
+                    completed_action.kind == "eef"
+                    and completed_action.eef is not None
+                    and completed_action.eef.close
+                    and active.plan.stage.operation in {Operation.PICK, Operation.PULL}
+                    and not context.backend.is_operator_grasping(active.operator.name)
+                )
+                if grasp_failed:
+                    grasp_failure = self._check_stage_condition(
+                        context=context,
+                        plan=active.plan,
+                        condition_type=OperationConditionType.SUCCESS,
+                    )
+                    self._records.append(
+                        ExecutionRecord(
+                            stage_index=active.plan.stage_index,
+                            stage_name=active.plan.stage_name,
+                            operator=active.operator.name,
+                            operation=active.plan.stage.operation.value,
+                            target_object=active.plan.stage.object,
+                            blocking=active.plan.stage.blocking,
+                            status=StageExecutionStatus.FAILED,
+                            details=grasp_failure or details,
+                        )
+                    )
+                    self._active_stage = None
+                    context.backend.set_interest_objects_and_operations([], [])
+                    return self._build_update(
+                        plan=active.plan,
+                        status=StageExecutionStatus.FAILED,
+                        details=grasp_failure or details,
+                        done=True,
+                        success=False,
+                    )
                 return self._build_update(
                     plan=active.plan,
                     status=StageExecutionStatus.RUNNING,
@@ -680,13 +725,16 @@ class TaskRunner:
         target: Optional[ObjectHandler],
     ) -> ControlResult:
         if action.kind == "pose" and action.pose is not None:
-            resolved_pose = TaskRunner._resolve_pose_command(
-                operator=operator,
-                pose=action.pose,
-                backend=backend,
-                target=target,
-            )
-            action.resolved_pose = resolved_pose
+            if action.pose.reference == PoseReference.EEF_WORLD and action.resolved_pose is not None:
+                resolved_pose = action.resolved_pose
+            else:
+                resolved_pose = TaskRunner._resolve_pose_command(
+                    operator=operator,
+                    pose=action.pose,
+                    backend=backend,
+                    target=target,
+                )
+                action.resolved_pose = resolved_pose
             return operator.move_to_pose(resolved_pose, backend, target)
         if action.kind == "eef" and action.eef is not None:
             return operator.control_eef(action.eef, backend)
@@ -741,7 +789,7 @@ class TaskRunner:
             return PoseState()
         if reference == PoseReference.BASE:
             return operator.get_base_pose(backend)
-        if reference == PoseReference.END_EFFECTOR:
+        if reference == PoseReference.EEF:
             return operator.get_end_effector_pose(backend)
         if reference == PoseReference.OBJECT_WORLD:
             if target is None:
@@ -750,6 +798,9 @@ class TaskRunner:
                 )
             object_pose = target.get_pose()
             return PoseState(position=object_pose.position)
+        if reference == PoseReference.EEF_WORLD:
+            eef_pose = operator.get_end_effector_pose(backend)
+            return PoseState(position=eef_pose.position)
         if reference == PoseReference.OBJECT:
             if target is None:
                 raise ValueError("Pose reference OBJECT requires a target object.")
