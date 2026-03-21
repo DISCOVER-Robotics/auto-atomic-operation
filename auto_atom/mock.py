@@ -18,7 +18,7 @@ from .runtime import (
     ObjectHandler,
     OperatorHandler,
     PoseState,
-    SimulatorBackend,
+    SceneBackend,
 )
 
 
@@ -59,7 +59,6 @@ class MockOperatorHandler(OperatorHandler):
     def move_to_pose(
         self,
         pose: PoseControlConfig,
-        simulator: SimulatorBackend,
         target: Optional[ObjectHandler],
     ) -> ControlResult:
         command_key = f"pose:{_serialize_param(pose)}:{target.name if target else ''}"
@@ -93,7 +92,6 @@ class MockOperatorHandler(OperatorHandler):
     def control_eef(
         self,
         eef: EefControlConfig,
-        simulator: SimulatorBackend,
     ) -> ControlResult:
         command_key = f"eef:{eef.close}:{eef.joint_positions}"
         self._prepare_command(command_key)
@@ -116,10 +114,10 @@ class MockOperatorHandler(OperatorHandler):
             },
         )
 
-    def get_end_effector_pose(self, simulator: SimulatorBackend) -> PoseState:
+    def get_end_effector_pose(self) -> PoseState:
         return self.end_effector_pose
 
-    def get_base_pose(self, simulator: SimulatorBackend) -> PoseState:
+    def get_base_pose(self) -> PoseState:
         return self.base_pose
 
     def _prepare_command(self, command_key: str) -> None:
@@ -129,8 +127,8 @@ class MockOperatorHandler(OperatorHandler):
 
 
 @dataclass
-class MockSimulatorBackend(SimulatorBackend):
-    """Simple simulator backend with in-memory object and operator handlers."""
+class MockSceneBackend(SceneBackend):
+    """Simple scene backend with in-memory object and operator handlers."""
 
     env_name: str
     """The registered environment name associated with this backend instance."""
@@ -204,7 +202,7 @@ def create_mock_env(kind: str = "mock_env") -> Dict[str, str]:
 def build_mock_backend(
     task: AutoAtomConfig | Dict[str, Any],
     operators: List[OperatorConfig] | List[Dict[str, Any]],
-) -> MockSimulatorBackend:
+) -> MockSceneBackend:
     config = task if isinstance(task, AutoAtomConfig) else AutoAtomConfig.model_validate(task)
     operator_configs = [
         item if isinstance(item, OperatorConfig) else OperatorConfig.model_validate(item)
@@ -233,7 +231,7 @@ def build_mock_backend(
                 orientation=(0.0, 0.0, 0.0, 1.0),
             ),
         )
-    return MockSimulatorBackend(
+    return MockSceneBackend(
         env_name=config.env_name,
         operators=operators,
         objects=objects,

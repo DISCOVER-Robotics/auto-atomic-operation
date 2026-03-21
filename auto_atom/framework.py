@@ -4,8 +4,11 @@ from pydantic import BaseModel, ConfigDict, ImportString, Field
 
 
 Position = Tuple[float, float, float]
+"""A 3D position represented as a tuple of three floats (x, y, z)."""
 Orientation = Tuple[float, float, float, float]
+"""A quaternion orientation represented as a tuple of four floats (x, y, z, w)."""
 Rotation = Tuple[float, float, float]
+"""A rotation represented as Euler angles in radians, as a tuple of three floats (roll, pitch, yaw)."""
 
 
 class Operation(str, Enum):
@@ -186,7 +189,7 @@ class AutoAtomConfig(BaseModel):
     stages: List[StageConfig]
     """A list of StageConfig objects, each representing a stage of the AutoAtom agent. The stages are executed in the order they are defined in the list."""
     env_name: str
-    """The registered environment name used to resolve the basis environment instance for the selected simulator."""
+    """The registered environment name used to resolve the basis environment instance for the selected scene."""
     seed: int = 0
     """The random seed for the AutoAtom agent. This is used to ensure reproducibility of the agent's behavior."""
     randomization: Dict[str, PoseRandomRange] = Field(default_factory=dict)
@@ -210,8 +213,8 @@ class TaskFileConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     backend: ImportString
-    """The backend to execute this task file. The backend should be registered in the ComponentRegistry and should be compatible with the selected simulator."""
+    """The backend to execute this task file. The backend should be registered in the ComponentRegistry and should be compatible with the selected scene."""
     task: AutoAtomConfig
-    """The task-level configuration describing stages, simulator, and environment selection."""
+    """The task-level configuration describing stages, scene, and environment selection."""
     operators: List[OperatorConfig] = Field(default_factory=list)
     """The operator definitions available to the selected backend for this task file."""

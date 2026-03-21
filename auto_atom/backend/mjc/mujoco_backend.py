@@ -21,7 +21,7 @@ from ...runtime import (
     ObjectHandler,
     OperatorHandler,
     PoseRandomRange,
-    SimulatorBackend,
+    SceneBackend,
 )
 from ...utils.pose import PoseState, compose_pose, inverse_pose, quaternion_to_rpy
 from ...basis.mujoco_env import EnvConfig, UnifiedMujocoEnv
@@ -125,7 +125,6 @@ class MujocoOperatorHandler(OperatorHandler):
     def move_to_pose(
         self,
         pose: PoseControlConfig,
-        simulator: SimulatorBackend,
         target: Optional[ObjectHandler],
     ) -> ControlResult:
         key = str(pose.model_dump(mode="json"))
@@ -159,7 +158,7 @@ class MujocoOperatorHandler(OperatorHandler):
         self.env.step(ctrl)
         self._move_steps += 1
 
-        current_pose = self.get_end_effector_pose(simulator)
+        current_pose = self.get_end_effector_pose()
         pos_error = float(
             np.linalg.norm(
                 np.asarray(current_pose.position) - np.asarray(pose.position)
@@ -199,7 +198,6 @@ class MujocoOperatorHandler(OperatorHandler):
     def control_eef(
         self,
         eef: EefControlConfig,
-        simulator: SimulatorBackend,
     ) -> ControlResult:
         target_ctrl = self._eef_target(eef)
         key = f"{target_ctrl:.6f}:{eef.model_dump(mode='json')}"
@@ -221,7 +219,7 @@ class MujocoOperatorHandler(OperatorHandler):
         if (
             eef.close
             and self._last_target is not None
-            and simulator.is_object_grasped(self.name, self._last_target.name)
+            and self._is_target_grasped(self._last_target)
         ):
             reached = True
             event = "eef_grasped"
@@ -249,19 +247,54 @@ class MujocoOperatorHandler(OperatorHandler):
             return ControlResult(signal=ControlSignal.TIMED_OUT, details=details)
         return ControlResult(signal=ControlSignal.RUNNING, details=details)
 
-    def get_end_effector_pose(self, simulator: SimulatorBackend) -> PoseState:
+    def get_end_effector_pose(self) -> PoseState:
         pos, quat = self.env.get_site_pose(self.eef_site_name)
         return PoseState(
             position=tuple(float(v) for v in pos),
             orientation=tuple(float(v) for v in quat),
         )
 
-    def get_base_pose(self, simulator: SimulatorBackend) -> PoseState:
+    def get_base_pose(self) -> PoseState:
         pos, quat = self.env.get_body_pose(self.root_body_name)
         return PoseState(
             position=tuple(float(v) for v in pos),
             orientation=tuple(float(v) for v in quat),
         )
+
+    def _is_target_grasped(self, target: "MujocoObjectHandler") -> bool:
+        target_body_id = mujoco.mj_name2id(
+            self.env.model, mujoco.mjtObj.mjOBJ_BODY, target.body_name
+        )
+        if target_body_id < 0:
+            return False
+        left_contact = False
+        right_contact = False
+        for idx in range(self.env.data.ncon):
+            contact = self.env.data.contact[idx]
+            geom1 = int(contact.geom1)
+            geom2 = int(contact.geom2)
+            body1 = int(self.env.model.geom_bodyid[geom1])
+            body2 = int(self.env.model.geom_bodyid[geom2])
+            if target_body_id not in {body1, body2}:
+                continue
+            other_geom = geom2 if body1 == target_body_id else geom1
+            other_name = (
+                mujoco.mj_id2name(self.env.model, mujoco.mjtObj.mjOBJ_GEOM, other_geom)
+                or ""
+            )
+            if other_name.startswith("left_"):
+                left_contact = True
+            if other_name.startswith("right_"):
+                right_contact = True
+        if not (left_contact and right_contact):
+            return False
+        target_pose = target.get_pose()
+        eef_pose = self.get_end_effector_pose()
+        horizontal_error = np.linalg.norm(
+            np.asarray(target_pose.position[:2], dtype=np.float64)
+            - np.asarray(eef_pose.position[:2], dtype=np.float64)
+        )
+        return bool(horizontal_error <= 0.03)
 
     def reset_state(self) -> None:
         self._last_move_key = None
@@ -335,8 +368,8 @@ class MujocoOperatorHandler(OperatorHandler):
         self.reset_state()
 
     def _compute_tool_pose_in_base(self) -> PoseState:
-        base_pose = self.get_base_pose(None)  # type: ignore[arg-type]
-        eef_pose = self.get_end_effector_pose(None)  # type: ignore[arg-type]
+        base_pose = self.get_base_pose()
+        eef_pose = self.get_end_effector_pose()
         return compose_pose(inverse_pose(base_pose), eef_pose)
 
     def _eef_target(self, eef: EefControlConfig) -> float:
@@ -346,7 +379,7 @@ class MujocoOperatorHandler(OperatorHandler):
 
 
 @dataclass
-class MujocoTaskBackend(SimulatorBackend):
+class MujocoTaskBackend(SceneBackend):
     """Framework backend implemented on top of ``UnifiedMujocoEnv``."""
 
     env: UnifiedMujocoEnv
@@ -449,7 +482,7 @@ class MujocoTaskBackend(SimulatorBackend):
             return False
 
         target_pose = target.get_pose()
-        eef_pose = operator.get_end_effector_pose(self)
+        eef_pose = operator.get_end_effector_pose()
         horizontal_error = np.linalg.norm(
             np.asarray(target_pose.position[:2], dtype=np.float64)
             - np.asarray(eef_pose.position[:2], dtype=np.float64)

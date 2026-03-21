@@ -10,7 +10,7 @@ from .framework import (
     StageControlConfig,
     TaskFileConfig,
 )
-from .mock import MockOperatorHandler, MockSimulatorBackend
+from .mock import MockOperatorHandler, MockSceneBackend
 from .runtime import (
     ComponentRegistry,
     ControlResult,
@@ -39,7 +39,7 @@ __all__ = [
     "ExecutionRecord",
     "EefControlConfig",
     "MockOperatorHandler",
-    "MockSimulatorBackend",
+    "MockSceneBackend",
     "ObjectHandler",
     "OperatorConfig",
     "OperatorHandler",
