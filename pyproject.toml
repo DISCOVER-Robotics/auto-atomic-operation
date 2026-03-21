@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "auto-atomic-operation"
 version = "0.1.0"
-description = "An automated atomic operation framework based on Mujoco."
+description = "A YAML-driven atomic operation framework for robotic manipulation."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -14,11 +14,12 @@ authors = [
 ]
 dependencies = [
   "hydra-core",
-  "mujoco",
   "numpy",
   "pydantic>=2",
-  "PyYAML",
 ]
+
+[project.optional-dependencies]
+mujoco = ["mujoco"]
 
 [tool.setuptools.packages.find]
 include = ["auto_atom*"]
