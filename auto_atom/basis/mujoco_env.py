@@ -42,6 +42,13 @@ class CameraSpec(BaseModel, frozen=True):
     """Whether to include a binary segmentation mask for configured objects."""
     enable_heat_map: bool = False
     """Whether to include per-operation heat maps derived from object masks."""
+    parent_frame: str = ""
+    """Name of the site or body whose frame is used as the reference for
+    camera extrinsics.  When set, the name is resolved as a site first; if no
+    site with that name exists it is resolved as a body.  If empty, the
+    reference frame is auto-detected from the camera's attached body (again
+    preferring a same-named site over the body itself).  Cameras attached
+    directly to the world body keep the world frame."""
 
 
 class ViewerConfig(BaseModel, frozen=True):
@@ -171,6 +178,23 @@ class UnifiedMujocoEnv:
                     width=spec.width,
                 )
 
+        # _camera_parent_frame: cam_name -> ("site"|"body", obj_id, frame_name)
+        self._camera_parent_frame: dict[str, tuple[str, int, str]] = {}
+        # _camera_frame_site_ids: cam_name -> site_id when same-named site exists
+        self._camera_frame_site_ids: dict[str, int] = {}
+        for name, cam_id in self._camera_ids.items():
+            site_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE, name)
+            if site_id >= 0:
+                self._camera_frame_site_ids[name] = site_id
+        for name, spec in self._camera_specs.items():
+            if spec.parent_frame:
+                entry = self._resolve_frame(spec.parent_frame)
+                if entry is None:
+                    raise ValueError(
+                        f"Camera '{name}': parent_frame '{spec.parent_frame}' not found as site or body."
+                    )
+                self._camera_parent_frame[name] = entry
+
         self._imu_ids = {}
         self._pose_ids = {}
         self._pose_site_ids = {}
@@ -195,6 +219,23 @@ class UnifiedMujocoEnv:
                 "force": self._sensor_id(f"{prefix}eef_force"),
                 "torque": self._sensor_id(f"{prefix}eef_torque"),
             }
+
+        # Auto-detect: cameras attached to a non-world body use that body (or a
+        # same-named site on it) as the parent frame.
+        for name, cam_id in self._camera_ids.items():
+            if name in self._camera_parent_frame:
+                continue  # explicit parent_frame already set
+            body_id = int(self.model.cam_bodyid[cam_id])
+            if body_id != 0:  # 0 is world body → world frame, no transform needed
+                body_name = mujoco.mj_id2name(
+                    self.model, mujoco.mjtObj.mjOBJ_BODY, body_id
+                )
+                entry = self._resolve_frame(body_name)
+                if entry is not None:
+                    self._camera_parent_frame[name] = entry
+                    logger.info(
+                        f"Camera '{name}' auto-detected parent frame: {entry[0]} '{entry[2]}'"
+                    )
 
         self._tactile_manager = None
         if (
@@ -362,6 +403,20 @@ class UnifiedMujocoEnv:
                 "DataType.TACTILE is enabled but no tactile sensors "
                 "(sites with 'touch_point') were found in the model."
             )
+
+    def _resolve_frame(self, name: str) -> tuple[str, int, str] | None:
+        """Resolve *name* to a frame: site takes priority over body.
+
+        Returns ``("site", site_id, name)`` or ``("body", body_id, name)``,
+        or ``None`` if the name is not found as either.
+        """
+        site_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE, name)
+        if site_id >= 0:
+            return ("site", int(site_id), name)
+        body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, name)
+        if body_id >= 0:
+            return ("body", int(body_id), name)
+        return None
 
     def _sensor_id(self, name: str) -> int:
         sid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SENSOR, name)
@@ -870,8 +925,30 @@ class UnifiedMujocoEnv:
                 ],
             }
 
-            cam_rot = np.asarray(self.data.cam_xmat[cam_id]).reshape(3, 3)
-            cam_pos = np.asarray(self.data.cam_xpos[cam_id])
+            # Camera frame: prefer same-named site (e.g. optical convention) over cam_xmat.
+            cam_site_id = self._camera_frame_site_ids.get(cam_name)
+            if cam_site_id is not None:
+                cam_rot = np.asarray(self.data.site_xmat[cam_site_id]).reshape(3, 3)
+                cam_pos = np.asarray(self.data.site_xpos[cam_site_id])
+            else:
+                cam_rot = np.asarray(self.data.cam_xmat[cam_id]).reshape(3, 3)
+                cam_pos = np.asarray(self.data.cam_xpos[cam_id])
+
+            # Parent frame: express camera pose relative to it.
+            parent = self._camera_parent_frame.get(cam_name)
+            if parent is not None:
+                kind, ref_id, frame_name = parent
+                if kind == "site":
+                    ref_rot = np.asarray(self.data.site_xmat[ref_id]).reshape(3, 3)
+                    ref_pos = np.asarray(self.data.site_xpos[ref_id])
+                else:
+                    ref_rot = np.asarray(self.data.xmat[ref_id]).reshape(3, 3)
+                    ref_pos = np.asarray(self.data.xpos[ref_id])
+                cam_rot = ref_rot.T @ cam_rot
+                cam_pos = ref_rot.T @ (cam_pos - ref_pos)
+                extrinsics_frame = frame_name
+            else:
+                extrinsics_frame = "world"
 
             info["cameras"][cam_name] = {
                 "camera_info": {
@@ -879,6 +956,7 @@ class UnifiedMujocoEnv:
                 },
                 # TODO: should separate extrinsics for color and depth?
                 "camera_extrinsics": {
+                    "frame": extrinsics_frame,
                     "translation": cam_pos,
                     "rotation_matrix": cam_rot,
                 },

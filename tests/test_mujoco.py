@@ -5,6 +5,7 @@ from auto_atom.basis.mujoco_env import (
     EnvConfig,
     UnifiedMujocoEnv,
 )
+from pprint import pprint
 
 
 def main():
@@ -19,7 +20,7 @@ def main():
     )
     env = UnifiedMujocoEnv(
         EnvConfig(
-            model_path="third_party/xml/scene_pick_place_demo.xml",
+            model_path="assets/xmls/scenes/pick_and_place/demo.xml",
             arm_mode="single",
             enabled_sensors=[
                 DataType.CAMERA,
@@ -31,7 +32,7 @@ def main():
                 # DataType.IMU
             ],
             cameras=[
-                cam_spec,
+                cam_spec.model_copy(update={"parent_frame": "eef_pose"}),
                 cam_spec.model_copy(update={"name": "front_cam"}),
                 cam_spec.model_copy(update={"name": "side_cam"}),
             ],
@@ -45,6 +46,10 @@ def main():
             ["source_block", "target_pedestal"], ["pick", "place"]
         )
         env.reset()
+
+        info = env.get_info()
+        pprint("Info:")
+        pprint(info)
 
         obs = env.capture_observation()
         mask = obs["hand_cam/mask/image_raw"]["data"]
