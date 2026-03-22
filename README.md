@@ -64,7 +64,7 @@ Uses the in-memory mock backend — ideal for testing task logic in isolation.
 
 ### MuJoCo demos
 
-If you want to use all the MuJoCo demos, make sure to install Git LFS and pull the assets after cloning:
+Make sure to install Git LFS and pull the assets after cloning:
 
 ```bash
 # For Debian/Ubuntu, you can install Git LFS via packagecloud.
@@ -74,17 +74,10 @@ sudo apt-get install git-lfs
 git lfs pull
 ```
 
-If you only want to try the basic pick and place demo, you can download the specific assets and unzip:
+If you only want to try the basic pick and place demo, you can only pull the assets for that demo:
 
 ```bash
-wget https://drive.usercontent.google.com/download?id=1NPHpa8KnPDKYunWXTQm1168QOC0X4iPU&export=download&authuser=0 --no-check-certificate -O assets.zip
-
-unzip assets.zip
-```
-
-```bash
-sudo apt-get install git-lfs
-# curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+git lfs pull -I "assets/meshes/robotiq/*"
 ```
 
 Run the pick & place demo:
@@ -162,12 +155,12 @@ Task files are processed by [Hydra](https://hydra.cc) / OmegaConf, so the full H
 
 A task file has four top-level keys:
 
-| Key | Description |
-|-----|-------------|
-| `env` | Hydra `_target_` instantiation of the environment, registered via `ComponentRegistry` |
-| `backend` | Dotted import path to the backend factory function |
-| `task` | Task definition: `env_name`, `seed`, and a list of `stages` |
-| `operators` | Named operators with assigned roles |
+| Key         | Description                                                                           |
+| ----------- | ------------------------------------------------------------------------------------- |
+| `env`       | Hydra `_target_` instantiation of the environment, registered via `ComponentRegistry` |
+| `backend`   | Dotted import path to the backend factory function                                    |
+| `task`      | Task definition: `env_name`, `seed`, and a list of `stages`                           |
+| `operators` | Named operators with assigned roles                                                   |
 
 ### Stage definition
 
@@ -190,15 +183,15 @@ A task file has four top-level keys:
 
 ### Pose references
 
-| Reference | Description |
-|-----------|-------------|
-| `world` | Fixed world frame |
-| `base` | Robot base frame |
-| `eef` | Current end-effector frame |
-| `object` | Object frame (tracks object movement) |
+| Reference      | Description                            |
+| -------------- | -------------------------------------- |
+| `world`        | Fixed world frame                      |
+| `base`         | Robot base frame                       |
+| `eef`          | Current end-effector frame             |
+| `object`       | Object frame (tracks object movement)  |
 | `object_world` | Object position with world orientation |
-| `eef_world` | EEF position snapshot at command start |
-| `auto` | Automatically determined from context |
+| `eef_world`    | EEF position snapshot at command start |
+| `auto`         | Automatically determined from context  |
 
 ## Architecture
 

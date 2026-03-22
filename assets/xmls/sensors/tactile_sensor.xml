@@ -1,3 +1,27 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:0e17c92ab13eebfdd7cec05cb7fffa8ab1d4e3496c6f6a66d14a952adb195232
-size 931
+<mujoco>
+  <default>
+    <default class="tactile_cell">
+      <geom type="sphere" size="0.0005" contype="1" conaffinity="1" condim="4" friction="0 0 0" margin="0.0003" solref="0.001 1" solimp="0.98 0.999 0.0005 0.5 2" rgba="0 1 1 0.2" density="500"/>
+      <site type="sphere" size="0.0005" rgba="0 0 0 0"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <body name="touch_pad" pos="0 0 0">
+      <replicate count="8" offset="0.0 0.005 0.0">
+        <replicate count="5" offset="0.005 0.0 0.0">
+          <body pos="0 0 0.005">
+            <geom name="touch_geom" class="tactile_cell"/>
+            <site name="touch_point" class="tactile_cell"/>
+          </body>
+        </replicate>
+      </replicate>
+    </body>
+  </worldbody>
+
+  <sensor>
+    <force name="touch_sensor" site="touch_point" cutoff="1000" noise="0.005" />
+    <torque name="torque_sensor" site="touch_point" cutoff="1000" noise="0.002" />
+  </sensor>
+
+</mujoco>
