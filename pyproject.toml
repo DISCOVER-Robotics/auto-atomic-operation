@@ -17,6 +17,7 @@ dependencies = [
   "numpy",
   "pydantic>=2",
 ]
+urls = { "repository" = "https://github.com/OpenGHz/auto-atomic-operation.git" }
 
 [project.optional-dependencies]
 mujoco = ["mujoco"]

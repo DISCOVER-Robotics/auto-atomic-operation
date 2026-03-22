@@ -2,9 +2,9 @@
 
 <h1>Auto Atomic Operation</h1>
 
-[![PyPI](https://img.shields.io/pypi/v/mcap-data-loader)](https://pypi.org/project/mcap-data-loader/)
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/github/license/OpenGHz/MCAP-DataLoader)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/auto-atomic-operation)](https://pypi.org/project/auto-atomic-operation/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 A YAML-driven atomic operation framework for robotic manipulation.
 
@@ -192,23 +192,6 @@ To integrate a new simulator or real robot, implement three abstract classes fro
 - `SceneBackend` — scene lifecycle, handler resolution, and randomization
 
 See the **[Custom Backend Guide](docs/custom-backend.md)** for a step-by-step walkthrough with annotated code examples. [`auto_atom/mock.py`](auto_atom/mock.py) provides a minimal reference implementation.
-
-## Requirements
-
-**Core dependencies** (installed automatically):
-
-| Dependency | Purpose |
-|------------|---------|
-| `numpy` | Numerical computing |
-| `pydantic >= 2` | Configuration validation |
-| `hydra-core` | Configuration loading |
-
-**Optional dependencies:**
-
-| Extra | Dependency | Purpose |
-|-------|------------|---------|
-| `mujoco` | `mujoco` | Built-in Mujoco backend |
-
 
 ## License
 
