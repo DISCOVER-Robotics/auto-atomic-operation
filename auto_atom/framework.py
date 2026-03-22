@@ -12,38 +12,45 @@ Rotation = Tuple[float, float, float]
 
 
 class Operation(str, Enum):
-    """Enumeration of possible operations that the AutoAtom agent can perform."""
+    """Enumeration of possible operations that the AutoAtom operator can perform.
+    `MOVE`, `GRASP`, `RELEASE` are three fundamental operations that can be used to construct more complex operations like `PICK`, `PLACE`, `PUSH`, `PULL`, and `PRESS`."""
 
-    GRASP = "grasp"
-    """Close the gripper to grasp the object at the current position. Can only be performed when the agent is not currently grasping any object. Failure occurs when the grippers close but fail to grasp an object (no object makes effective contact with the grippers)."""
-    RELEASE = "release"
-    """Open the gripper to release the currently grasped object. Can only be performed when the agent is currently grasping an object."""
-    PICK = "pick"
-    """Move to the object and grasp it. Can only be performed when the agent is not currently grasping any object. Failure occurs in the same way as the GRASP operation."""
-    PLACE = "place"
-    """Move to the target pose/object and release the grasped object. Can only be performed when the agent is currently grasping an object."""
-    PUSH = "push"
-    """Move to the object and push it to the target pose/object. Can be performed regardless of whether the agent is currently grasping an object or not."""
-    PULL = "pull"
-    """Move to the object, grasp and then pull it to the target pose/object. Can only be performed when the agent is not currently grasping any object."""
     MOVE = "move"
-    """Move to the target pose/object without interacting with any object. Can be performed regardless of whether the agent is currently grasping an object or not."""
+    """Execute pre_move waypoints to reach the target pose without interacting with any object. No pre- or post-condition is checked. Failure occurs when the operator fails to reach the target pose within the position tolerance within the time limit."""
+    GRASP = "grasp"
+    """Execute the eef phase (close gripper) at the current position. Pre-condition `released` is checked before the eef phase; post-condition `grasped` is checked after the eef phase. Failure occurs when the post-condition `grasped` is not satisfied (the gripper closes but no object is effectively grasped)."""
+    RELEASE = "release"
+    """Execute the eef phase (open gripper) at the current position. Pre-condition `grasped` is checked before the eef phase; post-condition `released` is checked after the eef phase. Failure occurs when the post-condition `released` is not satisfied (the gripper opens but the object is still effectively grasped)."""
+    PICK = "pick"
+    """Execute pre_move → eef (close gripper) → post_move to approach an object and grasp it. Pre-condition `released` is checked before the pre_move phase; post-condition `grasped` is checked after the post_move phase. Failure occurs when the post-condition `grasped` is not satisfied."""
+    PLACE = "place"
+    """Execute pre_move → eef (open gripper) → post_move to approach a target pose and release the held object. Pre-condition `grasped` is checked before the pre_move phase; post-condition `released` is checked after the post_move phase. Failure occurs when the post-condition `released` is not satisfied."""
+    PUSH = "push"
+    """Execute pre_move → post_move to approach and push an object to a target pose. No pre-condition is checked; post-condition `displaced` is checked after the post_move phase. Failure occurs when the post-condition `displaced` is not satisfied (the object has not moved beyond the displacement threshold)."""
+    PULL = "pull"
+    """Execute pre_move → eef (close gripper) → post_move to approach an object, grasp it, and pull it to a target pose. Pre-condition `grasped` is checked after the eef phase (confirming a successful grasp before pulling); post-condition `grasped` is checked after the post_move phase. Failure occurs when either condition `grasped` is not satisfied."""
+    PRESS = "press"
+    """Execute pre_move → post_move to approach and press an object at the target pose. No pre-condition is checked; post-condition `contacted` is checked after the post_move phase. Failure occurs when the post-condition `contacted` is not satisfied (the operator is not in contact with the target object at the end of the operation)."""
 
 
 class OperationConstraint(str, Enum):
-    """Enumeration of possible constraints for the operations that the AutoAtom agent can perform."""
+    """Enumeration of possible constraints for the operations."""
 
     GRASPED = "grasped"
-    """The operation can only be performed when the agent is currently grasping an object."""
+    """Whether the operator is currently grasping an object."""
     RELEASED = "released"
-    """The operation can only be performed when the agent is not currently grasping any object."""
-    ANY = "any"
-    """The operation can be performed regardless of whether the agent is currently grasping an object or not."""
+    """Whether the operator is not currently grasping any object."""
+    CONTACTED = "contacted"
+    """Whether the operator is in contact with the target object."""
+    DISPLACED = "displaced"
+    """Whether the target object has been displaced from its original pose (e.g., the distance between the current pose of the object and its original pose is greater than a certain threshold) after the operation."""
+    NONE = "none"
+    """No constraint."""
 
 
 class OperationConditionType(str, Enum):
     PERFORM = "perform"
-    """The condition for performing the operation. The agent will only perform the operation when the condition is satisfied."""
+    """The condition for performing the operation. The operator will only perform the operation when the condition is satisfied."""
     SUCCESS = "success"
     """The condition for the success of the operation. The operation is considered successful when the condition is satisfied after performing the operation."""
 
@@ -65,6 +72,16 @@ OPERATION_CONDITIONS = {
     Operation.PLACE: {
         _Condition.PERFORM: OperationConstraint.GRASPED,
         _Condition.SUCCESS: OperationConstraint.RELEASED,
+    },
+    Operation.PUSH: {
+        _Condition.SUCCESS: OperationConstraint.DISPLACED,
+    },
+    Operation.PULL: {
+        _Condition.PERFORM: OperationConstraint.GRASPED,
+        _Condition.SUCCESS: OperationConstraint.GRASPED,
+    },
+    Operation.PRESS: {
+        _Condition.SUCCESS: OperationConstraint.CONTACTED,
     },
 }
 
@@ -115,7 +132,7 @@ class EefControlConfig(BaseModel, extra="forbid"):
 
 
 class StageControlConfig(BaseModel):
-    """Configuration for the control of each stage of the AutoAtom agent."""
+    """Configuration for the control of each stage of the AutoAtom operator."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -128,7 +145,7 @@ class StageControlConfig(BaseModel):
 
 
 class StageConfig(BaseModel):
-    """Configuration for each stage of the AutoAtom agent."""
+    """Configuration for each stage of the AutoAtom operator."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -137,13 +154,13 @@ class StageConfig(BaseModel):
     object: str
     """The name of the object to be manipulated in this stage. The object should be defined in the environment and should have a unique name. An empty name means that the corresponding operation does not involve the target object; the target pose is obtained from the corresponding param."""
     operation: Operation
-    """The operation that the AutoAtom agent performs in this stage."""
+    """The operation that the AutoAtom operator performs in this stage."""
     param: StageControlConfig
     """The parameter for the operation."""
     operator: str = ""
-    """The name of the operator that performs the operation in this stage. The operator should be defined in the environment and should have a unique name. If there is only one operator in the environment, this field can be left empty, and the agent will automatically select that operator to perform the operation."""
+    """The name of the operator that performs the operation in this stage. The operator should be defined in the environment and should have a unique name. If there is only one operator in the environment, this field can be left empty, and the operator will automatically select that operator to perform the operation."""
     blocking: bool = True
-    """Whether the agent should wait for the completion of the operation before proceeding to the next stage. If set to False, the agent will proceed to the next stage immediately after initiating the operation. However, if the operator in the next stage is the same as the current stage, the agent will still wait for the completion of the operation to avoid conflicts."""
+    """Whether the operator should wait for the completion of the operation before proceeding to the next stage. If set to False, the operator will proceed to the next stage immediately after initiating the operation. However, if the operator in the next stage is the same as the current stage, the operator will still wait for the completion of the operation to avoid conflicts."""
 
 
 class PoseRandomRange(BaseModel):
@@ -182,20 +199,32 @@ class PoseRandomRange(BaseModel):
 
 
 class AutoAtomConfig(BaseModel):
-    """Configuration for the AutoAtom agent."""
+    """Configuration for the AutoAtom operator."""
 
     model_config = ConfigDict(extra="forbid")
 
     stages: List[StageConfig]
-    """A list of StageConfig objects, each representing a stage of the AutoAtom agent. The stages are executed in the order they are defined in the list."""
+    """A list of StageConfig objects, each representing a stage of the AutoAtom operator. The stages are executed in the order they are defined in the list."""
     env_name: str
     """The registered environment name used to resolve the basis environment instance for the selected scene."""
     seed: int = 0
-    """The random seed for the AutoAtom agent. This is used to ensure reproducibility of the agent's behavior."""
+    """The random seed for the AutoAtom operator. This is used to ensure reproducibility of the operator's behavior."""
     randomization: Dict[str, PoseRandomRange] = Field(default_factory=dict)
     """Per-entity pose randomization applied at each reset.  Keys are object or operator names; values define the randomization range."""
     randomization_debug: bool = False
     """When True the first N resets cycle through extreme poses (each axis at its min/max, then all-min and all-max) before switching to random sampling.  Use this to verify that configured ranges are not too large."""
+
+
+class OperatorInitialState(BaseModel):
+    """Optional override for an operator's home control state applied at reset."""
+
+    arm: Optional[List[float]] = None
+    """Override values for the arm actuator controls (ctrl[0:len(arm)]).
+    When omitted the keyframe value is kept."""
+
+    eef: Optional[float] = None
+    """Override value for the end-effector/gripper control (0.0 = open, 0.82 = closed).
+    When omitted the keyframe value is kept."""
 
 
 class OperatorConfig(BaseModel):
@@ -205,6 +234,10 @@ class OperatorConfig(BaseModel):
 
     name: str
     """The unique operator name referenced by task stages."""
+
+    initial_state: Optional[OperatorInitialState] = None
+    """Optional initial control state applied to this operator on every reset.
+    Overrides the keyframe-defined values for the specified fields."""
 
 
 class TaskFileConfig(BaseModel):

@@ -537,6 +537,14 @@ def build_mujoco_backend(
         operator.name: MujocoOperatorHandler(operator_name=operator.name, env=env)
         for operator in operator_configs
     }
+    for operator in operator_configs:
+        if operator.initial_state is not None:
+            handler = operator_handlers[operator.name]
+            if operator.initial_state.arm is not None:
+                vals = operator.initial_state.arm
+                handler._home_ctrl[: len(vals)] = vals
+            if operator.initial_state.eef is not None:
+                handler._home_ctrl[handler.eef_ctrl_index] = operator.initial_state.eef
     object_names = {stage.object for stage in config.stages if stage.object}
     object_handlers = {
         object_name: MujocoObjectHandler(

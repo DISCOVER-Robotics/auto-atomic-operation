@@ -95,7 +95,7 @@ task:
           - position: [0.0, 0.0, 0.12]
             orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
-          - position: [0.0, 0.0, 0.02]
+          - position: [0.0, 0.0, 0.035]
             orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         post_move:
@@ -113,7 +113,7 @@ task:
           - position: [0.0, 0.0, 0.12]
             orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
-          - position: [0.0, 0.0, 0.02]
+          - position: [0.0, 0.0, 0.035]
             orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         post_move:
@@ -131,7 +131,7 @@ task:
           - position: [0.0, 0.0, 0.12]
             orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
-          - position: [0.0, 0.0, 0.02]
+          - position: [0.0, 0.0, 0.035]
             orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         post_move:
@@ -141,3 +141,5 @@ task:
 
 operators:
   - name: arm
+    initial_state:
+      eef: 0.82  # closed gripper for pressing buttons
