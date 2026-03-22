@@ -3,6 +3,7 @@ from auto_atom.basis.mujoco_env import (
     CameraSpec,
     DataType,
     EnvConfig,
+    OperatorBinding,
     UnifiedMujocoEnv,
 )
 from pprint import pprint
@@ -21,7 +22,28 @@ def main():
     env = UnifiedMujocoEnv(
         EnvConfig(
             model_path="assets/xmls/scenes/pick_and_place/demo.xml",
-            arm_mode="single",
+            operators=[
+                OperatorBinding(
+                    name="arm",
+                    arm_actuators=[
+                        "act_root_x",
+                        "act_root_y",
+                        "act_root_z",
+                        "act_root_rot_z",
+                        "act_root_rot_y",
+                        "act_root_rot_x",
+                    ],
+                    eef_actuators=["fingers_actuator"],
+                    eef_output_name="eef",
+                    pose_site="eef_pose",
+                    imu_acc="imu_acc",
+                    imu_gyro="imu_gyro",
+                    imu_quat="imu_quat",
+                    pose_sensor_pos="global_gripper_pos",
+                    pose_sensor_quat="global_gripper_quat",
+                    tactile_prefixes=["left_", "right_"],
+                )
+            ],
             enabled_sensors=[
                 DataType.CAMERA,
                 DataType.JOINT_POSITION,
@@ -63,7 +85,7 @@ def main():
         print("heat_map_shape:", heat_map.shape)
         print("heat_map_dtype:", heat_map.dtype)
         print("channel_sum:", channel_sum.tolist())
-        print("tactile:", obs["arm_eef_left/tactile/point_cloud2"]["data"].keys())
+        print("tactile:", obs["eef_left/tactile/point_cloud2"]["data"].keys())
         # print("arm/joint_state/position:", obs["arm/joint_state/position"]["data"])
 
         assert mask.shape == (720, 1280)

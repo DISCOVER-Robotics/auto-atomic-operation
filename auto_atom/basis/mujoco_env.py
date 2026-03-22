@@ -68,13 +68,63 @@ class ViewerConfig(BaseModel, frozen=True):
     """Seconds to keep the viewer open after close() is called."""
 
 
+class OperatorBinding(BaseModel, frozen=True):
+    """Binds a logical operator name to the actuators and sensors defined in the XML model."""
+
+    model_config = ConfigDict(validate_assignment=True, extra="forbid")
+
+    name: str
+    """Logical operator name, used as the key prefix in observation dicts."""
+
+    arm_actuators: List[str] = Field(default_factory=list)
+    """Actuator names (as defined in the XML) that drive the main arm/body joints."""
+
+    eef_actuators: List[str] = Field(default_factory=list)
+    """Actuator names (as defined in the XML) that drive the end-effector/gripper joints."""
+
+    arm_output_name: str = ""
+    """Observation key prefix for arm joint data. Defaults to the operator ``name``."""
+
+    eef_output_name: str = "eef"
+    """Observation key prefix for end-effector joint data."""
+
+    pose_site: str = ""
+    """Site name (as defined in the XML) used for end-effector pose output.
+    Required when POSE sensor is enabled for this operator."""
+
+    imu_acc: str = ""
+    """Sensor name for IMU linear acceleration (accelerometer)."""
+
+    imu_gyro: str = ""
+    """Sensor name for IMU angular velocity (gyroscope)."""
+
+    imu_quat: str = ""
+    """Sensor name for IMU orientation quaternion."""
+
+    pose_sensor_pos: str = ""
+    """Sensor name for end-effector position, cross-validated against pose_site when provided."""
+
+    pose_sensor_quat: str = ""
+    """Sensor name for end-effector orientation quaternion, cross-validated against pose_site."""
+
+    wrench_force: str = ""
+    """Sensor name for end-effector force. Falls back to tactile-derived wrench if empty."""
+
+    wrench_torque: str = ""
+    """Sensor name for end-effector torque. Falls back to tactile-derived wrench if empty."""
+
+    tactile_prefixes: List[str] = Field(default_factory=list)
+    """Tactile panel name prefixes that belong to this operator's end-effector.
+    An empty list means all panels are assigned to this operator (only valid for a single operator)."""
+
+
 class EnvConfig(BaseModel, frozen=True):
     model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
     model_path: Path
     """The path to the Mujoco XML model file used to create the environment."""
-    arm_mode: str = "single"
-    """The arm topology mode, such as ``single`` or a multi-arm layout."""
+    operators: List[OperatorBinding] = Field(default_factory=list)
+    """Operator definitions mapping logical names to XML actuators and sensors."""
     enabled_sensors: Set[DataType] = Field(default_factory=set)
     """The sensor categories that should be exposed in captured observations."""
     cameras: List[CameraSpec] = Field(default_factory=list)
@@ -142,10 +192,30 @@ class UnifiedMujocoEnv:
             mujoco.mj_resetData(self.model, self.data)
         mujoco.mj_forward(self.model, self.data)
 
-        self._components = (
-            ["arm"] if config.arm_mode == "single" else ["left_arm", "right_arm"]
-        )
-        self._prefix = {"arm": "", "left_arm": "left_", "right_arm": "right_"}
+        # Pre-compute per-operator actuator and joint index arrays.
+        self._operators = config.operators
+        self._op_arm_aidx: dict[str, np.ndarray] = {}
+        self._op_eef_aidx: dict[str, np.ndarray] = {}
+        self._op_arm_qidx: dict[str, np.ndarray] = {}
+        self._op_eef_qidx: dict[str, np.ndarray] = {}
+        self._op_arm_vidx: dict[str, np.ndarray] = {}
+        self._op_eef_vidx: dict[str, np.ndarray] = {}
+        self._op_output_names: dict[str, tuple[str, str]] = {}
+        for op in self._operators:
+            arm_aidx = self._resolve_actuator_indices(op.arm_actuators)
+            eef_aidx = self._resolve_actuator_indices(op.eef_actuators)
+            arm_qidx, arm_vidx = self._actuator_joint_indices(arm_aidx.tolist())
+            eef_qidx, eef_vidx = self._actuator_joint_indices(eef_aidx.tolist())
+            self._op_arm_aidx[op.name] = arm_aidx
+            self._op_eef_aidx[op.name] = eef_aidx
+            self._op_arm_qidx[op.name] = arm_qidx
+            self._op_eef_qidx[op.name] = eef_qidx
+            self._op_arm_vidx[op.name] = arm_vidx
+            self._op_eef_vidx[op.name] = eef_vidx
+            self._op_output_names[op.name] = (
+                op.arm_output_name or op.name,
+                op.eef_output_name,
+            )
 
         self._camera_specs = {c.name: c for c in config.cameras}
         self._renderers: Dict[str, mujoco.Renderer] = {}
@@ -195,33 +265,43 @@ class UnifiedMujocoEnv:
                     )
                 self._camera_parent_frame[name] = entry
 
-        self._imu_ids = {}
-        self._pose_ids = {}
-        self._pose_site_ids = {}
+        # Per-operator sensor IDs resolved from config (-1 when not specified).
+        self._imu_ids: dict[str, dict[str, int]] = {}
+        self._pose_ids: dict[str, dict[str, int]] = {}
+        self._pose_site_ids: dict[str, int] = {}
         self._pose_validated_components: set[str] = set()
-        self._wrench_ids = {}
-        for comp in self._components:
-            prefix = self._prefix[comp]
-            self._imu_ids[comp] = {
-                "acc": self._sensor_id(f"{prefix}imu_acc"),
-                "gyro": self._sensor_id(f"{prefix}imu_gyro"),
-                "quat": self._sensor_id(f"{prefix}imu_quat"),
+        self._wrench_ids: dict[str, dict[str, int]] = {}
+        for op in self._operators:
+            self._imu_ids[op.name] = {
+                "acc": self._sensor_id(op.imu_acc) if op.imu_acc else -1,
+                "gyro": self._sensor_id(op.imu_gyro) if op.imu_gyro else -1,
+                "quat": self._sensor_id(op.imu_quat) if op.imu_quat else -1,
             }
-            self._pose_ids[comp] = {
-                "pos": self._sensor_id(f"{prefix}global_gripper_pos"),
-                "quat": self._sensor_id(f"{prefix}global_gripper_quat"),
+            self._pose_ids[op.name] = {
+                "pos": self._sensor_id(op.pose_sensor_pos)
+                if op.pose_sensor_pos
+                else -1,
+                "quat": self._sensor_id(op.pose_sensor_quat)
+                if op.pose_sensor_quat
+                else -1,
             }
-            pose_site_name = f"{prefix}eef_pose" if prefix else "eef_pose"
-            self._pose_site_ids[comp] = mujoco.mj_name2id(
-                self.model, mujoco.mjtObj.mjOBJ_SITE, pose_site_name
-            )
-            self._wrench_ids[comp] = {
-                "force": self._sensor_id(f"{prefix}eef_force"),
-                "torque": self._sensor_id(f"{prefix}eef_torque"),
+            if op.pose_site:
+                site_id = mujoco.mj_name2id(
+                    self.model, mujoco.mjtObj.mjOBJ_SITE, op.pose_site
+                )
+                if site_id < 0:
+                    raise ValueError(
+                        f"Operator '{op.name}': pose_site '{op.pose_site}' not found in the model."
+                    )
+                self._pose_site_ids[op.name] = int(site_id)
+            else:
+                self._pose_site_ids[op.name] = -1
+            self._wrench_ids[op.name] = {
+                "force": self._sensor_id(op.wrench_force) if op.wrench_force else -1,
+                "torque": self._sensor_id(op.wrench_torque) if op.wrench_torque else -1,
             }
 
-        # Auto-detect: cameras attached to a non-world body use that body (or a
-        # same-named site on it) as the parent frame.
+        # Auto-detect camera parent frames for cameras attached to non-world bodies.
         for name, cam_id in self._camera_ids.items():
             if name in self._camera_parent_frame:
                 continue  # explicit parent_frame already set
@@ -429,98 +509,63 @@ class UnifiedMujocoEnv:
         dim = self.model.sensor_dim[sensor_id]
         return np.asarray(self.data.sensordata[idx : idx + dim], dtype=np.float32)
 
-    def _component_q_indices(self, component: str) -> np.ndarray:
-        if component == "arm":
-            return np.arange(min(7, self.model.nq), dtype=np.int32)
+    def _resolve_actuator_indices(self, actuator_names: List[str]) -> np.ndarray:
+        """Return actuator index array for the given actuator names.
 
-        prefix = self._prefix[component]
+        Raises ``ValueError`` if any name is not found in the model.
+        """
         indices = []
-        for jid in range(self.model.njnt):
-            name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, jid) or ""
-            if name.startswith(prefix):
-                qpos_adr = int(self.model.jnt_qposadr[jid])
-                indices.append(qpos_adr)
-        indices = sorted(set(indices))
-        if not indices:
-            return np.arange(min(7, self.model.nq), dtype=np.int32)
-        return np.asarray(indices[:7], dtype=np.int32)
-
-    def _component_actuator_indices(self, component: str) -> np.ndarray:
-        prefix = self._prefix[component]
-        if component == "arm":
-            return np.arange(min(7, self.model.nu), dtype=np.int32)
-
-        indices = []
-        for aid in range(self.model.nu):
-            name = (
-                mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, aid) or ""
-            )
-            if name.startswith(prefix):
-                indices.append(aid)
-        if not indices:
-            return np.arange(min(7, self.model.nu), dtype=np.int32)
-        return np.asarray(indices[:7], dtype=np.int32)
-
-    def _component_output_names(self, component: str) -> tuple[str, str]:
-        if component == "arm":
-            return "arm", "eef"
-        if component == "left_arm":
-            return "left_arm", "left_eef"
-        if component == "right_arm":
-            return "right_arm", "right_eef"
-        return component, f"{component}_eef"
-
-    def _split_component_joint_state_indices(
-        self, component: str
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        actuator_indices = self._component_actuator_indices(component)
-        arm_actuator_indices = []
-        eef_actuator_indices = []
-
-        for actuator_idx in actuator_indices:
-            actuator_name = (
-                mujoco.mj_id2name(
-                    self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, int(actuator_idx)
+        for name in actuator_names:
+            aid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
+            if aid < 0:
+                available = [
+                    mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, i)
+                    for i in range(self.model.nu)
+                ]
+                raise ValueError(
+                    f"Actuator '{name}' not found in the Mujoco model. "
+                    f"Available actuators: {available}"
                 )
-                or ""
-            )
-            if "fingers" in actuator_name:
-                eef_actuator_indices.append(int(actuator_idx))
-            else:
-                arm_actuator_indices.append(int(actuator_idx))
+            indices.append(int(aid))
+        return np.asarray(indices, dtype=np.int32)
 
-        def _joint_and_velocity_indices(
-            selected_actuator_indices: list[int],
-        ) -> tuple[np.ndarray, np.ndarray]:
-            joint_indices = []
-            velocity_indices = []
-            for actuator_idx in selected_actuator_indices:
-                joint_id = int(self.model.actuator_trnid[actuator_idx, 0])
-                if joint_id < 0:
-                    continue
-                joint_indices.append(int(self.model.jnt_qposadr[joint_id]))
-                velocity_indices.append(int(self.model.jnt_dofadr[joint_id]))
-            return (
-                np.asarray(joint_indices, dtype=np.int32),
-                np.asarray(velocity_indices, dtype=np.int32),
-            )
-
-        arm_qidx, arm_vidx = _joint_and_velocity_indices(arm_actuator_indices)
-        eef_qidx, eef_vidx = _joint_and_velocity_indices(eef_actuator_indices)
-
+    def _actuator_joint_indices(
+        self, actuator_indices: List[int]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Return ``(qpos_indices, dof_indices)`` for joints driven by the given actuators."""
+        joint_indices = []
+        velocity_indices = []
+        for actuator_idx in actuator_indices:
+            joint_id = int(self.model.actuator_trnid[actuator_idx, 0])
+            if joint_id < 0:
+                continue
+            joint_indices.append(int(self.model.jnt_qposadr[joint_id]))
+            velocity_indices.append(int(self.model.jnt_dofadr[joint_id]))
         return (
-            arm_qidx,
-            eef_qidx,
-            arm_vidx,
-            eef_vidx,
-            np.asarray(arm_actuator_indices, dtype=np.int32),
-            np.asarray(eef_actuator_indices, dtype=np.int32),
+            np.asarray(joint_indices, dtype=np.int32),
+            np.asarray(velocity_indices, dtype=np.int32),
         )
 
-    def _pose_rot9d(self, component: str) -> np.ndarray:
-        site_id = self._pose_site_ids.get(component, -1)
+    def _split_component_joint_state_indices(
+        self, operator_name: str
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Return pre-computed index arrays for ``operator_name``.
+
+        Returns ``(arm_qidx, eef_qidx, arm_vidx, eef_vidx, arm_aidx, eef_aidx)``.
+        """
+        return (
+            self._op_arm_qidx[operator_name],
+            self._op_eef_qidx[operator_name],
+            self._op_arm_vidx[operator_name],
+            self._op_eef_vidx[operator_name],
+            self._op_arm_aidx[operator_name],
+            self._op_eef_aidx[operator_name],
+        )
+
+    def _pose_rot9d(self, operator_name: str) -> np.ndarray:
+        site_id = self._pose_site_ids.get(operator_name, -1)
         if site_id < 0:
-            raise ValueError(f"No pose site found for component '{component}'")
+            raise ValueError(f"No pose site found for operator '{operator_name}'")
         return self.data.site_xmat[site_id]
 
     def _quat_wxyz_to_xyzw(self, quat: np.ndarray) -> np.ndarray:
@@ -532,10 +577,10 @@ class UnifiedMujocoEnv:
         mujoco.mju_mat2Quat(quat_wxyz, np.asarray(rotmat, dtype=np.float64).reshape(9))
         return self._quat_wxyz_to_xyzw(quat_wxyz).astype(np.float32)
 
-    def _site_pose(self, component: str) -> tuple[np.ndarray, np.ndarray]:
-        site_id = self._pose_site_ids.get(component, -1)
+    def _site_pose(self, operator_name: str) -> tuple[np.ndarray, np.ndarray]:
+        site_id = self._pose_site_ids.get(operator_name, -1)
         if site_id < 0:
-            raise ValueError(f"No pose site found for component '{component}'")
+            raise ValueError(f"No pose site found for operator '{operator_name}'")
         pos = np.asarray(self.data.site_xpos[site_id], dtype=np.float32)
         quat = self._rotmat_to_quat_xyzw(self.data.site_xmat[site_id])
         return pos, quat
@@ -567,23 +612,23 @@ class UnifiedMujocoEnv:
         )
 
     def _validate_pose_sensor_matches_site(
-        self, component: str, pos: np.ndarray, quat_xyzw: np.ndarray
+        self, operator_name: str, pos: np.ndarray, quat_xyzw: np.ndarray
     ) -> None:
-        if component in self._pose_validated_components:
+        if operator_name in self._pose_validated_components:
             return
 
-        site_pos, site_quat_xyzw = self._site_pose(component)
+        site_pos, site_quat_xyzw = self._site_pose(operator_name)
         if not np.allclose(pos, site_pos, atol=1e-5) or not self._quats_equivalent_xyzw(
             quat_xyzw, site_quat_xyzw, atol=1e-5
         ):
             raise ValueError(
-                "Pose sensor does not match pose site for component "
-                f"'{component}': sensor_pos={pos.tolist()}, site_pos={site_pos.tolist()}, "
+                "Pose sensor does not match pose site for operator "
+                f"'{operator_name}': sensor_pos={pos.tolist()}, site_pos={site_pos.tolist()}, "
                 f"sensor_quat_xyzw={quat_xyzw.tolist()}, "
                 f"site_quat_xyzw={site_quat_xyzw.tolist()}"
             )
 
-        self._pose_validated_components.add(component)
+        self._pose_validated_components.add(operator_name)
 
     def reset(self) -> None:
         if self.model.nkey > 0:
@@ -613,11 +658,14 @@ class UnifiedMujocoEnv:
         )
         obs: dict[str, dict[str, Any]] = {}
 
-        for component in self._components:
-            arm_qidx, eef_qidx, arm_vidx, eef_vidx, arm_aidx, eef_aidx = (
-                self._split_component_joint_state_indices(component)
-            )
-            arm_name, eef_name = self._component_output_names(component)
+        for op in self._operators:
+            arm_qidx = self._op_arm_qidx[op.name]
+            eef_qidx = self._op_eef_qidx[op.name]
+            arm_vidx = self._op_arm_vidx[op.name]
+            eef_vidx = self._op_eef_vidx[op.name]
+            arm_aidx = self._op_arm_aidx[op.name]
+            eef_aidx = self._op_eef_aidx[op.name]
+            arm_name, eef_name = self._op_output_names[op.name]
 
             if DataType.JOINT_POSITION in self.config.enabled_sensors:
                 obs[f"{arm_name}/joint_state/position"] = {
@@ -656,56 +704,62 @@ class UnifiedMujocoEnv:
                 }
 
             if DataType.POSE in self.config.enabled_sensors:
-                pos = self._sensor_data(self._pose_ids[component]["pos"])
-                quat = self._quat_wxyz_to_xyzw(
-                    self._sensor_data(self._pose_ids[component]["quat"])
-                )
-                rot9d = self._pose_rot9d(component)
-                self._validate_pose_sensor_matches_site(component, pos, quat)
-                obs[f"{component}/pose/position"] = {
-                    "data": pos.astype(np.float32),
-                    "t": t,
-                }
-                obs[f"{component}/pose/orientation"] = {
-                    "data": quat.astype(np.float32),
-                    "t": t,
-                }
-                obs[f"{component}/pose/rotation"] = {
-                    "data": euler_from_matrix(rot9d.reshape(3, 3)),
-                    "t": t,
-                }
-                obs[f"{component}/pose/rotation_6d"] = {
-                    "data": rot9d[:6].astype(np.float32),
-                    "t": t,
-                }
+                site_id = self._pose_site_ids.get(op.name, -1)
+                if site_id >= 0:
+                    pos_id = self._pose_ids[op.name]["pos"]
+                    quat_id = self._pose_ids[op.name]["quat"]
+                    if pos_id >= 0 and quat_id >= 0:
+                        pos = self._sensor_data(pos_id)
+                        quat = self._quat_wxyz_to_xyzw(self._sensor_data(quat_id))
+                        self._validate_pose_sensor_matches_site(op.name, pos, quat)
+                    else:
+                        pos, quat = self._site_pose(op.name)
+                    rot9d = self._pose_rot9d(op.name)
+                    obs[f"{op.name}/pose/position"] = {
+                        "data": pos.astype(np.float32),
+                        "t": t,
+                    }
+                    obs[f"{op.name}/pose/orientation"] = {
+                        "data": quat.astype(np.float32),
+                        "t": t,
+                    }
+                    obs[f"{op.name}/pose/rotation"] = {
+                        "data": euler_from_matrix(rot9d.reshape(3, 3)),
+                        "t": t,
+                    }
+                    obs[f"{op.name}/pose/rotation_6d"] = {
+                        "data": rot9d[:6].astype(np.float32),
+                        "t": t,
+                    }
 
             if DataType.IMU in self.config.enabled_sensors:
-                acc = self._sensor_data(self._imu_ids[component]["acc"])
-                gyro = self._sensor_data(self._imu_ids[component]["gyro"])
-                quat = self._sensor_data(self._imu_ids[component]["quat"])
-                obs[f"{component}/imu/linear_acceleration"] = {
-                    "data": acc,
-                    "t": t,
-                }
-                obs[f"{component}/imu/angular_velocity"] = {
-                    "data": gyro,
-                    "t": t,
-                }
-                obs[f"{component}/imu/orientation"] = {
-                    "data": quat,
-                    "t": t,
-                }
+                acc_id = self._imu_ids[op.name]["acc"]
+                gyro_id = self._imu_ids[op.name]["gyro"]
+                quat_id = self._imu_ids[op.name]["quat"]
+                if acc_id >= 0 and gyro_id >= 0 and quat_id >= 0:
+                    obs[f"{op.name}/imu/linear_acceleration"] = {
+                        "data": self._sensor_data(acc_id),
+                        "t": t,
+                    }
+                    obs[f"{op.name}/imu/angular_velocity"] = {
+                        "data": self._sensor_data(gyro_id),
+                        "t": t,
+                    }
+                    obs[f"{op.name}/imu/orientation"] = {
+                        "data": self._sensor_data(quat_id),
+                        "t": t,
+                    }
 
             if DataType.WRENCH in self.config.enabled_sensors:
-                force = self._sensor_data(self._wrench_ids[component]["force"])
-                torque = self._sensor_data(self._wrench_ids[component]["torque"])
+                force = self._sensor_data(self._wrench_ids[op.name]["force"])
+                torque = self._sensor_data(self._wrench_ids[op.name]["torque"])
                 if force.size == 0 or torque.size == 0:
-                    force, torque = self._wrench_from_tactile(component)
-                obs[f"{component}/wrench/force"] = {
+                    force, torque = self._wrench_from_tactile(op)
+                obs[f"{op.name}/wrench/force"] = {
                     "data": np.asarray(force, dtype=np.float32),
                     "t": t,
                 }
-                obs[f"{component}/wrench/torque"] = {
+                obs[f"{op.name}/wrench/torque"] = {
                     "data": np.asarray(torque, dtype=np.float32),
                     "t": t,
                 }
@@ -781,7 +835,9 @@ class UnifiedMujocoEnv:
             if self.config.viewer.step_delay > 0.0:
                 time.sleep(self.config.viewer.step_delay)
 
-    def _wrench_from_tactile(self, component: str) -> tuple[np.ndarray, np.ndarray]:
+    def _wrench_from_tactile(
+        self, op: OperatorBinding
+    ) -> tuple[np.ndarray, np.ndarray]:
         if self._tactile_manager is None:
             return np.zeros(3, dtype=np.float32), np.zeros(3, dtype=np.float32)
 
@@ -789,12 +845,10 @@ class UnifiedMujocoEnv:
         force = np.zeros(3, dtype=np.float64)
         torque = np.zeros(3, dtype=np.float64)
         for panel_name, panel_wrench in wrenches.items():
-            if component == "arm":
-                matches = True
-            elif component == "left_arm":
-                matches = panel_name.startswith("left_")
+            if not op.tactile_prefixes:
+                matches = len(self._operators) == 1
             else:
-                matches = panel_name.startswith("right_")
+                matches = any(panel_name.startswith(pfx) for pfx in op.tactile_prefixes)
             if not matches:
                 continue
             panel_wrench = np.asarray(panel_wrench, dtype=np.float64).reshape(-1)
@@ -802,6 +856,17 @@ class UnifiedMujocoEnv:
                 force += panel_wrench[:3]
                 torque += panel_wrench[3:6]
         return force.astype(np.float32), torque.astype(np.float32)
+
+    def _find_operator_for_tactile_panel(
+        self, panel_prefix: str
+    ) -> OperatorBinding | None:
+        for op in self._operators:
+            if not op.tactile_prefixes:
+                if len(self._operators) == 1:
+                    return op
+            elif any(panel_prefix.startswith(pfx) for pfx in op.tactile_prefixes):
+                return op
+        return None
 
     def _group_tactile_by_component(
         self, tactile_tensor: np.ndarray
@@ -812,50 +877,42 @@ class UnifiedMujocoEnv:
         cols = 5
         max_points = rows * cols
         for i, panel_prefix in enumerate(self._tactile_manager.panel_order):
+            op = self._find_operator_for_tactile_panel(panel_prefix)
+            if op is None:
+                continue
+            _, eef_name = self._op_output_names[op.name]
             panel_data = tactile_tensor[i]
             packed_points = np.zeros((max_points, 6), dtype=np.float32)
 
-            for i in range(min(len(panel_data), max_points)):
-                row = i // cols
-                col = i % cols
-                packed_points[i, 0] = col * 0.005
-                packed_points[i, 1] = row * 0.005
-                packed_points[i, 2] = 0.0
-                packed_points[i, 3] = panel_data[i, 0]
-                packed_points[i, 4] = panel_data[i, 1]
-                packed_points[i, 5] = panel_data[i, 2]
+            for j in range(min(len(panel_data), max_points)):
+                row = j // cols
+                col = j % cols
+                packed_points[j, 0] = col * 0.005
+                packed_points[j, 1] = row * 0.005
+                packed_points[j, 2] = 0.0
+                packed_points[j, 3] = panel_data[j, 0]
+                packed_points[j, 4] = panel_data[j, 1]
+                packed_points[j, 5] = panel_data[j, 2]
 
             feats = ("x", "y", "z", "fx", "fy", "fz")
             field_size = 4
             fields = [
                 {
                     "name": name,
-                    "offset": field_size * i,
+                    "offset": field_size * idx,
                     "datatype": "FLOAT32",
                     "count": 1,
                 }
-                for i, name in enumerate(feats)
+                for idx, name in enumerate(feats)
             ]
 
-            single = self.config.arm_mode == "single"
-            comp_suffix = "arm_eef"
-            if single:
-                comp = comp_suffix
-            else:
-                if panel_prefix.startswith("left_"):
-                    comp = "left_" + comp_suffix
-                elif panel_prefix.startswith("right_"):
-                    comp = "right_" + comp_suffix
-                else:
-                    raise ValueError(
-                        f"Unexpected panel prefix '{panel_prefix}' in multi-arm mode"
-                    )
+            # Derive a label from the panel prefix (strip trailing underscore).
+            panel_label = panel_prefix.rstrip("_")
+            key = f"{eef_name}_{panel_label}" if panel_label else eef_name
 
             sim_time = self.data.time
             sec = int(sim_time)
             nanosec = int((sim_time - sec) * 1e9)
-            loc = "left" if panel_prefix.endswith("left_") else "right"
-            key = f"{comp}_{loc}"
             grouped[key] = {
                 "header": {
                     "frame_id": f"{key}_tactile",

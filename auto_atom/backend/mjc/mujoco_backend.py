@@ -76,8 +76,6 @@ class MujocoOperatorHandler(OperatorHandler):
     """The runtime-visible operator name for this controller."""
     env: UnifiedMujocoEnv
     """The shared Mujoco basis environment used to step the simulation."""
-    component: str = "arm"
-    """The environment component name this operator is bound to."""
     root_body_name: str = "robotiq_interface"
     """The root body name used to read the operator base pose."""
     eef_site_name: str = "eef_pose"
@@ -306,7 +304,7 @@ class MujocoOperatorHandler(OperatorHandler):
     def home(self) -> None:
         self.reset_state()
         arm_qidx, eef_qidx, arm_vidx, eef_vidx, arm_aidx, eef_aidx = (
-            self.env._split_component_joint_state_indices(self.component)
+            self.env._split_component_joint_state_indices(self.operator_name)
         )
         n = min(len(self._home_ctrl), self.env.model.nu)
         ctrl = np.asarray(self.env.data.ctrl, dtype=np.float64).copy()
@@ -340,7 +338,7 @@ class MujocoOperatorHandler(OperatorHandler):
         """
         roll, pitch, yaw = quaternion_to_rpy(pose.orientation)
         arm_qidx, _, arm_vidx, eef_vidx, arm_aidx, _ = (
-            self.env._split_component_joint_state_indices(self.component)
+            self.env._split_component_joint_state_indices(self.operator_name)
         )
         n = min(len(self._home_ctrl), self.env.model.nu)
         new_ctrl = np.asarray(self.env.data.ctrl, dtype=np.float64).copy()
