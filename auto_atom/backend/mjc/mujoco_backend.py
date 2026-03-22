@@ -494,6 +494,38 @@ class MujocoTaskBackend(SceneBackend):
                 return True
         return False
 
+    def is_operator_contacting(self, operator_name: str, object_name: str) -> bool:
+        """Return True if any geom of the operator is in contact with the target object."""
+        operator = self.get_operator_handler(operator_name)
+        target = self.get_object_handler(object_name)
+        if target is None:
+            return False
+        target_body_id = mujoco.mj_name2id(
+            self.env.model, mujoco.mjtObj.mjOBJ_BODY, target.body_name
+        )
+        if target_body_id < 0:
+            return False
+        # Collect all body IDs that belong to this operator (root + descendants).
+        root_body_id = mujoco.mj_name2id(
+            self.env.model, mujoco.mjtObj.mjOBJ_BODY, operator.root_body_name
+        )
+        operator_body_ids: set[int] = set()
+        for bid in range(self.env.model.nbody):
+            parent = int(self.env.model.body_parentid[bid])
+            if bid == root_body_id or (parent in operator_body_ids and bid != 0):
+                operator_body_ids.add(bid)
+        for idx in range(self.env.data.ncon):
+            contact = self.env.data.contact[idx]
+            geom1 = int(contact.geom1)
+            geom2 = int(contact.geom2)
+            body1 = int(self.env.model.geom_bodyid[geom1])
+            body2 = int(self.env.model.geom_bodyid[geom2])
+            if target_body_id in {body1, body2}:
+                other_body = body2 if body1 == target_body_id else body1
+                if other_body in operator_body_ids:
+                    return True
+        return False
+
     def set_interest_objects_and_operations(
         self,
         object_names: List[str],

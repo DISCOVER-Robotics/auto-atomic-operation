@@ -30,7 +30,7 @@ class Operation(str, Enum):
     PULL = "pull"
     """Execute pre_move → eef (close gripper) → post_move to approach an object, grasp it, and pull it to a target pose. Pre-condition `grasped` is checked after the eef phase (confirming a successful grasp before pulling); post-condition `grasped` is checked after the post_move phase. Failure occurs when either condition `grasped` is not satisfied."""
     PRESS = "press"
-    """Execute pre_move → post_move to approach and press an object at the target pose. No pre-condition is checked; post-condition `contacted` is checked after the post_move phase. Failure occurs when the post-condition `contacted` is not satisfied (the operator is not in contact with the target object at the end of the operation)."""
+    """Execute pre_move → eef → post_move to approach and press an object at the target pose. No pre-condition is checked; post-condition `contacted` is checked after the eef phase (at the moment of contact, before retreat). Failure occurs when the post-condition `contacted` is not satisfied (the operator end-effector is not in contact with the target object after the eef phase)."""
 
 
 class OperationConstraint(str, Enum):

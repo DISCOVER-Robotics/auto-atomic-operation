@@ -148,6 +148,37 @@ class SceneBackend(ABC):
     def is_operator_grasping(self, operator_name: str) -> bool:
         """Return whether the operator is currently grasping any object."""
 
+    def is_object_displaced(
+        self,
+        object_name: str,
+        original_pose: "PoseState",
+        threshold: float = 0.01,
+    ) -> bool:
+        """Return True if *object_name* has moved more than *threshold* metres from *original_pose*.
+
+        The default implementation uses Euclidean distance between positions.
+        Override for orientation-aware or physics-specific displacement metrics.
+        """
+        handler = self.get_object_handler(object_name)
+        if handler is None:
+            return False
+        current = handler.get_pose()
+        delta = float(
+            np.linalg.norm(
+                np.asarray(current.position, dtype=np.float64)
+                - np.asarray(original_pose.position, dtype=np.float64)
+            )
+        )
+        return delta > threshold
+
+    def is_operator_contacting(self, operator_name: str, object_name: str) -> bool:
+        """Return True if the operator end-effector is currently in contact with *object_name*.
+
+        The default implementation always returns False.  Override in backends that
+        support contact sensing (e.g. MuJoCo contact pair queries or tactile sensors).
+        """
+        return False
+
     def set_interest_objects_and_operations(
         self,
         object_names: List[str],
@@ -510,6 +541,8 @@ class ActiveStageState:
     """The ordered primitive actions still being executed for this stage."""
     action_index: int = 0
     """The index of the primitive action currently in progress."""
+    initial_object_pose: Optional[PoseState] = None
+    """The world pose of the target object captured at stage start; used for displacement checks."""
 
 
 class ComponentRegistry:
@@ -569,7 +602,7 @@ class TaskFlowBuilder:
     def build_actions(stage: StageConfig) -> List[PrimitiveAction]:
         control = TaskFlowBuilder._normalize_control(stage)
 
-        if stage.operation in {Operation.MOVE, Operation.PUSH}:
+        if stage.operation in {Operation.MOVE, Operation.PUSH, Operation.PRESS}:
             actions: List[PrimitiveAction] = TaskFlowBuilder._build_pose_actions(
                 TaskFlowBuilder._require_moves(stage, control, "pre_move")
             )
@@ -601,6 +634,10 @@ class TaskFlowBuilder:
         elif stage.operation == Operation.PLACE:
             actions.append(
                 PrimitiveAction(kind="eef", eef=TaskFlowBuilder._release_eef(control))
+            )
+        elif stage.operation == Operation.PRESS:
+            actions.append(
+                PrimitiveAction(kind="eef", eef=TaskFlowBuilder._grasp_eef(control))
             )
         elif stage.operation not in {Operation.MOVE, Operation.PUSH}:
             raise NotImplementedError(
@@ -712,10 +749,15 @@ class TaskRunner:
 
         if self._active_stage is None:
             plan = self._plan[self._stage_index]
-            precondition_failure = self._check_stage_condition(
-                context=context,
-                plan=plan,
-                condition_type=OperationConditionType.PERFORM,
+            precondition_failure = (
+                # PULL defers its pre-condition check to after the eef phase.
+                None
+                if plan.stage.operation == Operation.PULL
+                else self._check_stage_condition(
+                    context=context,
+                    plan=plan,
+                    condition_type=OperationConditionType.PERFORM,
+                )
             )
             if precondition_failure is not None:
                 self._records.append(
@@ -764,41 +806,61 @@ class TaskRunner:
         if result.signal == ControlSignal.REACHED:
             completed_action = action
             active.action_index += 1
-            if active.action_index < len(active.actions):
-                grasp_failed = (
-                    completed_action.kind == "eef"
-                    and completed_action.eef is not None
-                    and completed_action.eef.close
-                    and active.plan.stage.operation in {Operation.PICK, Operation.PULL}
-                    and not context.backend.is_operator_grasping(active.operator.name)
-                )
-                if grasp_failed:
-                    grasp_failure = self._check_stage_condition(
+            op = active.plan.stage.operation
+
+            # --- Phase-boundary condition checks ---
+            mid_failure: Optional[Dict[str, Any]] = None
+            if completed_action.kind == "eef":
+                if op == Operation.PULL:
+                    # PULL pre-condition: grasped must hold after eef before post_move.
+                    mid_failure = self._check_stage_condition(
+                        context=context,
+                        plan=active.plan,
+                        condition_type=OperationConditionType.PERFORM,
+                        initial_pose=active.initial_object_pose,
+                    )
+                elif op == Operation.PICK and not context.backend.is_operator_grasping(
+                    active.operator.name
+                ):
+                    # PICK: early exit if grasp already failed (avoids unnecessary post_move).
+                    mid_failure = self._check_stage_condition(
                         context=context,
                         plan=active.plan,
                         condition_type=OperationConditionType.SUCCESS,
+                        initial_pose=active.initial_object_pose,
                     )
-                    self._records.append(
-                        ExecutionRecord(
-                            stage_index=active.plan.stage_index,
-                            stage_name=active.plan.stage_name,
-                            operator=active.operator.name,
-                            operation=active.plan.stage.operation.value,
-                            target_object=active.plan.stage.object,
-                            blocking=active.plan.stage.blocking,
-                            status=StageExecutionStatus.FAILED,
-                            details=grasp_failure or details,
-                        )
-                    )
-                    self._active_stage = None
-                    context.backend.set_interest_objects_and_operations([], [])
-                    return self._build_update(
+                elif op == Operation.PRESS:
+                    # PRESS post-condition: contacted must hold at the press point (after eef).
+                    mid_failure = self._check_stage_condition(
+                        context=context,
                         plan=active.plan,
-                        status=StageExecutionStatus.FAILED,
-                        details=grasp_failure or details,
-                        done=True,
-                        success=False,
+                        condition_type=OperationConditionType.SUCCESS,
+                        initial_pose=active.initial_object_pose,
                     )
+            if mid_failure is not None:
+                self._records.append(
+                    ExecutionRecord(
+                        stage_index=active.plan.stage_index,
+                        stage_name=active.plan.stage_name,
+                        operator=active.operator.name,
+                        operation=active.plan.stage.operation.value,
+                        target_object=active.plan.stage.object,
+                        blocking=active.plan.stage.blocking,
+                        status=StageExecutionStatus.FAILED,
+                        details=mid_failure,
+                    )
+                )
+                self._active_stage = None
+                context.backend.set_interest_objects_and_operations([], [])
+                return self._build_update(
+                    plan=active.plan,
+                    status=StageExecutionStatus.FAILED,
+                    details=mid_failure,
+                    done=True,
+                    success=False,
+                )
+
+            if active.action_index < len(active.actions):
                 return self._build_update(
                     plan=active.plan,
                     status=StageExecutionStatus.RUNNING,
@@ -806,10 +868,18 @@ class TaskRunner:
                     done=False,
                     success=None,
                 )
-            success_failure = self._check_stage_condition(
-                context=context,
-                plan=active.plan,
-                condition_type=OperationConditionType.SUCCESS,
+
+            # --- Final post-condition check (after all actions complete) ---
+            # PRESS post-condition was already checked after the eef phase; skip here.
+            success_failure = (
+                None
+                if op == Operation.PRESS
+                else self._check_stage_condition(
+                    context=context,
+                    plan=active.plan,
+                    condition_type=OperationConditionType.SUCCESS,
+                    initial_pose=active.initial_object_pose,
+                )
             )
             if success_failure is not None:
                 self._records.append(
@@ -902,11 +972,18 @@ class TaskRunner:
     ) -> ActiveStageState:
         operator = context.backend.get_operator_handler(plan.operator_name)
         target = context.backend.get_object_handler(plan.stage.object)
+        initial_object_pose: Optional[PoseState] = None
+        if target is not None:
+            try:
+                initial_object_pose = target.get_pose()
+            except NotImplementedError:
+                pass
         return ActiveStageState(
             plan=plan,
             operator=operator,
             target=target,
             actions=self.builder.build_actions(plan.stage),
+            initial_object_pose=initial_object_pose,
         )
 
     @staticmethod
@@ -914,24 +991,35 @@ class TaskRunner:
         context: ExecutionContext,
         plan: StageExecutionPlan,
         condition_type: OperationConditionType,
+        initial_pose: Optional[PoseState] = None,
     ) -> Optional[Dict[str, Any]]:
         constraints = OPERATION_CONDITIONS.get(plan.stage.operation)
         if not constraints:
             return None
 
         constraint = constraints.get(condition_type)
-        if constraint is None:
+        if constraint is None or constraint == OperationConstraint.NONE:
             return None
 
         operator_name = plan.operator_name
+        object_name = plan.stage.object
         backend = context.backend
         is_grasping = backend.is_operator_grasping(operator_name)
 
-        satisfied = True
         if constraint == OperationConstraint.GRASPED:
             satisfied = is_grasping
         elif constraint == OperationConstraint.RELEASED:
             satisfied = not is_grasping
+        elif constraint == OperationConstraint.CONTACTED:
+            satisfied = backend.is_operator_contacting(operator_name, object_name)
+        elif constraint == OperationConstraint.DISPLACED:
+            satisfied = (
+                backend.is_object_displaced(object_name, initial_pose)
+                if initial_pose is not None and object_name
+                else True
+            )
+        else:
+            satisfied = True
 
         if satisfied:
             return None
@@ -941,17 +1029,27 @@ class TaskRunner:
             if condition_type == OperationConditionType.PERFORM
             else "postcondition"
         )
-        if constraint == OperationConstraint.GRASPED:
-            failure_category = "missing_grasp"
-            failure_reason = "operator is not grasping a required object"
-        elif constraint == OperationConstraint.RELEASED:
-            failure_category = "unexpected_grasp"
-            failure_reason = (
-                "operator is still grasping an object when it should be empty-handed"
-            )
-        else:
-            failure_category = "condition_mismatch"
-            failure_reason = "stage condition is not satisfied"
+        _failure_map = {
+            OperationConstraint.GRASPED: (
+                "missing_grasp",
+                "operator is not grasping the required object",
+            ),
+            OperationConstraint.RELEASED: (
+                "unexpected_grasp",
+                "operator is still grasping when it should be empty-handed",
+            ),
+            OperationConstraint.CONTACTED: (
+                "no_contact",
+                f"operator end-effector is not in contact with '{object_name}'",
+            ),
+            OperationConstraint.DISPLACED: (
+                "no_displacement",
+                f"object '{object_name}' has not been displaced beyond the threshold",
+            ),
+        }
+        failure_category, failure_reason = _failure_map.get(
+            constraint, ("condition_mismatch", "stage condition is not satisfied")
+        )
 
         return {
             "event": f"stage_{phase}_failed",
@@ -962,7 +1060,7 @@ class TaskRunner:
             "required_constraint": constraint.value,
             "operator": operator_name,
             "operation": plan.stage.operation.value,
-            "target_object": plan.stage.object,
+            "target_object": object_name,
             "is_operator_grasping": is_grasping,
         }
 

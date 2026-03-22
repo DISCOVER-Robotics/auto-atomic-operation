@@ -88,7 +88,7 @@ task:
     # approach z+0.12 above site, descend to z+0.02 (at cylinder top)
     - name: press_blue
       object: button_blue
-      operation: push
+      operation: press
       operator: arm
       param:
         pre_move:
@@ -106,7 +106,7 @@ task:
     # Stage 2: Press green button
     - name: press_green
       object: button_green
-      operation: push
+      operation: press
       operator: arm
       param:
         pre_move:
@@ -124,7 +124,7 @@ task:
     # Stage 3: Press pink button
     - name: press_pink
       object: button_pink
-      operation: push
+      operation: press
       operator: arm
       param:
         pre_move:

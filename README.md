@@ -208,20 +208,20 @@ A task file has four top-level keys:
 
 ### Atomic operations
 
-Each stage executes up to three sub-phases in order: **pre_move** (approach waypoints) → **eef** (gripper action) → **post_move** (retreat waypoints). Not every operation uses all three sub-phases.
+Each stage executes up to three sub-phases in order: **pre_move** (approach waypoints) → **eef** (gripper action) → **post_move** (retreat waypoints). The table below lists only the sub-phases that each operation **requires**; any unlisted sub-phases are optional and executed when provided.
 
 Pre- and post-conditions constrain when an operation may run and what constitutes success. The timing of condition checks depends on the operation:
 
-| Operation | Description | Active sub-phases | Pre-condition | Pre-condition checked | Post-condition | Post-condition checked |
-| --------- | ----------- | ----------------- | ------------- | --------------------- | -------------- | ---------------------- |
+| Operation | Description | Required sub-phases | Pre-condition | Pre-condition checked | Post-condition | Post-condition checked |
+| --------- | ----------- | ------------------- | ------------- | --------------------- | -------------- | ---------------------- |
 | `move`    | Move to a target pose without interacting with any object | pre_move | — | — | — | — |
 | `grasp`   | Close the gripper at the current position to grasp an object | eef | `released` | Before eef | `grasped` | After eef |
 | `release` | Open the gripper at the current position to release the held object | eef | `grasped` | Before eef | `released` | After eef |
-| `pick`    | Approach the object (pre_move), grasp it (eef), then retreat (post_move) | pre_move → eef → post_move | `released` | Before pre_move | `grasped` | After post_move |
-| `place`   | Approach the target (pre_move), release the object (eef), then retreat (post_move) | pre_move → eef → post_move | `grasped` | Before pre_move | `released` | After post_move |
-| `push`    | Move to the object and push it to the target location | pre_move → post_move | — | — | `displaced` | After post_move |
-| `pull`    | Move to the object (pre_move), grasp it (eef), then pull to the target (post_move) | pre_move → eef → post_move | `grasped` | After eef | `grasped` | After post_move |
-| `press`   | Move to the object and press it at the target pose | pre_move → post_move | — | — | `contacted` | After post_move |
+| `pick`    | Approach the object, grasp it, then retreat | pre_move, eef | `released` | Before pre_move | `grasped` | After post_move |
+| `place`   | Approach the target, release the object, then retreat | pre_move, eef | `grasped` | Before pre_move | `released` | After post_move |
+| `push`    | Move to the object and push it to the target location | pre_move | — | — | `displaced` | After post_move |
+| `pull`    | Move to the object, grasp it, then pull to the target | pre_move | `grasped` | After eef | `grasped` | After post_move |
+| `press`   | Move to the object and press it at the target pose | pre_move | — | — | `contacted` | After eef |
 
 **Condition constraints:**
 
