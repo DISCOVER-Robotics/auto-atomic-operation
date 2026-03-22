@@ -26,6 +26,22 @@ A YAML-driven atomic operation framework for robotic manipulation.
 
 Requires **Python 3.10+**.
 
+### Install from PyPI
+
+```bash
+pip install auto-atomic-operation
+```
+
+### Install from source
+
+```bash
+GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/OpenGHz/auto-atomic-operation.git
+```
+
+Note: the mujoco demo assets are stored with Git LFS, so the above command skips downloading them. If you want to use the demos, follow the instructions in the [Examples](#examples) section below to download the assets separately.
+
+Then install the package:
+
 ```bash
 # Core framework only
 pip install -e .
@@ -46,15 +62,24 @@ python examples/run_mock_example.py
 
 Uses the in-memory mock backend — ideal for testing task logic in isolation.
 
-### MuJoCo pick-and-place demo
+### MuJoCo demos
 
-Download the assets and unzip:
+If you want to use all the MuJoCo demos, make sure to install Git LFS and pull the assets after cloning:
+
+```bash
+# For Debian/Ubuntu, you can install Git LFS via packagecloud.
+# Firstly, you may need to add the repository to your system through the following sh script:
+# curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh
+sudo apt-get install git-lfs
+git lfs pull
+```
+
+If you only want to try the basic pick and place demo, you can download the specific assets and unzip:
 
 ```bash
 wget https://drive.usercontent.google.com/download?id=1NPHpa8KnPDKYunWXTQm1168QOC0X4iPU&export=download&authuser=0 --no-check-certificate -O assets.zip
 
 unzip assets.zip
-
 ```
 
 ```bash
@@ -62,7 +87,7 @@ sudo apt-get install git-lfs
 # curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
 ```
 
-Run the demo:
+Run the pick & place demo:
 
 ```bash
 python examples/run_mujoco_pick_place_demo.py
