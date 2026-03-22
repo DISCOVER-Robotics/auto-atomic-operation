@@ -52,17 +52,25 @@ pip install -e ".[mujoco]"
 
 ## Examples
 
-The [`examples/`](examples/) directory contains two runnable demos:
+The [`examples/`](examples/) directory contains a single entry-point script [`run_demo.py`](examples/run_demo.py) and a [`mujoco/`](examples/mujoco/) subdirectory with YAML configs:
+
+```
+examples/
+├── run_demo.py          # Unified Hydra-based runner
+└── mujoco/
+    ├── pick_and_place.yaml   # MuJoCo pick-and-place demo (default)
+    └── mock.yaml             # Mock backend demo (no simulator required)
+```
 
 ### Mock example (no robot or simulator required)
 
 ```bash
-python examples/run_mock_example.py
+python examples/run_demo.py --config-name mock
 ```
 
 Uses the in-memory mock backend — ideal for testing task logic in isolation.
 
-### MuJoCo demos
+### MuJoCo pick-and-place demo
 
 Make sure to install Git LFS and pull the assets after cloning:
 
@@ -83,10 +91,15 @@ git lfs pull -I "assets/meshes/robotiq/*"
 Run the pick & place demo:
 
 ```bash
-python examples/run_mujoco_pick_place_demo.py
+python examples/run_demo.py
 ```
 
-A full pick-and-place task with RGB-D cameras, tactile sensors, and randomized object placement, running in the Mujoco physics simulator.
+A full pick-and-place task with RGB-D cameras, tactile sensors, and randomized object placement, running in the Mujoco physics simulator. Config values can be overridden on the command line via Hydra:
+
+```bash
+python examples/run_demo.py task.seed=0
+python examples/run_demo.py "task.randomization.source_block.x=[-0.05,0.05]"
+```
 
 ## Quick Start
 
