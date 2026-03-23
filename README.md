@@ -56,10 +56,13 @@ The [`examples/`](examples/) directory contains a single entry-point script [`ru
 
 ```
 examples/
-├── run_demo.py          # Unified Hydra-based runner
+├── run_demo.py                    # Unified Hydra-based runner
 └── mujoco/
-    ├── pick_and_place.yaml   # MuJoCo pick-and-place demo (default)
-    └── mock.yaml             # Mock backend demo (no simulator required)
+    ├── pick_and_place.yaml        # Pick and place a block (default)
+    ├── cup_on_coaster.yaml        # Pick a cup and place it on a coaster
+    ├── stack_color_blocks.yaml    # Stack three colored blocks
+    ├── press_three_buttons.yaml   # Press three buttons in sequence
+    └── mock.yaml                  # Mock backend demo (no simulator required)
 ```
 
 ### Mock example (no robot or simulator required)
@@ -70,7 +73,7 @@ python examples/run_demo.py --config-name mock
 
 Uses the in-memory mock backend — ideal for testing task logic in isolation.
 
-### MuJoCo pick-and-place demo
+### MuJoCo demos
 
 Make sure to install Git LFS and pull the assets after cloning:
 
@@ -82,29 +85,26 @@ sudo apt-get install git-lfs
 git lfs pull
 ```
 
-If you only want to try the basic pick and place demo, you can only pull the assets for that demo:
+Run any demo by passing its config name:
 
 ```bash
-git lfs pull -I "assets/meshes/robotiq/*"
+python examples/run_demo.py --config-name <config>
 ```
 
-Run the pick & place demo:
+Available configs:
+
+| Config | Description |
+| ------ | ----------- |
+| `pick_and_place` (default) | Pick a block and place it at a target location |
+| `cup_on_coaster` | Pick a cup from a randomized position and place it on a coaster |
+| `stack_color_blocks` | Stack three colored blocks: blue on orange, then yellow on blue |
+| `press_three_buttons` | Press three buttons (blue, green, pink) in sequence |
+
+Each demo runs in the MuJoCo physics simulator with RGB-D cameras, tactile sensors, and randomized object placement. The scene XML for each demo is at `assets/xmls/scenes/<config>/demo.xml` and can be previewed with:
 
 ```bash
-python examples/run_demo.py --config-name pick_and_place
+(cd assets/xmls/scenes/<config>/ && python -m mujoco.viewer --mjcf demo.xml)
 ```
-
-A full pick-and-place task with RGB-D cameras, tactile sensors, and randomized object placement, running in the Mujoco physics simulator.
-
-This demo uses the scene `assets/xmls/scenes/pick_and_place/demo.xml`. You can use the following command to visualize the scene:
-
-```bash
-(cd assets/xmls/scenes/pick_and_place/ && python -m mujoco.viewer --mjcf demo.yaml)
-```
-
-Note: (command) will use a sub-shell to change the working directory, so it won't affect the main shell's current directory.
-
-```bash
 
 Config values can be overridden on the command line via Hydra:
 
