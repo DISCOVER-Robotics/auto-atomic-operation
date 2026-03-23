@@ -139,6 +139,8 @@ class EnvConfig(BaseModel, frozen=True):
     """Physics simulation frequency in Hz. If None, uses the timestep defined in the XML model."""
     update_freq: float | None = None
     """Control update frequency in Hz. Must be <= sim_freq. If None, defaults to sim_freq (n_substeps=1)."""
+    initial_joint_positions: Dict[str, float] = Field(default_factory=dict)
+    """Joint name → qpos value overrides applied after every reset (after the keyframe)."""
     viewer: ViewerConfig | None = None
     """Viewer configuration. If None, the passive viewer is not launched."""
     structured: bool = False
@@ -637,6 +639,10 @@ class UnifiedMujocoEnv:
             mujoco.mj_resetDataKeyframe(self.model, self.data, 0)
         else:
             mujoco.mj_resetData(self.model, self.data)
+        for joint_name, qpos_val in self.config.initial_joint_positions.items():
+            jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+            if jid >= 0:
+                self.data.qpos[int(self.model.jnt_qposadr[jid])] = qpos_val
         mujoco.mj_forward(self.model, self.data)
 
     def step(self, action: np.ndarray) -> None:

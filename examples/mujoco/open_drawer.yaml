@@ -1,6 +1,6 @@
 env:
   _target_: auto_atom.runtime.ComponentRegistry.register_env
-  name: open_close_drawer
+  name: open_drawer
   env:
     _target_: auto_atom.basis.mujoco_env.UnifiedMujocoEnv
     config:
@@ -45,18 +45,18 @@ env:
           enable_depth: true
           enable_mask: false
           enable_heat_map: false
-      viewer:
-        lookat: [0.0, 0.04, 0.12]
-        distance: 0.75
-        azimuth: 155
-        elevation: -22
-        step_delay: 0.025
-        hold_seconds: 3.0
+      # viewer:
+      #   lookat: [0.0, 0.04, 0.12]
+      #   distance: 0.75
+      #   azimuth: 155
+      #   elevation: -22
+      #   step_delay: 0.025
+      #   hold_seconds: 3.0
 
 backend: auto_atom.backend.mjc.mujoco_backend.build_mujoco_backend
 
 task:
-  env_name: open_close_drawer
+  env_name: open_drawer
   seed: 42
   stages:
     # Pull the handle to open the drawer.
@@ -73,7 +73,7 @@ task:
           - position: [0.0, -0.10, 0.0]
             orientation: [-0.5, 0.5, 0.5, 0.5]
             reference: object_world
-          # Step 2: advance to grasp position — EEF at handle center in Y so finger
+          # Step 2: advance to grasp position �� EEF at handle center in Y so finger
           #         pads (±42 mm in Z) straddle the handle (±15 mm in Z) and can close on it
           - position: [0.0, 0.0, 0.0]
             orientation: [-0.5, 0.5, 0.5, 0.5]
