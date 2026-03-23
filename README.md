@@ -75,6 +75,13 @@ Uses the in-memory mock backend — ideal for testing task logic in isolation.
 
 ### MuJoCo demos
 
+| | |
+|:---:|:---:|
+| ![pick_and_place](assets/videos/pick_and_place.gif) | ![cup_on_coaster](assets/videos/cup_on_coaster.gif) |
+| `pick_and_place` | `cup_on_coaster` |
+| ![stack_color_blocks](assets/videos/stack_color_blocks.gif) | ![press_three_buttons](assets/videos/press_three_buttons.gif) |
+| `stack_color_blocks` | `press_three_buttons` |
+
 Make sure to install Git LFS and pull the assets after cloning:
 
 ```bash
