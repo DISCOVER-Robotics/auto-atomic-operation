@@ -130,6 +130,19 @@ python examples/run_demo.py task.seed=0
 python examples/run_demo.py "task.randomization.source_block.x=[-0.05,0.05]"
 ```
 
+### 3D GS Rendering Demos
+
+Run the following command to download the assets for the 3D GS assets for the demos:
+
+```bash
+pip install huggingface_hub
+hf download OpenGHz/auto-atom-assets --repo-type=dataset --include "assets/gs/*" --local-dir .
+```
+
+If the download is slow, you may need to configure a terminal proxy first. You can also download the assets in your browser from https://huggingface.co/datasets/OpenGHz/auto-atom-assets/tree/main.
+
+Configuration files related to 3D GS end with `_gs.yaml` and are run in the same way as described above.
+
 ## Data Collection
 
 See the **[Data Collection Guide](docs/data_collection.md)** for recording task demos (GIF/MP4) and comparing GS vs native MuJoCo rendering.
