@@ -280,7 +280,7 @@
       <geom name="chicken_doll_vis_028" type="mesh" mesh="chicken_doll_part_028" material="chicken_doll_mat" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="chicken_doll_vis_029" type="mesh" mesh="chicken_doll_part_029" material="chicken_doll_mat" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="chicken_doll_vis_030" type="mesh" mesh="chicken_doll_part_030" material="chicken_doll_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="chicken_doll_col" type="box" size="0.04 0.04 0.031" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+      <geom name="chicken_doll_col" type="box" size="0.045 0.045 0.035" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
       <site name="chicken_doll_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
     </body>
     <!-- dog (static) -->

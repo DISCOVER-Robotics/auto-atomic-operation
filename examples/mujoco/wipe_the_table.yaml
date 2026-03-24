@@ -27,7 +27,8 @@ env:
         - joint_effort
       sim_freq: 500
       update_freq: 20
-      operations: ["pick", "place", "push", "pull", "press"]
+      mask_objects: ["blue_duck", "chicken_doll", "transparent_tape_paper", "white_box"]
+      operations: ["pick", "place"]
       cameras:
         - name: front_cam
           width: 640
@@ -48,7 +49,147 @@ backend: auto_atom.backend.mjc.mujoco_backend.build_mujoco_backend
 
 task:
   env_name: wipe_the_table
-  stages: []
+  seed: 42
+  randomization:
+    blue_duck:
+      x: [-0.01, 0.01]
+      y: [-0.01, 0.01]
+      collision_radius: 0.05
+    chicken_doll:
+      x: [-0.01, 0.01]
+      y: [-0.01, 0.01]
+      collision_radius: 0.05
+    transparent_tape_paper:
+      x: [-0.01, 0.01]
+      y: [-0.01, 0.01]
+      collision_radius: 0.05
+    arm:
+      x: [-0.01, 0.01]
+      y: [-0.01, 0.01]
+      collision_radius: 0.15
+  stages:
+    # Stage 1: Pick blue duck
+    # blue_duck col half-height=0.026, center z=0.12
+    - name: pick_blue_duck
+      object: blue_duck
+      operation: pick
+      operator: arm
+      param:
+        pre_move:
+          - position: [0.0, 0.0, 0.12]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+          - position: [0.0, 0.0, 0.001]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+        post_move:
+          - position: [0.0, 0.0, 0.2]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: eef_world
+        eef:
+          close: true
+
+    # Stage 2: Place blue duck into white box
+    # white_box center z=0.09, col half-height=0.07 → top z≈0.16
+    # place offset from box center = 0.10 (above box rim)
+    - name: place_blue_duck_in_box
+      object: white_box
+      operation: place
+      operator: arm
+      param:
+        pre_move:
+          - position: [0.0, 0.05, 0.20]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+          - position: [0.0, 0.05, 0.15]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+        post_move:
+          - position: [0.0, 0.05, 0.20]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+        eef:
+          close: false
+
+    # Stage 3: Pick chicken doll
+    - name: pick_chicken_doll
+      object: chicken_doll
+      operation: pick
+      operator: arm
+      param:
+        pre_move:
+          - position: [0.0, 0.0, 0.12]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+          - position: [0.0, 0.0, 0.001]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+        post_move:
+          - position: [0.0, 0.0, 0.2]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: eef_world
+        eef:
+          close: true
+
+    # Stage 4: Place chicken doll into white box
+    - name: place_chicken_doll_in_box
+      object: white_box
+      operation: place
+      operator: arm
+      param:
+        pre_move:
+          - position: [0.0, 0.08, 0.20]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+          - position: [0.0, 0.08, 0.15]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+        post_move:
+          - position: [0.0, 0.08, 0.2]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+        eef:
+          close: false
+
+    # Stage 5: Pick transparent tape paper
+    - name: pick_tape_paper
+      object: transparent_tape_paper
+      operation: pick
+      operator: arm
+      param:
+        pre_move:
+          - position: [0.0, 0.0, 0.12]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+          - position: [0.0, 0.0, 0.001]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+        post_move:
+          - position: [0.0, 0.0, 0.2]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: eef_world
+        eef:
+          close: true
+
+    # Stage 6: Place transparent tape paper into white box
+    - name: place_tape_paper_in_box
+      object: white_box
+      operation: place
+      operator: arm
+      param:
+        pre_move:
+          - position: [0.0, 0.065, 0.20]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+          - position: [0.0, 0.065, 0.15]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+        post_move:
+          - position: [0.0, 0.065, 0.20]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+        eef:
+          close: false
 
 operators:
   - name: arm

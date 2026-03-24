@@ -69,7 +69,7 @@
   <!-- Arm starts horizontal: rot_x=pi/2 → gripper points +Y toward cabinet, fingers in ±Z (one up/down) -->
   <keyframe>
     <key
-      qpos="0 -0.2 0.15 0 0 1.5707  0.00522882 0.00541525 0.00562153 0.00529892 0.00548528 0.00569143  0"
+      qpos="0 -0.2 0.15 0 0 1.5707 0.00522882 0.00541525 0.00562153 0.00529892 0.00548528 0.00569143  0"
       ctrl="0 -0.2 0.15 0 0 1.5707 0"
     />
   </keyframe>

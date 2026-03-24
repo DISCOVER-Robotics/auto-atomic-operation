@@ -257,7 +257,7 @@
       <geom name="blue_duck_vis_028" type="mesh" mesh="blue_duck_part_028" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="blue_duck_vis_029" type="mesh" mesh="blue_duck_part_029" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="blue_duck_vis_030" type="mesh" mesh="blue_duck_part_030" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="blue_duck_col" type="box" size="0.04 0.04 0.026" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+      <geom name="blue_duck_col" type="box" size="0.04 0.034 0.026" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
         <site name="blue_duck_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
       </body>
     </body>
@@ -296,7 +296,7 @@
       <geom name="chicken_doll_vis_028" type="mesh" mesh="chicken_doll_part_028" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="chicken_doll_vis_029" type="mesh" mesh="chicken_doll_part_029" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="chicken_doll_vis_030" type="mesh" mesh="chicken_doll_part_030" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="chicken_doll_col" type="box" size="0.04 0.04 0.031" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+      <geom name="chicken_doll_col" type="box" size="0.04 0.035 0.031" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
         <site name="chicken_doll_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
       </body>
     </body>
@@ -374,7 +374,7 @@
       <geom name="white_box_vis_029" type="mesh" mesh="white_box_part_029" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="white_box_vis_030" type="mesh" mesh="white_box_part_030" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="white_box_vis_031" type="mesh" mesh="white_box_part_031" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="white_box_col" type="box" size="0.14 0.14 0.07" mass="0.5" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+      <geom name="white_box_col" type="box" size="0.14 0.14 0.001" mass="0.5" rgba="0 0 0 0" contype="1" conaffinity="1"/>
         <site name="white_box_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
       </body>
     </body>
@@ -447,7 +447,7 @@
       <geom name="transparent_tape_paper_vis_023" type="mesh" mesh="transparent_tape_paper_part_023" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="transparent_tape_paper_vis_024" type="mesh" mesh="transparent_tape_paper_part_024" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="transparent_tape_paper_vis_025" type="mesh" mesh="transparent_tape_paper_part_025" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="transparent_tape_paper_col" type="box" size="0.05 0.05 0.026" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+      <geom name="transparent_tape_paper_col" type="box" size="0.05 0.04 0.026" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
         <site name="transparent_tape_paper_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
       </body>
     </body>
