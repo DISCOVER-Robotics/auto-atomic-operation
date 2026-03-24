@@ -2,7 +2,7 @@ from enum import Enum
 from math import tan, pi
 from pathlib import Path
 from typing import Any, Dict, List, Set
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
 from auto_atom.utils.transformations import euler_from_matrix
 from auto_atom.backend.mjc.tactile.tactile_sensor import TactileSensorManager
 import os
@@ -66,6 +66,8 @@ class ViewerConfig(BaseModel, frozen=True):
     """Seconds to sleep after each update step."""
     hold_seconds: float = 0.0
     """Seconds to keep the viewer open after close() is called."""
+    disable: bool = False
+    """Whether to disable launching the viewer, even if a ViewerConfig is provided."""
 
 
 class OperatorBinding(BaseModel, frozen=True):
@@ -171,6 +173,13 @@ class EnvConfig(BaseModel, frozen=True):
             if cam_cfg.enable_mask and not self.mask_objects:
                 raise ValueError("mask_objects must be set when enable_mask")
         return self
+
+    @field_validator("viewer")
+    @classmethod
+    def validate_viewer(cls, v: ViewerConfig | None) -> ViewerConfig | None:
+        if v is not None and v.disable:
+            return None
+        return v
 
 
 class UnifiedMujocoEnv:
