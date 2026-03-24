@@ -3,7 +3,6 @@ defaults:
   - _self_
 
 gs_dir: assets/gs/scenes/hang_toothbrush_cup
-bg_dir: third_party/press_da_button/gs_playground/models/robots/manipulation/franka_emika_panda_robotiq/3dgs
 
 env:
   env:
@@ -20,7 +19,7 @@ env:
           enable_mask: false
           enable_heat_map: false
       gaussian_render:
-        background_ply: ${bg_dir}/background.ply
+        background_ply: assets/gs/backgrounds/example.ply
         body_gaussians:
           rack_gs:           ${gs_dir}/rack.ply
           toothbrush_cup_gs: ${gs_dir}/toothbrush_cup.ply

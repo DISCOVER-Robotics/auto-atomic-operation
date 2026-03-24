@@ -3,7 +3,6 @@ defaults:
   - _self_
 
 gs_dir: assets/gs/scenes/press_three_buttons
-bg_dir: third_party/press_da_button/gs_playground/models/robots/manipulation/franka_emika_panda_robotiq/3dgs
 
 env:
   env:
@@ -25,7 +24,7 @@ env:
           enable_mask: false
           enable_heat_map: false
       gaussian_render:
-        background_ply: ${bg_dir}/background.ply
+        background_ply: assets/gs/backgrounds/example.ply
         body_gaussians:
           button_blue_gs: ${gs_dir}/button_blue.ply
           button_green_gs: ${gs_dir}/button_green.ply
