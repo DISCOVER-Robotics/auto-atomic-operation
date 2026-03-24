@@ -96,16 +96,14 @@
     <!-- rack: static hook/rack object
          center z = 0.06 (table top) + estimated half-height ~0.09 = 0.15       -->
     <body name="rack" pos="0.0 0.15 0.15">
-      <geom name="rack_vis_000" type="mesh" mesh="rack_part_000" material="rack_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="rack_vis_001" type="mesh" mesh="rack_part_001" material="rack_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="rack_vis_002" type="mesh" mesh="rack_part_002" material="rack_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="rack_vis_003" type="mesh" mesh="rack_part_003" material="rack_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="rack_vis_004" type="mesh" mesh="rack_part_004" material="rack_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="rack_vis_005" type="mesh" mesh="rack_part_005" material="rack_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="rack_vis_006" type="mesh" mesh="rack_part_006" material="rack_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="rack_vis_007" type="mesh" mesh="rack_part_007" material="rack_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="rack_col" type="box" size="0.08 0.02 0.09"
-            mass="0.5" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+      <geom name="rack_vis_000" type="mesh" mesh="rack_part_000" material="rack_mat" density="0" contype="1" conaffinity="1" group="1"/>
+      <geom name="rack_vis_001" type="mesh" mesh="rack_part_001" material="rack_mat" density="0" contype="1" conaffinity="1" group="1"/>
+      <geom name="rack_vis_002" type="mesh" mesh="rack_part_002" material="rack_mat" density="0" contype="1" conaffinity="1" group="1"/>
+      <geom name="rack_vis_003" type="mesh" mesh="rack_part_003" material="rack_mat" density="0" contype="1" conaffinity="1" group="1"/>
+      <geom name="rack_vis_004" type="mesh" mesh="rack_part_004" material="rack_mat" density="0" contype="1" conaffinity="1" group="1"/>
+      <geom name="rack_vis_005" type="mesh" mesh="rack_part_005" material="rack_mat" density="0" contype="1" conaffinity="1" group="1"/>
+      <geom name="rack_vis_006" type="mesh" mesh="rack_part_006" material="rack_mat" density="0" contype="1" conaffinity="1" group="1"/>
+      <geom name="rack_vis_007" type="mesh" mesh="rack_part_007" material="rack_mat" density="0" contype="1" conaffinity="1" group="1"/>
       <site name="rack_site" pos="0 0 0" size="0.004" rgba="0.5 0.5 0 0"/>
     </body>
 
@@ -113,73 +111,70 @@
          center z = 0.06 + 0.025 = 0.085                                         -->
     <body name="toothbrush_cup" pos="0.0 -0.05 0.085">
       <freejoint name="toothbrush_cup_joint"/>
-      <geom name="cup_vis_000" type="mesh" mesh="cup_part_000" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_001" type="mesh" mesh="cup_part_001" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_002" type="mesh" mesh="cup_part_002" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_003" type="mesh" mesh="cup_part_003" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_004" type="mesh" mesh="cup_part_004" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_005" type="mesh" mesh="cup_part_005" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_006" type="mesh" mesh="cup_part_006" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_007" type="mesh" mesh="cup_part_007" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_008" type="mesh" mesh="cup_part_008" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_009" type="mesh" mesh="cup_part_009" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_010" type="mesh" mesh="cup_part_010" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_011" type="mesh" mesh="cup_part_011" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_012" type="mesh" mesh="cup_part_012" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_013" type="mesh" mesh="cup_part_013" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_014" type="mesh" mesh="cup_part_014" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_015" type="mesh" mesh="cup_part_015" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_016" type="mesh" mesh="cup_part_016" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_017" type="mesh" mesh="cup_part_017" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_018" type="mesh" mesh="cup_part_018" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_019" type="mesh" mesh="cup_part_019" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_020" type="mesh" mesh="cup_part_020" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_021" type="mesh" mesh="cup_part_021" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_022" type="mesh" mesh="cup_part_022" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_023" type="mesh" mesh="cup_part_023" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_024" type="mesh" mesh="cup_part_024" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_025" type="mesh" mesh="cup_part_025" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_026" type="mesh" mesh="cup_part_026" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_027" type="mesh" mesh="cup_part_027" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_028" type="mesh" mesh="cup_part_028" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_029" type="mesh" mesh="cup_part_029" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_030" type="mesh" mesh="cup_part_030" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_031" type="mesh" mesh="cup_part_031" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_032" type="mesh" mesh="cup_part_032" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_033" type="mesh" mesh="cup_part_033" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_034" type="mesh" mesh="cup_part_034" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_035" type="mesh" mesh="cup_part_035" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_036" type="mesh" mesh="cup_part_036" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_037" type="mesh" mesh="cup_part_037" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_038" type="mesh" mesh="cup_part_038" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_039" type="mesh" mesh="cup_part_039" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_040" type="mesh" mesh="cup_part_040" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_041" type="mesh" mesh="cup_part_041" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_042" type="mesh" mesh="cup_part_042" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_043" type="mesh" mesh="cup_part_043" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_044" type="mesh" mesh="cup_part_044" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_045" type="mesh" mesh="cup_part_045" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_046" type="mesh" mesh="cup_part_046" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_047" type="mesh" mesh="cup_part_047" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_048" type="mesh" mesh="cup_part_048" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_049" type="mesh" mesh="cup_part_049" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_050" type="mesh" mesh="cup_part_050" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_051" type="mesh" mesh="cup_part_051" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_052" type="mesh" mesh="cup_part_052" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_053" type="mesh" mesh="cup_part_053" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_054" type="mesh" mesh="cup_part_054" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_055" type="mesh" mesh="cup_part_055" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_056" type="mesh" mesh="cup_part_056" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_057" type="mesh" mesh="cup_part_057" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_058" type="mesh" mesh="cup_part_058" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_059" type="mesh" mesh="cup_part_059" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_060" type="mesh" mesh="cup_part_060" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_061" type="mesh" mesh="cup_part_061" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_062" type="mesh" mesh="cup_part_062" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_vis_063" type="mesh" mesh="cup_part_063" material="cup_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="cup_col" type="cylinder" size="0.03 0.04"
-            mass="0.05" friction="1.2 0.05 0.01"
-            rgba="0 0 0 0" contype="1" conaffinity="1"/>
+      <geom name="cup_vis_000" type="mesh" mesh="cup_part_000" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_001" type="mesh" mesh="cup_part_001" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_002" type="mesh" mesh="cup_part_002" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_003" type="mesh" mesh="cup_part_003" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_004" type="mesh" mesh="cup_part_004" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_005" type="mesh" mesh="cup_part_005" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_006" type="mesh" mesh="cup_part_006" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_007" type="mesh" mesh="cup_part_007" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_008" type="mesh" mesh="cup_part_008" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_009" type="mesh" mesh="cup_part_009" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_010" type="mesh" mesh="cup_part_010" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_011" type="mesh" mesh="cup_part_011" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_012" type="mesh" mesh="cup_part_012" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_013" type="mesh" mesh="cup_part_013" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_014" type="mesh" mesh="cup_part_014" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_015" type="mesh" mesh="cup_part_015" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_016" type="mesh" mesh="cup_part_016" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_017" type="mesh" mesh="cup_part_017" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_018" type="mesh" mesh="cup_part_018" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_019" type="mesh" mesh="cup_part_019" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_020" type="mesh" mesh="cup_part_020" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_021" type="mesh" mesh="cup_part_021" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_022" type="mesh" mesh="cup_part_022" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_023" type="mesh" mesh="cup_part_023" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_024" type="mesh" mesh="cup_part_024" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_025" type="mesh" mesh="cup_part_025" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_026" type="mesh" mesh="cup_part_026" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_027" type="mesh" mesh="cup_part_027" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_028" type="mesh" mesh="cup_part_028" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_029" type="mesh" mesh="cup_part_029" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_030" type="mesh" mesh="cup_part_030" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_031" type="mesh" mesh="cup_part_031" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_032" type="mesh" mesh="cup_part_032" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_033" type="mesh" mesh="cup_part_033" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_034" type="mesh" mesh="cup_part_034" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_035" type="mesh" mesh="cup_part_035" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_036" type="mesh" mesh="cup_part_036" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_037" type="mesh" mesh="cup_part_037" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_038" type="mesh" mesh="cup_part_038" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_039" type="mesh" mesh="cup_part_039" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_040" type="mesh" mesh="cup_part_040" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_041" type="mesh" mesh="cup_part_041" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_042" type="mesh" mesh="cup_part_042" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_043" type="mesh" mesh="cup_part_043" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_044" type="mesh" mesh="cup_part_044" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_045" type="mesh" mesh="cup_part_045" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_046" type="mesh" mesh="cup_part_046" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_047" type="mesh" mesh="cup_part_047" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_048" type="mesh" mesh="cup_part_048" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_049" type="mesh" mesh="cup_part_049" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_050" type="mesh" mesh="cup_part_050" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_051" type="mesh" mesh="cup_part_051" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_052" type="mesh" mesh="cup_part_052" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_053" type="mesh" mesh="cup_part_053" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_054" type="mesh" mesh="cup_part_054" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_055" type="mesh" mesh="cup_part_055" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_056" type="mesh" mesh="cup_part_056" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_057" type="mesh" mesh="cup_part_057" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_058" type="mesh" mesh="cup_part_058" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_059" type="mesh" mesh="cup_part_059" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_060" type="mesh" mesh="cup_part_060" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_061" type="mesh" mesh="cup_part_061" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_062" type="mesh" mesh="cup_part_062" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
+      <geom name="cup_vis_063" type="mesh" mesh="cup_part_063" material="cup_mat" density="200" contype="1" conaffinity="1" group="1"/>
       <site name="cup_site" pos="0 0 0" size="0.004" rgba="0 0 1 0"/>
     </body>
 

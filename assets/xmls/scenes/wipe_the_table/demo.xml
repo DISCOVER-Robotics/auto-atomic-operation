@@ -243,7 +243,7 @@
       <geom name="blue_duck_vis_028" type="mesh" mesh="blue_duck_part_028" material="blue_duck_mat" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="blue_duck_vis_029" type="mesh" mesh="blue_duck_part_029" material="blue_duck_mat" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="blue_duck_vis_030" type="mesh" mesh="blue_duck_part_030" material="blue_duck_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="blue_duck_col" type="box" size="0.04 0.04 0.06" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+      <geom name="blue_duck_col" type="box" size="0.04 0.04 0.026" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
       <site name="blue_duck_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
     </body>
     <!-- chicken doll (dynamic) -->
@@ -280,7 +280,7 @@
       <geom name="chicken_doll_vis_028" type="mesh" mesh="chicken_doll_part_028" material="chicken_doll_mat" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="chicken_doll_vis_029" type="mesh" mesh="chicken_doll_part_029" material="chicken_doll_mat" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="chicken_doll_vis_030" type="mesh" mesh="chicken_doll_part_030" material="chicken_doll_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="chicken_doll_col" type="box" size="0.04 0.04 0.07" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+      <geom name="chicken_doll_col" type="box" size="0.04 0.04 0.031" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
       <site name="chicken_doll_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
     </body>
     <!-- dog (static) -->
@@ -423,7 +423,7 @@
       <geom name="transparent_tape_paper_vis_023" type="mesh" mesh="transparent_tape_paper_part_023" material="transparent_tape_paper_mat" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="transparent_tape_paper_vis_024" type="mesh" mesh="transparent_tape_paper_part_024" material="transparent_tape_paper_mat" density="0" contype="0" conaffinity="0" group="1"/>
       <geom name="transparent_tape_paper_vis_025" type="mesh" mesh="transparent_tape_paper_part_025" material="transparent_tape_paper_mat" density="0" contype="0" conaffinity="0" group="1"/>
-      <geom name="transparent_tape_paper_col" type="box" size="0.05 0.05 0.02" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+      <geom name="transparent_tape_paper_col" type="box" size="0.05 0.05 0.026" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
       <site name="transparent_tape_paper_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
     </body>
 
