@@ -525,6 +525,12 @@ class TaskUpdate:
     """The final task success flag when done, or ``None`` while still running."""
     details: Dict[str, Any] = field(default_factory=dict)
     """Additional progress metadata describing the latest update."""
+    phase: Optional[str] = None
+    """Current execution phase: 'pre_move', 'eef', or 'post_move'.
+    None when the task is idle or finished."""
+    phase_step: Optional[int] = None
+    """Zero-based index of the current waypoint within the active move phase
+    (pre_move or post_move). None when the phase is eef or the task is idle/finished."""
 
 
 @dataclass
@@ -795,12 +801,15 @@ class TaskRunner:
         }
 
         if result.signal == ControlSignal.RUNNING:
+            phase, phase_step = self._action_phase(active.actions, active.action_index)
             return self._build_update(
                 plan=active.plan,
                 status=StageExecutionStatus.RUNNING,
                 details=details,
                 done=False,
                 success=None,
+                phase=phase,
+                phase_step=phase_step,
             )
 
         if result.signal == ControlSignal.REACHED:
@@ -861,12 +870,17 @@ class TaskRunner:
                 )
 
             if active.action_index < len(active.actions):
+                phase, phase_step = self._action_phase(
+                    active.actions, active.action_index
+                )
                 return self._build_update(
                     plan=active.plan,
                     status=StageExecutionStatus.RUNNING,
                     details=details,
                     done=False,
                     success=None,
+                    phase=phase,
+                    phase_step=phase_step,
                 )
 
             # --- Final post-condition check (after all actions complete) ---
@@ -1201,12 +1215,29 @@ class TaskRunner:
         )
 
     @staticmethod
+    def _action_phase(actions: List[PrimitiveAction], action_index: int) -> tuple:
+        """Return (phase, phase_step) for the given action index."""
+        eef_idx: Optional[int] = None
+        for idx, a in enumerate(actions):
+            if a.kind == "eef":
+                eef_idx = idx
+                break
+        if eef_idx is not None and action_index == eef_idx:
+            return "eef", None
+        if eef_idx is None or action_index < eef_idx:
+            return "pre_move", action_index
+        # post_move
+        return "post_move", action_index - (eef_idx + 1)
+
+    @staticmethod
     def _build_update(
         plan: StageExecutionPlan,
         status: StageExecutionStatus,
         details: Dict[str, Any],
         done: bool,
         success: Optional[bool],
+        phase: Optional[str] = None,
+        phase_step: Optional[int] = None,
     ) -> TaskUpdate:
         return TaskUpdate(
             stage_index=plan.stage_index,
@@ -1215,6 +1246,8 @@ class TaskRunner:
             done=done,
             success=success,
             details=details,
+            phase=phase,
+            phase_step=phase_step,
         )
 
     def _require_context(self) -> ExecutionContext:
