@@ -130,6 +130,10 @@ python examples/run_demo.py task.seed=0
 python examples/run_demo.py "task.randomization.source_block.x=[-0.05,0.05]"
 ```
 
+## Data Collection
+
+See the **[Data Collection Guide](docs/data_collection.md)** for recording task demos (GIF/MP4) and comparing GS vs native MuJoCo rendering.
+
 ## Quick Start
 
 ### 1. Define a task in YAML
@@ -294,10 +298,6 @@ To integrate a new simulator or real robot, implement three abstract classes fro
 - `SceneBackend` — scene lifecycle, handler resolution, and randomization
 
 See the **[Custom Backend Guide](docs/custom-backend.md)** for a step-by-step walkthrough with annotated code examples. [`auto_atom/mock.py`](auto_atom/mock.py) provides a minimal reference implementation.
-
-## Data Collection
-
-See the **[Data Collection Guide](docs/data_collection.md)** for recording task demos (GIF/MP4) and comparing GS vs native MuJoCo rendering.
 
 ## License
 

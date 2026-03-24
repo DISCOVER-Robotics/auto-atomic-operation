@@ -21,6 +21,7 @@ urls = { "repository" = "https://github.com/OpenGHz/auto-atomic-operation.git" }
 
 [project.optional-dependencies]
 mujoco = ["mujoco"]
+gs = ["gaussian_renderer", "gsplat", "torch", "scipy", "plyfile"]
 
 [tool.setuptools.packages.find]
 include = ["auto_atom*"]
