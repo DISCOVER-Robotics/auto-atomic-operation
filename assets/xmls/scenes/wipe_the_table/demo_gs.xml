@@ -1,0 +1,474 @@
+<mujoco model="wipe_the_table_gs">
+  <include file="../../robots/robotiq.xml"/>
+
+  <visual>
+    <map znear="0.001"/>
+  </visual>
+
+  <asset>
+    <!-- meshdir resolved to assets/meshes/ via robotiq.xml compiler -->
+    <mesh name="blue_duck_part_000" file="wipe_the_table/blue_duck/part_000.obj"/>
+    <mesh name="blue_duck_part_001" file="wipe_the_table/blue_duck/part_001.obj"/>
+    <mesh name="blue_duck_part_002" file="wipe_the_table/blue_duck/part_002.obj"/>
+    <mesh name="blue_duck_part_003" file="wipe_the_table/blue_duck/part_003.obj"/>
+    <mesh name="blue_duck_part_004" file="wipe_the_table/blue_duck/part_004.obj"/>
+    <mesh name="blue_duck_part_005" file="wipe_the_table/blue_duck/part_005.obj"/>
+    <mesh name="blue_duck_part_006" file="wipe_the_table/blue_duck/part_006.obj"/>
+    <mesh name="blue_duck_part_007" file="wipe_the_table/blue_duck/part_007.obj"/>
+    <mesh name="blue_duck_part_008" file="wipe_the_table/blue_duck/part_008.obj"/>
+    <mesh name="blue_duck_part_009" file="wipe_the_table/blue_duck/part_009.obj"/>
+    <mesh name="blue_duck_part_010" file="wipe_the_table/blue_duck/part_010.obj"/>
+    <mesh name="blue_duck_part_011" file="wipe_the_table/blue_duck/part_011.obj"/>
+    <mesh name="blue_duck_part_012" file="wipe_the_table/blue_duck/part_012.obj"/>
+    <mesh name="blue_duck_part_013" file="wipe_the_table/blue_duck/part_013.obj"/>
+    <mesh name="blue_duck_part_014" file="wipe_the_table/blue_duck/part_014.obj"/>
+    <mesh name="blue_duck_part_015" file="wipe_the_table/blue_duck/part_015.obj"/>
+    <mesh name="blue_duck_part_016" file="wipe_the_table/blue_duck/part_016.obj"/>
+    <mesh name="blue_duck_part_017" file="wipe_the_table/blue_duck/part_017.obj"/>
+    <mesh name="blue_duck_part_018" file="wipe_the_table/blue_duck/part_018.obj"/>
+    <mesh name="blue_duck_part_019" file="wipe_the_table/blue_duck/part_019.obj"/>
+    <mesh name="blue_duck_part_020" file="wipe_the_table/blue_duck/part_020.obj"/>
+    <mesh name="blue_duck_part_021" file="wipe_the_table/blue_duck/part_021.obj"/>
+    <mesh name="blue_duck_part_022" file="wipe_the_table/blue_duck/part_022.obj"/>
+    <mesh name="blue_duck_part_023" file="wipe_the_table/blue_duck/part_023.obj"/>
+    <mesh name="blue_duck_part_024" file="wipe_the_table/blue_duck/part_024.obj"/>
+    <mesh name="blue_duck_part_025" file="wipe_the_table/blue_duck/part_025.obj"/>
+    <mesh name="blue_duck_part_026" file="wipe_the_table/blue_duck/part_026.obj"/>
+    <mesh name="blue_duck_part_027" file="wipe_the_table/blue_duck/part_027.obj"/>
+    <mesh name="blue_duck_part_028" file="wipe_the_table/blue_duck/part_028.obj"/>
+    <mesh name="blue_duck_part_029" file="wipe_the_table/blue_duck/part_029.obj"/>
+    <mesh name="blue_duck_part_030" file="wipe_the_table/blue_duck/part_030.obj"/>
+    <mesh name="chicken_doll_part_000" file="wipe_the_table/chicken_doll/part_000.obj"/>
+    <mesh name="chicken_doll_part_001" file="wipe_the_table/chicken_doll/part_001.obj"/>
+    <mesh name="chicken_doll_part_002" file="wipe_the_table/chicken_doll/part_002.obj"/>
+    <mesh name="chicken_doll_part_003" file="wipe_the_table/chicken_doll/part_003.obj"/>
+    <mesh name="chicken_doll_part_004" file="wipe_the_table/chicken_doll/part_004.obj"/>
+    <mesh name="chicken_doll_part_005" file="wipe_the_table/chicken_doll/part_005.obj"/>
+    <mesh name="chicken_doll_part_006" file="wipe_the_table/chicken_doll/part_006.obj"/>
+    <mesh name="chicken_doll_part_007" file="wipe_the_table/chicken_doll/part_007.obj"/>
+    <mesh name="chicken_doll_part_008" file="wipe_the_table/chicken_doll/part_008.obj"/>
+    <mesh name="chicken_doll_part_009" file="wipe_the_table/chicken_doll/part_009.obj"/>
+    <mesh name="chicken_doll_part_010" file="wipe_the_table/chicken_doll/part_010.obj"/>
+    <mesh name="chicken_doll_part_011" file="wipe_the_table/chicken_doll/part_011.obj"/>
+    <mesh name="chicken_doll_part_012" file="wipe_the_table/chicken_doll/part_012.obj"/>
+    <mesh name="chicken_doll_part_013" file="wipe_the_table/chicken_doll/part_013.obj"/>
+    <mesh name="chicken_doll_part_014" file="wipe_the_table/chicken_doll/part_014.obj"/>
+    <mesh name="chicken_doll_part_015" file="wipe_the_table/chicken_doll/part_015.obj"/>
+    <mesh name="chicken_doll_part_016" file="wipe_the_table/chicken_doll/part_016.obj"/>
+    <mesh name="chicken_doll_part_017" file="wipe_the_table/chicken_doll/part_017.obj"/>
+    <mesh name="chicken_doll_part_018" file="wipe_the_table/chicken_doll/part_018.obj"/>
+    <mesh name="chicken_doll_part_019" file="wipe_the_table/chicken_doll/part_019.obj"/>
+    <mesh name="chicken_doll_part_020" file="wipe_the_table/chicken_doll/part_020.obj"/>
+    <mesh name="chicken_doll_part_021" file="wipe_the_table/chicken_doll/part_021.obj"/>
+    <mesh name="chicken_doll_part_022" file="wipe_the_table/chicken_doll/part_022.obj"/>
+    <mesh name="chicken_doll_part_023" file="wipe_the_table/chicken_doll/part_023.obj"/>
+    <mesh name="chicken_doll_part_024" file="wipe_the_table/chicken_doll/part_024.obj"/>
+    <mesh name="chicken_doll_part_025" file="wipe_the_table/chicken_doll/part_025.obj"/>
+    <mesh name="chicken_doll_part_026" file="wipe_the_table/chicken_doll/part_026.obj"/>
+    <mesh name="chicken_doll_part_027" file="wipe_the_table/chicken_doll/part_027.obj"/>
+    <mesh name="chicken_doll_part_028" file="wipe_the_table/chicken_doll/part_028.obj"/>
+    <mesh name="chicken_doll_part_029" file="wipe_the_table/chicken_doll/part_029.obj"/>
+    <mesh name="chicken_doll_part_030" file="wipe_the_table/chicken_doll/part_030.obj"/>
+    <mesh name="dog_part_000" file="wipe_the_table/dog/part_000.obj"/>
+    <mesh name="dog_part_001" file="wipe_the_table/dog/part_001.obj"/>
+    <mesh name="dog_part_002" file="wipe_the_table/dog/part_002.obj"/>
+    <mesh name="dog_part_003" file="wipe_the_table/dog/part_003.obj"/>
+    <mesh name="dog_part_004" file="wipe_the_table/dog/part_004.obj"/>
+    <mesh name="dog_part_005" file="wipe_the_table/dog/part_005.obj"/>
+    <mesh name="dog_part_006" file="wipe_the_table/dog/part_006.obj"/>
+    <mesh name="dog_part_007" file="wipe_the_table/dog/part_007.obj"/>
+    <mesh name="dog_part_008" file="wipe_the_table/dog/part_008.obj"/>
+    <mesh name="dog_part_009" file="wipe_the_table/dog/part_009.obj"/>
+    <mesh name="dog_part_010" file="wipe_the_table/dog/part_010.obj"/>
+    <mesh name="dog_part_011" file="wipe_the_table/dog/part_011.obj"/>
+    <mesh name="dog_part_012" file="wipe_the_table/dog/part_012.obj"/>
+    <mesh name="dog_part_013" file="wipe_the_table/dog/part_013.obj"/>
+    <mesh name="dog_part_014" file="wipe_the_table/dog/part_014.obj"/>
+    <mesh name="dog_part_015" file="wipe_the_table/dog/part_015.obj"/>
+    <mesh name="dog_part_016" file="wipe_the_table/dog/part_016.obj"/>
+    <mesh name="dog_part_017" file="wipe_the_table/dog/part_017.obj"/>
+    <mesh name="dog_part_018" file="wipe_the_table/dog/part_018.obj"/>
+    <mesh name="dog_part_019" file="wipe_the_table/dog/part_019.obj"/>
+    <mesh name="dog_part_020" file="wipe_the_table/dog/part_020.obj"/>
+    <mesh name="dog_part_021" file="wipe_the_table/dog/part_021.obj"/>
+    <mesh name="dog_part_022" file="wipe_the_table/dog/part_022.obj"/>
+    <mesh name="dog_part_023" file="wipe_the_table/dog/part_023.obj"/>
+    <mesh name="dog_part_024" file="wipe_the_table/dog/part_024.obj"/>
+    <mesh name="dog_part_025" file="wipe_the_table/dog/part_025.obj"/>
+    <mesh name="dog_part_026" file="wipe_the_table/dog/part_026.obj"/>
+    <mesh name="dog_part_027" file="wipe_the_table/dog/part_027.obj"/>
+    <mesh name="dog_part_028" file="wipe_the_table/dog/part_028.obj"/>
+    <mesh name="dog_part_029" file="wipe_the_table/dog/part_029.obj"/>
+    <mesh name="dog_part_030" file="wipe_the_table/dog/part_030.obj"/>
+    <mesh name="dog_part_031" file="wipe_the_table/dog/part_031.obj"/>
+    <mesh name="white_box_part_000" file="wipe_the_table/white_box/part_000.obj"/>
+    <mesh name="white_box_part_001" file="wipe_the_table/white_box/part_001.obj"/>
+    <mesh name="white_box_part_002" file="wipe_the_table/white_box/part_002.obj"/>
+    <mesh name="white_box_part_003" file="wipe_the_table/white_box/part_003.obj"/>
+    <mesh name="white_box_part_004" file="wipe_the_table/white_box/part_004.obj"/>
+    <mesh name="white_box_part_005" file="wipe_the_table/white_box/part_005.obj"/>
+    <mesh name="white_box_part_006" file="wipe_the_table/white_box/part_006.obj"/>
+    <mesh name="white_box_part_007" file="wipe_the_table/white_box/part_007.obj"/>
+    <mesh name="white_box_part_008" file="wipe_the_table/white_box/part_008.obj"/>
+    <mesh name="white_box_part_009" file="wipe_the_table/white_box/part_009.obj"/>
+    <mesh name="white_box_part_010" file="wipe_the_table/white_box/part_010.obj"/>
+    <mesh name="white_box_part_011" file="wipe_the_table/white_box/part_011.obj"/>
+    <mesh name="white_box_part_012" file="wipe_the_table/white_box/part_012.obj"/>
+    <mesh name="white_box_part_013" file="wipe_the_table/white_box/part_013.obj"/>
+    <mesh name="white_box_part_014" file="wipe_the_table/white_box/part_014.obj"/>
+    <mesh name="white_box_part_015" file="wipe_the_table/white_box/part_015.obj"/>
+    <mesh name="white_box_part_016" file="wipe_the_table/white_box/part_016.obj"/>
+    <mesh name="white_box_part_017" file="wipe_the_table/white_box/part_017.obj"/>
+    <mesh name="white_box_part_018" file="wipe_the_table/white_box/part_018.obj"/>
+    <mesh name="white_box_part_019" file="wipe_the_table/white_box/part_019.obj"/>
+    <mesh name="white_box_part_020" file="wipe_the_table/white_box/part_020.obj"/>
+    <mesh name="white_box_part_021" file="wipe_the_table/white_box/part_021.obj"/>
+    <mesh name="white_box_part_022" file="wipe_the_table/white_box/part_022.obj"/>
+    <mesh name="white_box_part_023" file="wipe_the_table/white_box/part_023.obj"/>
+    <mesh name="white_box_part_024" file="wipe_the_table/white_box/part_024.obj"/>
+    <mesh name="white_box_part_025" file="wipe_the_table/white_box/part_025.obj"/>
+    <mesh name="white_box_part_026" file="wipe_the_table/white_box/part_026.obj"/>
+    <mesh name="white_box_part_027" file="wipe_the_table/white_box/part_027.obj"/>
+    <mesh name="white_box_part_028" file="wipe_the_table/white_box/part_028.obj"/>
+    <mesh name="white_box_part_029" file="wipe_the_table/white_box/part_029.obj"/>
+    <mesh name="white_box_part_030" file="wipe_the_table/white_box/part_030.obj"/>
+    <mesh name="white_box_part_031" file="wipe_the_table/white_box/part_031.obj"/>
+    <mesh name="yellow_brush_part_000" file="wipe_the_table/yellow_brush/part_000.obj"/>
+    <mesh name="yellow_brush_part_001" file="wipe_the_table/yellow_brush/part_001.obj"/>
+    <mesh name="yellow_brush_part_002" file="wipe_the_table/yellow_brush/part_002.obj"/>
+    <mesh name="yellow_brush_part_003" file="wipe_the_table/yellow_brush/part_003.obj"/>
+    <mesh name="yellow_brush_part_004" file="wipe_the_table/yellow_brush/part_004.obj"/>
+    <mesh name="yellow_brush_part_005" file="wipe_the_table/yellow_brush/part_005.obj"/>
+    <mesh name="yellow_brush_part_006" file="wipe_the_table/yellow_brush/part_006.obj"/>
+    <mesh name="yellow_brush_part_007" file="wipe_the_table/yellow_brush/part_007.obj"/>
+    <mesh name="yellow_brush_part_008" file="wipe_the_table/yellow_brush/part_008.obj"/>
+    <mesh name="yellow_brush_part_009" file="wipe_the_table/yellow_brush/part_009.obj"/>
+    <mesh name="yellow_brush_part_010" file="wipe_the_table/yellow_brush/part_010.obj"/>
+    <mesh name="yellow_brush_part_011" file="wipe_the_table/yellow_brush/part_011.obj"/>
+    <mesh name="yellow_brush_part_012" file="wipe_the_table/yellow_brush/part_012.obj"/>
+    <mesh name="yellow_brush_part_013" file="wipe_the_table/yellow_brush/part_013.obj"/>
+    <mesh name="yellow_brush_part_014" file="wipe_the_table/yellow_brush/part_014.obj"/>
+    <mesh name="yellow_brush_part_015" file="wipe_the_table/yellow_brush/part_015.obj"/>
+    <mesh name="yellow_brush_part_016" file="wipe_the_table/yellow_brush/part_016.obj"/>
+    <mesh name="yellow_brush_part_017" file="wipe_the_table/yellow_brush/part_017.obj"/>
+    <mesh name="yellow_brush_part_018" file="wipe_the_table/yellow_brush/part_018.obj"/>
+    <mesh name="yellow_brush_part_019" file="wipe_the_table/yellow_brush/part_019.obj"/>
+    <mesh name="yellow_brush_part_020" file="wipe_the_table/yellow_brush/part_020.obj"/>
+    <mesh name="yellow_brush_part_021" file="wipe_the_table/yellow_brush/part_021.obj"/>
+    <mesh name="yellow_brush_part_022" file="wipe_the_table/yellow_brush/part_022.obj"/>
+    <mesh name="yellow_brush_part_023" file="wipe_the_table/yellow_brush/part_023.obj"/>
+    <mesh name="yellow_brush_part_024" file="wipe_the_table/yellow_brush/part_024.obj"/>
+    <mesh name="yellow_brush_part_025" file="wipe_the_table/yellow_brush/part_025.obj"/>
+    <mesh name="yellow_brush_part_026" file="wipe_the_table/yellow_brush/part_026.obj"/>
+    <mesh name="yellow_brush_part_027" file="wipe_the_table/yellow_brush/part_027.obj"/>
+    <mesh name="yellow_brush_part_028" file="wipe_the_table/yellow_brush/part_028.obj"/>
+    <mesh name="yellow_brush_part_029" file="wipe_the_table/yellow_brush/part_029.obj"/>
+    <mesh name="yellow_brush_part_030" file="wipe_the_table/yellow_brush/part_030.obj"/>
+    <mesh name="yellow_brush_part_031" file="wipe_the_table/yellow_brush/part_031.obj"/>
+    <mesh name="transparent_tape_paper_part_000" file="wipe_the_table/transparent_tape_paper/part_000.obj"/>
+    <mesh name="transparent_tape_paper_part_001" file="wipe_the_table/transparent_tape_paper/part_001.obj"/>
+    <mesh name="transparent_tape_paper_part_002" file="wipe_the_table/transparent_tape_paper/part_002.obj"/>
+    <mesh name="transparent_tape_paper_part_003" file="wipe_the_table/transparent_tape_paper/part_003.obj"/>
+    <mesh name="transparent_tape_paper_part_004" file="wipe_the_table/transparent_tape_paper/part_004.obj"/>
+    <mesh name="transparent_tape_paper_part_005" file="wipe_the_table/transparent_tape_paper/part_005.obj"/>
+    <mesh name="transparent_tape_paper_part_006" file="wipe_the_table/transparent_tape_paper/part_006.obj"/>
+    <mesh name="transparent_tape_paper_part_007" file="wipe_the_table/transparent_tape_paper/part_007.obj"/>
+    <mesh name="transparent_tape_paper_part_008" file="wipe_the_table/transparent_tape_paper/part_008.obj"/>
+    <mesh name="transparent_tape_paper_part_009" file="wipe_the_table/transparent_tape_paper/part_009.obj"/>
+    <mesh name="transparent_tape_paper_part_010" file="wipe_the_table/transparent_tape_paper/part_010.obj"/>
+    <mesh name="transparent_tape_paper_part_011" file="wipe_the_table/transparent_tape_paper/part_011.obj"/>
+    <mesh name="transparent_tape_paper_part_012" file="wipe_the_table/transparent_tape_paper/part_012.obj"/>
+    <mesh name="transparent_tape_paper_part_013" file="wipe_the_table/transparent_tape_paper/part_013.obj"/>
+    <mesh name="transparent_tape_paper_part_014" file="wipe_the_table/transparent_tape_paper/part_014.obj"/>
+    <mesh name="transparent_tape_paper_part_015" file="wipe_the_table/transparent_tape_paper/part_015.obj"/>
+    <mesh name="transparent_tape_paper_part_016" file="wipe_the_table/transparent_tape_paper/part_016.obj"/>
+    <mesh name="transparent_tape_paper_part_017" file="wipe_the_table/transparent_tape_paper/part_017.obj"/>
+    <mesh name="transparent_tape_paper_part_018" file="wipe_the_table/transparent_tape_paper/part_018.obj"/>
+    <mesh name="transparent_tape_paper_part_019" file="wipe_the_table/transparent_tape_paper/part_019.obj"/>
+    <mesh name="transparent_tape_paper_part_020" file="wipe_the_table/transparent_tape_paper/part_020.obj"/>
+    <mesh name="transparent_tape_paper_part_021" file="wipe_the_table/transparent_tape_paper/part_021.obj"/>
+    <mesh name="transparent_tape_paper_part_022" file="wipe_the_table/transparent_tape_paper/part_022.obj"/>
+    <mesh name="transparent_tape_paper_part_023" file="wipe_the_table/transparent_tape_paper/part_023.obj"/>
+    <mesh name="transparent_tape_paper_part_024" file="wipe_the_table/transparent_tape_paper/part_024.obj"/>
+    <mesh name="transparent_tape_paper_part_025" file="wipe_the_table/transparent_tape_paper/part_025.obj"/>
+
+    <material name="blue_duck_mat" rgba="0.1 0.3 0.9 1" reflectance="0.2"/>
+    <material name="chicken_doll_mat" rgba="0.95 0.85 0.2 1" reflectance="0.2"/>
+    <material name="dog_mat" rgba="0.7 0.5 0.3 1" reflectance="0.2"/>
+    <material name="white_box_mat" rgba="0.9 0.9 0.9 1" reflectance="0.2"/>
+    <material name="yellow_brush_mat" rgba="0.95 0.85 0.1 1" reflectance="0.2"/>
+    <material name="transparent_tape_paper_mat" rgba="0.8 0.8 0.9 0.7" reflectance="0.2"/>
+  </asset>
+
+  <worldbody>
+    <light name="demo_light" pos="0 0 1.5" dir="0 0 -1"/>
+    <geom name="floor" type="plane" size="2 2 0.1" rgba="0.85 0.85 0.85 1"/>
+
+    <!-- Table matches background GS coordinate frame (table30_05_wipe_the_table).
+         center z=0.0642, half-height=0.01 → top surface z=0.0742.              -->
+    <geom name="table" pos="0.45 0.06 0.0642" size="0.33 0.525 0.01" type="box"
+          contype="1" conaffinity="1" rgba="0.6 0.45 0.3 1"/>
+
+    <!-- ── OBJECT BODIES (two-layer structure) ────────────────────────────────
+         Outer body (*_gs): identity orientation, world pos from PLY capture frame.
+         body_gaussians in YAML maps this body to the pre-rotated .ply.
+         Inner body (*): physics body.
+
+         Positions from table30_05_wipe_the_table.xml keyframe / body declarations:
+           blue_duck:              (0.4629, 0.2951, 0.0998) — dynamic
+           chicken_doll:           (0.4106, 0.1433, 0.1052) — dynamic
+           dog:                    (0.5820, -0.3015, 0.2) — static
+           white_box (container):  (0.5820, -0.2016, 0.1512) — static
+           yellow_brush:           (0.5975, -0.1179, 0.1009) — static
+           transparent_tape_paper: (0.3094, 0.1863, 0.1) — dynamic             -->
+
+    <!-- BLUE DUCK -->
+    <body name="blue_duck_gs" pos="0.462898 0.295108 0.0998">
+      <freejoint name="blue_duck_joint"/>
+      <body name="blue_duck" pos="0 0 0">
+      <geom name="blue_duck_vis_000" type="mesh" mesh="blue_duck_part_000" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_001" type="mesh" mesh="blue_duck_part_001" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_002" type="mesh" mesh="blue_duck_part_002" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_003" type="mesh" mesh="blue_duck_part_003" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_004" type="mesh" mesh="blue_duck_part_004" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_005" type="mesh" mesh="blue_duck_part_005" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_006" type="mesh" mesh="blue_duck_part_006" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_007" type="mesh" mesh="blue_duck_part_007" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_008" type="mesh" mesh="blue_duck_part_008" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_009" type="mesh" mesh="blue_duck_part_009" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_010" type="mesh" mesh="blue_duck_part_010" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_011" type="mesh" mesh="blue_duck_part_011" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_012" type="mesh" mesh="blue_duck_part_012" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_013" type="mesh" mesh="blue_duck_part_013" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_014" type="mesh" mesh="blue_duck_part_014" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_015" type="mesh" mesh="blue_duck_part_015" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_016" type="mesh" mesh="blue_duck_part_016" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_017" type="mesh" mesh="blue_duck_part_017" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_018" type="mesh" mesh="blue_duck_part_018" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_019" type="mesh" mesh="blue_duck_part_019" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_020" type="mesh" mesh="blue_duck_part_020" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_021" type="mesh" mesh="blue_duck_part_021" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_022" type="mesh" mesh="blue_duck_part_022" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_023" type="mesh" mesh="blue_duck_part_023" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_024" type="mesh" mesh="blue_duck_part_024" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_025" type="mesh" mesh="blue_duck_part_025" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_026" type="mesh" mesh="blue_duck_part_026" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_027" type="mesh" mesh="blue_duck_part_027" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_028" type="mesh" mesh="blue_duck_part_028" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_029" type="mesh" mesh="blue_duck_part_029" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_vis_030" type="mesh" mesh="blue_duck_part_030" material="blue_duck_mat" quat="0.441243 0.887355 0.133118 0.013612" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="blue_duck_col" type="box" size="0.04 0.04 0.06" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <site name="blue_duck_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
+      </body>
+    </body>
+    <!-- CHICKEN DOLL -->
+    <body name="chicken_doll_gs" pos="0.410603 0.143326 0.1052">
+      <freejoint name="chicken_doll_joint"/>
+      <body name="chicken_doll" pos="0 0 0">
+      <geom name="chicken_doll_vis_000" type="mesh" mesh="chicken_doll_part_000" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_001" type="mesh" mesh="chicken_doll_part_001" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_002" type="mesh" mesh="chicken_doll_part_002" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_003" type="mesh" mesh="chicken_doll_part_003" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_004" type="mesh" mesh="chicken_doll_part_004" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_005" type="mesh" mesh="chicken_doll_part_005" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_006" type="mesh" mesh="chicken_doll_part_006" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_007" type="mesh" mesh="chicken_doll_part_007" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_008" type="mesh" mesh="chicken_doll_part_008" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_009" type="mesh" mesh="chicken_doll_part_009" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_010" type="mesh" mesh="chicken_doll_part_010" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_011" type="mesh" mesh="chicken_doll_part_011" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_012" type="mesh" mesh="chicken_doll_part_012" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_013" type="mesh" mesh="chicken_doll_part_013" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_014" type="mesh" mesh="chicken_doll_part_014" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_015" type="mesh" mesh="chicken_doll_part_015" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_016" type="mesh" mesh="chicken_doll_part_016" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_017" type="mesh" mesh="chicken_doll_part_017" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_018" type="mesh" mesh="chicken_doll_part_018" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_019" type="mesh" mesh="chicken_doll_part_019" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_020" type="mesh" mesh="chicken_doll_part_020" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_021" type="mesh" mesh="chicken_doll_part_021" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_022" type="mesh" mesh="chicken_doll_part_022" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_023" type="mesh" mesh="chicken_doll_part_023" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_024" type="mesh" mesh="chicken_doll_part_024" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_025" type="mesh" mesh="chicken_doll_part_025" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_026" type="mesh" mesh="chicken_doll_part_026" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_027" type="mesh" mesh="chicken_doll_part_027" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_028" type="mesh" mesh="chicken_doll_part_028" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_029" type="mesh" mesh="chicken_doll_part_029" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_vis_030" type="mesh" mesh="chicken_doll_part_030" material="chicken_doll_mat" quat="0.489886 0.684493 -0.392919 0.370265" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="chicken_doll_col" type="box" size="0.04 0.04 0.07" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <site name="chicken_doll_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
+      </body>
+    </body>
+    <!-- DOG -->
+    <body name="dog_gs" pos="0.5820 -0.3015 0.2">
+      <body name="dog" pos="0 0 0">
+      <geom name="dog_vis_000" type="mesh" mesh="dog_part_000" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_001" type="mesh" mesh="dog_part_001" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_002" type="mesh" mesh="dog_part_002" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_003" type="mesh" mesh="dog_part_003" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_004" type="mesh" mesh="dog_part_004" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_005" type="mesh" mesh="dog_part_005" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_006" type="mesh" mesh="dog_part_006" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_007" type="mesh" mesh="dog_part_007" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_008" type="mesh" mesh="dog_part_008" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_009" type="mesh" mesh="dog_part_009" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_010" type="mesh" mesh="dog_part_010" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_011" type="mesh" mesh="dog_part_011" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_012" type="mesh" mesh="dog_part_012" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_013" type="mesh" mesh="dog_part_013" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_014" type="mesh" mesh="dog_part_014" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_015" type="mesh" mesh="dog_part_015" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_016" type="mesh" mesh="dog_part_016" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_017" type="mesh" mesh="dog_part_017" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_018" type="mesh" mesh="dog_part_018" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_019" type="mesh" mesh="dog_part_019" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_020" type="mesh" mesh="dog_part_020" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_021" type="mesh" mesh="dog_part_021" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_022" type="mesh" mesh="dog_part_022" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_023" type="mesh" mesh="dog_part_023" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_024" type="mesh" mesh="dog_part_024" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_025" type="mesh" mesh="dog_part_025" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_026" type="mesh" mesh="dog_part_026" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_027" type="mesh" mesh="dog_part_027" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_028" type="mesh" mesh="dog_part_028" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_029" type="mesh" mesh="dog_part_029" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_030" type="mesh" mesh="dog_part_030" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_vis_031" type="mesh" mesh="dog_part_031" material="dog_mat" quat="0.9968 -0.0083 0.0054 0.0797" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="dog_col" type="box" size="0.05 0.05 0.09" mass="0.5" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <site name="dog_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
+      </body>
+    </body>
+    <!-- WHITE BOX -->
+    <body name="white_box_gs" pos="0.582006 -0.20156 0.151185">
+      <body name="white_box" pos="0 0 0">
+      <geom name="white_box_vis_000" type="mesh" mesh="white_box_part_000" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_001" type="mesh" mesh="white_box_part_001" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_002" type="mesh" mesh="white_box_part_002" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_003" type="mesh" mesh="white_box_part_003" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_004" type="mesh" mesh="white_box_part_004" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_005" type="mesh" mesh="white_box_part_005" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_006" type="mesh" mesh="white_box_part_006" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_007" type="mesh" mesh="white_box_part_007" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_008" type="mesh" mesh="white_box_part_008" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_009" type="mesh" mesh="white_box_part_009" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_010" type="mesh" mesh="white_box_part_010" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_011" type="mesh" mesh="white_box_part_011" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_012" type="mesh" mesh="white_box_part_012" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_013" type="mesh" mesh="white_box_part_013" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_014" type="mesh" mesh="white_box_part_014" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_015" type="mesh" mesh="white_box_part_015" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_016" type="mesh" mesh="white_box_part_016" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_017" type="mesh" mesh="white_box_part_017" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_018" type="mesh" mesh="white_box_part_018" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_019" type="mesh" mesh="white_box_part_019" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_020" type="mesh" mesh="white_box_part_020" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_021" type="mesh" mesh="white_box_part_021" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_022" type="mesh" mesh="white_box_part_022" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_023" type="mesh" mesh="white_box_part_023" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_024" type="mesh" mesh="white_box_part_024" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_025" type="mesh" mesh="white_box_part_025" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_026" type="mesh" mesh="white_box_part_026" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_027" type="mesh" mesh="white_box_part_027" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_028" type="mesh" mesh="white_box_part_028" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_029" type="mesh" mesh="white_box_part_029" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_030" type="mesh" mesh="white_box_part_030" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_vis_031" type="mesh" mesh="white_box_part_031" material="white_box_mat" quat="0.9997 0.0010 -0.0005 0.0251" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="white_box_col" type="box" size="0.14 0.14 0.07" mass="0.5" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <site name="white_box_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
+      </body>
+    </body>
+    <!-- YELLOW BRUSH -->
+    <body name="yellow_brush_gs" pos="0.597517 -0.117931 0.100882">
+      <body name="yellow_brush" pos="0 0 0">
+      <geom name="yellow_brush_vis_000" type="mesh" mesh="yellow_brush_part_000" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_001" type="mesh" mesh="yellow_brush_part_001" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_002" type="mesh" mesh="yellow_brush_part_002" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_003" type="mesh" mesh="yellow_brush_part_003" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_004" type="mesh" mesh="yellow_brush_part_004" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_005" type="mesh" mesh="yellow_brush_part_005" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_006" type="mesh" mesh="yellow_brush_part_006" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_007" type="mesh" mesh="yellow_brush_part_007" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_008" type="mesh" mesh="yellow_brush_part_008" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_009" type="mesh" mesh="yellow_brush_part_009" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_010" type="mesh" mesh="yellow_brush_part_010" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_011" type="mesh" mesh="yellow_brush_part_011" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_012" type="mesh" mesh="yellow_brush_part_012" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_013" type="mesh" mesh="yellow_brush_part_013" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_014" type="mesh" mesh="yellow_brush_part_014" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_015" type="mesh" mesh="yellow_brush_part_015" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_016" type="mesh" mesh="yellow_brush_part_016" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_017" type="mesh" mesh="yellow_brush_part_017" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_018" type="mesh" mesh="yellow_brush_part_018" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_019" type="mesh" mesh="yellow_brush_part_019" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_020" type="mesh" mesh="yellow_brush_part_020" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_021" type="mesh" mesh="yellow_brush_part_021" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_022" type="mesh" mesh="yellow_brush_part_022" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_023" type="mesh" mesh="yellow_brush_part_023" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_024" type="mesh" mesh="yellow_brush_part_024" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_025" type="mesh" mesh="yellow_brush_part_025" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_026" type="mesh" mesh="yellow_brush_part_026" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_027" type="mesh" mesh="yellow_brush_part_027" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_028" type="mesh" mesh="yellow_brush_part_028" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_029" type="mesh" mesh="yellow_brush_part_029" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_030" type="mesh" mesh="yellow_brush_part_030" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_vis_031" type="mesh" mesh="yellow_brush_part_031" material="yellow_brush_mat" quat="0.359153 -0.901677 0.212907 0.112504" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="yellow_brush_col" type="box" size="0.1 0.02 0.015" mass="0.5" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <site name="yellow_brush_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
+      </body>
+    </body>
+    <!-- TRANSPARENT TAPE PAPER -->
+    <body name="transparent_tape_paper_gs" pos="0.3094 0.1863 0.1">
+      <freejoint name="transparent_tape_paper_joint"/>
+      <body name="transparent_tape_paper" pos="0 0 0">
+      <geom name="transparent_tape_paper_vis_000" type="mesh" mesh="transparent_tape_paper_part_000" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_001" type="mesh" mesh="transparent_tape_paper_part_001" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_002" type="mesh" mesh="transparent_tape_paper_part_002" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_003" type="mesh" mesh="transparent_tape_paper_part_003" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_004" type="mesh" mesh="transparent_tape_paper_part_004" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_005" type="mesh" mesh="transparent_tape_paper_part_005" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_006" type="mesh" mesh="transparent_tape_paper_part_006" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_007" type="mesh" mesh="transparent_tape_paper_part_007" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_008" type="mesh" mesh="transparent_tape_paper_part_008" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_009" type="mesh" mesh="transparent_tape_paper_part_009" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_010" type="mesh" mesh="transparent_tape_paper_part_010" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_011" type="mesh" mesh="transparent_tape_paper_part_011" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_012" type="mesh" mesh="transparent_tape_paper_part_012" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_013" type="mesh" mesh="transparent_tape_paper_part_013" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_014" type="mesh" mesh="transparent_tape_paper_part_014" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_015" type="mesh" mesh="transparent_tape_paper_part_015" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_016" type="mesh" mesh="transparent_tape_paper_part_016" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_017" type="mesh" mesh="transparent_tape_paper_part_017" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_018" type="mesh" mesh="transparent_tape_paper_part_018" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_019" type="mesh" mesh="transparent_tape_paper_part_019" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_020" type="mesh" mesh="transparent_tape_paper_part_020" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_021" type="mesh" mesh="transparent_tape_paper_part_021" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_022" type="mesh" mesh="transparent_tape_paper_part_022" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_023" type="mesh" mesh="transparent_tape_paper_part_023" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_024" type="mesh" mesh="transparent_tape_paper_part_024" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_vis_025" type="mesh" mesh="transparent_tape_paper_part_025" material="transparent_tape_paper_mat" quat="0.884719 -0.420518 -0.0333871 0.198297" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="transparent_tape_paper_col" type="box" size="0.05 0.05 0.02" mass="0.1" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <site name="transparent_tape_paper_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
+      </body>
+    </body>
+
+    <!-- Camera matching background GS coordinate frame (table30_05_wipe_the_table) -->
+    <camera name="front" pos="1.574 0.022 1.073"
+            xyaxes="-0.029 1.000 0.000 -0.488 -0.014 0.872" fovy="43.365"/>
+  </worldbody>
+
+  <keyframe>
+    <!-- 6 Robotiq floating-base joints + 6 gripper finger joints
+         + 3 dynamic body freejoints (7 each)
+         Freejoint positions match outer body positions (inner offset is zero). -->
+    <key
+      qpos="
+        0.45 0.06 0.45 0 0 0
+        0.00522882 0.00541525 0.00562153 0.00529892 0.00548528 0.00569143
+        0.462898 0.295108 0.0998  1 0 0 0
+        0.410603 0.143326 0.1052  1 0 0 0
+        0.3094 0.1863 0.1  1 0 0 0"
+      ctrl="0.45 0.06 0.45 0 0 0 0"
+    />
+  </keyframe>
+</mujoco>

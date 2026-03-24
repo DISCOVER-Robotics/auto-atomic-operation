@@ -1,0 +1,79 @@
+<mujoco model="cup_on_coaster_gs">
+  <include file="../../robots/robotiq.xml"/>
+
+  <visual>
+    <map znear="0.001"/>
+  </visual>
+
+  <asset>
+    <!-- meshdir resolved to assets/meshes/ via robotiq.xml compiler -->
+    <mesh name="cup_mesh"     file="cup_on_coaster/blue_water_cup/blue_water_cup.obj"/>
+    <mesh name="coaster_mesh" file="cup_on_coaster/coaster/coaster.obj"/>
+
+    <material name="cup_mat"     rgba="0.1 0.45 0.85 0.85" specular="0.5" shininess="0.5"/>
+    <material name="coaster_mat" rgba="0.65 0.45 0.3 1"    reflectance="0.15"/>
+  </asset>
+
+  <worldbody>
+    <light name="demo_light" pos="0 0 1.5" dir="0 0 -1"/>
+    <geom name="floor" type="plane" size="2 2 0.1" rgba="0.85 0.85 0.85 1"/>
+
+    <!-- Table matches background GS coordinate frame (table30_06_put_cup_on_coaster).
+         center z=0.0642, half-height=0.01 → top surface z=0.0742.              -->
+    <geom name="table" pos="0.45 0.06 0.0642" size="0.33 0.525 0.01" type="box"
+          contype="1" conaffinity="1" rgba="0.6 0.45 0.3 1"/>
+
+    <!-- ── OBJECT BODIES (two-layer structure) ────────────────────────────────
+         Outer body (*_gs): freejoint + identity orientation, pos from capture frame.
+         Freejoint MUST be on the outer (top-level) body per MuJoCo constraint.
+
+         Positions from table30 home keyframe:
+           cup:     (0.45, 0.15, 0.12)
+           coaster: (0.45, -0.05, 0.08)                                         -->
+
+    <!-- CUP -->
+    <body name="cup_gs" pos="0.45 0.15 0.12">
+      <freejoint name="cup_joint"/>
+      <body name="cup" pos="0 0 0">
+        <geom name="cup_col" type="box" size="0.03 0.03 0.045"
+              mass="0.005" friction="1.2 0.05 0.01"
+              rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <geom name="cup_vis" type="mesh" mesh="cup_mesh" material="cup_mat"
+              quat="0.490144 -0.86997 -0.0468224 0.0267941" density="0"
+              contype="0" conaffinity="0" group="1"/>
+        <site name="cup_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
+      </body>
+    </body>
+
+    <!-- COASTER -->
+    <body name="coaster_gs" pos="0.45 -0.05 0.08">
+      <freejoint name="coaster_joint"/>
+      <body name="coaster" pos="0 0 0">
+        <geom name="coaster_col" type="box" size="0.05 0.05 0.01"
+              mass="0.05" friction="1.2 0.05 0.01"
+              rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <geom name="coaster_vis" type="mesh" mesh="coaster_mesh" material="coaster_mat"
+              quat="0.941624 0.302989 -0.0408287 -0.140976" density="0"
+              contype="0" conaffinity="0" group="1"/>
+        <site name="coaster_site" pos="0 0 0" size="0.004" rgba="0 1 0 0"/>
+      </body>
+    </body>
+
+    <!-- Camera matching background GS coordinate frame (table30_06_put_cup_on_coaster) -->
+    <camera name="front" pos="1.574 0.022 1.073"
+            xyaxes="-0.029 1.000 0.000 -0.488 -0.014 0.872" fovy="43.365"/>
+  </worldbody>
+
+  <keyframe>
+    <!-- 6 Robotiq floating-base joints + 6 gripper finger joints
+         + cup_gs freejoint (7) + coaster_gs freejoint (7) -->
+    <key
+      qpos="
+        0.45 0.06 0.45 0 0 0
+        0.00522882 0.00541525 0.00562153 0.00529892 0.00548528 0.00569143
+        0.45  0.15  0.12  1 0 0 0
+        0.45 -0.05  0.08  1 0 0 0"
+      ctrl="0.45 0.06 0.45 0 0 0 0"
+    />
+  </keyframe>
+</mujoco>

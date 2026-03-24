@@ -1,0 +1,27 @@
+defaults:
+  - arrange_flowers
+  - _self_
+
+gs_dir: assets/gs/scenes/arrange_flowers
+bg_dir: third_party/press_da_button/gs_playground/models/robots/manipulation/franka_emika_panda_robotiq/3dgs
+
+env:
+  env:
+    _target_: auto_atom.basis.gs_mujoco_env.GSUnifiedMujocoEnv
+    config:
+      _target_: auto_atom.basis.gs_mujoco_env.GSEnvConfig
+      model_path: assets/xmls/scenes/arrange_flowers/demo_gs.xml
+      cameras:
+        - name: front
+          width: 640
+          height: 480
+          enable_color: true
+          enable_depth: true
+          enable_mask: false
+          enable_heat_map: false
+      gaussian_render:
+        background_ply: ${bg_dir}/background.ply
+        body_gaussians:
+          vase_gs:   ${gs_dir}/vase.ply
+          vase2_gs:  ${gs_dir}/vase2.ply
+          flower_gs: ${gs_dir}/flower1.ply

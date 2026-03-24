@@ -1,0 +1,218 @@
+<mujoco model="hang_toothbrush_cup_gs">
+  <include file="../../robots/robotiq.xml"/>
+
+  <visual>
+    <map znear="0.001"/>
+  </visual>
+
+  <asset>
+    <!-- meshdir resolved to assets/meshes/ via robotiq.xml compiler -->
+    <mesh name="rack_part_000" file="hang_toothbrush_cup/rack/part_000.obj"/>
+    <mesh name="rack_part_001" file="hang_toothbrush_cup/rack/part_001.obj"/>
+    <mesh name="rack_part_002" file="hang_toothbrush_cup/rack/part_002.obj"/>
+    <mesh name="rack_part_003" file="hang_toothbrush_cup/rack/part_003.obj"/>
+    <mesh name="rack_part_004" file="hang_toothbrush_cup/rack/part_004.obj"/>
+    <mesh name="rack_part_005" file="hang_toothbrush_cup/rack/part_005.obj"/>
+    <mesh name="rack_part_006" file="hang_toothbrush_cup/rack/part_006.obj"/>
+    <mesh name="rack_part_007" file="hang_toothbrush_cup/rack/part_007.obj"/>
+    <mesh name="cup_part_000" file="hang_toothbrush_cup/toothbrush_cup/part_000.obj"/>
+    <mesh name="cup_part_001" file="hang_toothbrush_cup/toothbrush_cup/part_001.obj"/>
+    <mesh name="cup_part_002" file="hang_toothbrush_cup/toothbrush_cup/part_002.obj"/>
+    <mesh name="cup_part_003" file="hang_toothbrush_cup/toothbrush_cup/part_003.obj"/>
+    <mesh name="cup_part_004" file="hang_toothbrush_cup/toothbrush_cup/part_004.obj"/>
+    <mesh name="cup_part_005" file="hang_toothbrush_cup/toothbrush_cup/part_005.obj"/>
+    <mesh name="cup_part_006" file="hang_toothbrush_cup/toothbrush_cup/part_006.obj"/>
+    <mesh name="cup_part_007" file="hang_toothbrush_cup/toothbrush_cup/part_007.obj"/>
+    <mesh name="cup_part_008" file="hang_toothbrush_cup/toothbrush_cup/part_008.obj"/>
+    <mesh name="cup_part_009" file="hang_toothbrush_cup/toothbrush_cup/part_009.obj"/>
+    <mesh name="cup_part_010" file="hang_toothbrush_cup/toothbrush_cup/part_010.obj"/>
+    <mesh name="cup_part_011" file="hang_toothbrush_cup/toothbrush_cup/part_011.obj"/>
+    <mesh name="cup_part_012" file="hang_toothbrush_cup/toothbrush_cup/part_012.obj"/>
+    <mesh name="cup_part_013" file="hang_toothbrush_cup/toothbrush_cup/part_013.obj"/>
+    <mesh name="cup_part_014" file="hang_toothbrush_cup/toothbrush_cup/part_014.obj"/>
+    <mesh name="cup_part_015" file="hang_toothbrush_cup/toothbrush_cup/part_015.obj"/>
+    <mesh name="cup_part_016" file="hang_toothbrush_cup/toothbrush_cup/part_016.obj"/>
+    <mesh name="cup_part_017" file="hang_toothbrush_cup/toothbrush_cup/part_017.obj"/>
+    <mesh name="cup_part_018" file="hang_toothbrush_cup/toothbrush_cup/part_018.obj"/>
+    <mesh name="cup_part_019" file="hang_toothbrush_cup/toothbrush_cup/part_019.obj"/>
+    <mesh name="cup_part_020" file="hang_toothbrush_cup/toothbrush_cup/part_020.obj"/>
+    <mesh name="cup_part_021" file="hang_toothbrush_cup/toothbrush_cup/part_021.obj"/>
+    <mesh name="cup_part_022" file="hang_toothbrush_cup/toothbrush_cup/part_022.obj"/>
+    <mesh name="cup_part_023" file="hang_toothbrush_cup/toothbrush_cup/part_023.obj"/>
+    <mesh name="cup_part_024" file="hang_toothbrush_cup/toothbrush_cup/part_024.obj"/>
+    <mesh name="cup_part_025" file="hang_toothbrush_cup/toothbrush_cup/part_025.obj"/>
+    <mesh name="cup_part_026" file="hang_toothbrush_cup/toothbrush_cup/part_026.obj"/>
+    <mesh name="cup_part_027" file="hang_toothbrush_cup/toothbrush_cup/part_027.obj"/>
+    <mesh name="cup_part_028" file="hang_toothbrush_cup/toothbrush_cup/part_028.obj"/>
+    <mesh name="cup_part_029" file="hang_toothbrush_cup/toothbrush_cup/part_029.obj"/>
+    <mesh name="cup_part_030" file="hang_toothbrush_cup/toothbrush_cup/part_030.obj"/>
+    <mesh name="cup_part_031" file="hang_toothbrush_cup/toothbrush_cup/part_031.obj"/>
+    <mesh name="cup_part_032" file="hang_toothbrush_cup/toothbrush_cup/part_032.obj"/>
+    <mesh name="cup_part_033" file="hang_toothbrush_cup/toothbrush_cup/part_033.obj"/>
+    <mesh name="cup_part_034" file="hang_toothbrush_cup/toothbrush_cup/part_034.obj"/>
+    <mesh name="cup_part_035" file="hang_toothbrush_cup/toothbrush_cup/part_035.obj"/>
+    <mesh name="cup_part_036" file="hang_toothbrush_cup/toothbrush_cup/part_036.obj"/>
+    <mesh name="cup_part_037" file="hang_toothbrush_cup/toothbrush_cup/part_037.obj"/>
+    <mesh name="cup_part_038" file="hang_toothbrush_cup/toothbrush_cup/part_038.obj"/>
+    <mesh name="cup_part_039" file="hang_toothbrush_cup/toothbrush_cup/part_039.obj"/>
+    <mesh name="cup_part_040" file="hang_toothbrush_cup/toothbrush_cup/part_040.obj"/>
+    <mesh name="cup_part_041" file="hang_toothbrush_cup/toothbrush_cup/part_041.obj"/>
+    <mesh name="cup_part_042" file="hang_toothbrush_cup/toothbrush_cup/part_042.obj"/>
+    <mesh name="cup_part_043" file="hang_toothbrush_cup/toothbrush_cup/part_043.obj"/>
+    <mesh name="cup_part_044" file="hang_toothbrush_cup/toothbrush_cup/part_044.obj"/>
+    <mesh name="cup_part_045" file="hang_toothbrush_cup/toothbrush_cup/part_045.obj"/>
+    <mesh name="cup_part_046" file="hang_toothbrush_cup/toothbrush_cup/part_046.obj"/>
+    <mesh name="cup_part_047" file="hang_toothbrush_cup/toothbrush_cup/part_047.obj"/>
+    <mesh name="cup_part_048" file="hang_toothbrush_cup/toothbrush_cup/part_048.obj"/>
+    <mesh name="cup_part_049" file="hang_toothbrush_cup/toothbrush_cup/part_049.obj"/>
+    <mesh name="cup_part_050" file="hang_toothbrush_cup/toothbrush_cup/part_050.obj"/>
+    <mesh name="cup_part_051" file="hang_toothbrush_cup/toothbrush_cup/part_051.obj"/>
+    <mesh name="cup_part_052" file="hang_toothbrush_cup/toothbrush_cup/part_052.obj"/>
+    <mesh name="cup_part_053" file="hang_toothbrush_cup/toothbrush_cup/part_053.obj"/>
+    <mesh name="cup_part_054" file="hang_toothbrush_cup/toothbrush_cup/part_054.obj"/>
+    <mesh name="cup_part_055" file="hang_toothbrush_cup/toothbrush_cup/part_055.obj"/>
+    <mesh name="cup_part_056" file="hang_toothbrush_cup/toothbrush_cup/part_056.obj"/>
+    <mesh name="cup_part_057" file="hang_toothbrush_cup/toothbrush_cup/part_057.obj"/>
+    <mesh name="cup_part_058" file="hang_toothbrush_cup/toothbrush_cup/part_058.obj"/>
+    <mesh name="cup_part_059" file="hang_toothbrush_cup/toothbrush_cup/part_059.obj"/>
+    <mesh name="cup_part_060" file="hang_toothbrush_cup/toothbrush_cup/part_060.obj"/>
+    <mesh name="cup_part_061" file="hang_toothbrush_cup/toothbrush_cup/part_061.obj"/>
+    <mesh name="cup_part_062" file="hang_toothbrush_cup/toothbrush_cup/part_062.obj"/>
+    <mesh name="cup_part_063" file="hang_toothbrush_cup/toothbrush_cup/part_063.obj"/>
+
+    <material name="rack_mat" rgba="0.6 0.5 0.4 1"   reflectance="0.2"/>
+    <material name="cup_mat"  rgba="0.9 0.9 0.9 0.9" specular="0.5" shininess="0.5"/>
+  </asset>
+
+  <worldbody>
+    <light name="demo_light" pos="0 0 1.5" dir="0 0 -1"/>
+    <geom name="floor" type="plane" size="2 2 0.1" rgba="0.85 0.85 0.85 1"/>
+
+    <!-- Table matches background GS coordinate frame (table30_04_hang_toothbrush_cup).
+         center z=0.0642, half-height=0.01 → top surface z=0.0742.              -->
+    <geom name="table" pos="0.45 0.06 0.0642" size="0.33 0.525 0.01" type="box"
+          contype="1" conaffinity="1" rgba="0.6 0.45 0.3 1"/>
+
+    <!-- ── OBJECT BODIES (two-layer structure) ────────────────────────────────
+         Outer body (*_gs): identity orientation, world pos from PLY capture frame.
+         body_gaussians in YAML maps this body to the pre-rotated .ply.
+
+         Inner body (*): physics body (freejoint or static).
+
+         Positions from table30_04_hang_toothbrush_cup.xml:
+           rack:          (0.5, 0.23379, 0.1542) — static (no freejoint)
+           toothbrush_cup: (0.515367, 0.056162, 0.085959) — dynamic
+
+         Visual mesh geoms use euler="0.959931089 0.052359878 0" to orient OBJ
+         files (exported in Franka capture frame) into MuJoCo world frame.        -->
+
+    <!-- RACK (static) -->
+    <body name="rack_gs" pos="0.5 0.23379 0.1542">
+      <body name="rack" pos="0 0 0">
+      <geom name="rack_vis_000" type="mesh" mesh="rack_part_000" material="rack_mat" quat="0.721105 0 0 -0.692826" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="rack_vis_001" type="mesh" mesh="rack_part_001" material="rack_mat" quat="0.721105 0 0 -0.692826" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="rack_vis_002" type="mesh" mesh="rack_part_002" material="rack_mat" quat="0.721105 0 0 -0.692826" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="rack_vis_003" type="mesh" mesh="rack_part_003" material="rack_mat" quat="0.721105 0 0 -0.692826" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="rack_vis_004" type="mesh" mesh="rack_part_004" material="rack_mat" quat="0.721105 0 0 -0.692826" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="rack_vis_005" type="mesh" mesh="rack_part_005" material="rack_mat" quat="0.721105 0 0 -0.692826" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="rack_vis_006" type="mesh" mesh="rack_part_006" material="rack_mat" quat="0.721105 0 0 -0.692826" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="rack_vis_007" type="mesh" mesh="rack_part_007" material="rack_mat" quat="0.721105 0 0 -0.692826" density="0" contype="0" conaffinity="0" group="1"/>
+        <geom name="rack_col" type="box" size="0.08 0.02 0.09"
+              mass="0.5" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <site name="rack_site" pos="0 0 0" size="0.004" rgba="0.5 0.5 0 0"/>
+      </body>
+    </body>
+
+    <!-- TOOTHBRUSH CUP (dynamic) -->
+    <body name="toothbrush_cup_gs" pos="0.515367 0.056162 0.085959">
+      <freejoint name="toothbrush_cup_joint"/>
+      <body name="toothbrush_cup" pos="0 0 0">
+      <geom name="cup_vis_000" type="mesh" mesh="cup_part_000" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_001" type="mesh" mesh="cup_part_001" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_002" type="mesh" mesh="cup_part_002" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_003" type="mesh" mesh="cup_part_003" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_004" type="mesh" mesh="cup_part_004" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_005" type="mesh" mesh="cup_part_005" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_006" type="mesh" mesh="cup_part_006" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_007" type="mesh" mesh="cup_part_007" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_008" type="mesh" mesh="cup_part_008" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_009" type="mesh" mesh="cup_part_009" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_010" type="mesh" mesh="cup_part_010" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_011" type="mesh" mesh="cup_part_011" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_012" type="mesh" mesh="cup_part_012" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_013" type="mesh" mesh="cup_part_013" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_014" type="mesh" mesh="cup_part_014" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_015" type="mesh" mesh="cup_part_015" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_016" type="mesh" mesh="cup_part_016" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_017" type="mesh" mesh="cup_part_017" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_018" type="mesh" mesh="cup_part_018" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_019" type="mesh" mesh="cup_part_019" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_020" type="mesh" mesh="cup_part_020" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_021" type="mesh" mesh="cup_part_021" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_022" type="mesh" mesh="cup_part_022" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_023" type="mesh" mesh="cup_part_023" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_024" type="mesh" mesh="cup_part_024" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_025" type="mesh" mesh="cup_part_025" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_026" type="mesh" mesh="cup_part_026" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_027" type="mesh" mesh="cup_part_027" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_028" type="mesh" mesh="cup_part_028" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_029" type="mesh" mesh="cup_part_029" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_030" type="mesh" mesh="cup_part_030" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_031" type="mesh" mesh="cup_part_031" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_032" type="mesh" mesh="cup_part_032" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_033" type="mesh" mesh="cup_part_033" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_034" type="mesh" mesh="cup_part_034" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_035" type="mesh" mesh="cup_part_035" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_036" type="mesh" mesh="cup_part_036" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_037" type="mesh" mesh="cup_part_037" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_038" type="mesh" mesh="cup_part_038" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_039" type="mesh" mesh="cup_part_039" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_040" type="mesh" mesh="cup_part_040" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_041" type="mesh" mesh="cup_part_041" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_042" type="mesh" mesh="cup_part_042" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_043" type="mesh" mesh="cup_part_043" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_044" type="mesh" mesh="cup_part_044" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_045" type="mesh" mesh="cup_part_045" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_046" type="mesh" mesh="cup_part_046" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_047" type="mesh" mesh="cup_part_047" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_048" type="mesh" mesh="cup_part_048" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_049" type="mesh" mesh="cup_part_049" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_050" type="mesh" mesh="cup_part_050" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_051" type="mesh" mesh="cup_part_051" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_052" type="mesh" mesh="cup_part_052" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_053" type="mesh" mesh="cup_part_053" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_054" type="mesh" mesh="cup_part_054" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_055" type="mesh" mesh="cup_part_055" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_056" type="mesh" mesh="cup_part_056" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_057" type="mesh" mesh="cup_part_057" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_058" type="mesh" mesh="cup_part_058" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_059" type="mesh" mesh="cup_part_059" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_060" type="mesh" mesh="cup_part_060" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_061" type="mesh" mesh="cup_part_061" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_062" type="mesh" mesh="cup_part_062" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+      <geom name="cup_vis_063" type="mesh" mesh="cup_part_063" material="cup_mat" quat="-0.725325 -0.00304526 0.00311753 0.688392" density="0" contype="0" conaffinity="0" group="1"/>
+        <geom name="cup_col" type="cylinder" size="0.03 0.04"
+              mass="0.05" friction="1.2 0.05 0.01"
+              rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <site name="cup_site" pos="0 0 0" size="0.004" rgba="0 0 1 0"/>
+      </body>
+    </body>
+
+    <!-- Camera matching background GS coordinate frame (table30_04_hang_toothbrush_cup) -->
+    <camera name="front" pos="1.0372 0.0372 0.6834"
+            xyaxes="-0.109 0.993 0.038 -0.6451 -0.1089 0.7563" fovy="43.36"/>
+  </worldbody>
+
+  <keyframe>
+    <!-- 6 Robotiq floating-base joints + 6 gripper finger joints
+         + toothbrush_cup freejoint (7)
+         Cup freejoint pos matches outer body position (inner offset is zero). -->
+    <key
+      qpos="
+        0.45 0.06 0.45 0 0 0
+        0.00522882 0.00541525 0.00562153 0.00529892 0.00548528 0.00569143
+        0.515367 0.056162 0.085959  1 0 0 0"
+      ctrl="0.45 0.06 0.45 0 0 0 0"
+    />
+  </keyframe>
+</mujoco>

@@ -1,0 +1,101 @@
+<mujoco model="stack_color_blocks_gs">
+  <include file="../../robots/robotiq.xml"/>
+
+  <visual>
+    <map znear="0.001"/>
+  </visual>
+
+  <asset>
+    <!-- meshdir resolved to assets/meshes/ via robotiq.xml compiler -->
+    <mesh name="cube_blue_mesh"   file="stack_color_blocks/blue_plastic_cube/blue_plastic_cube.obj"/>
+    <mesh name="cube_yellow_mesh" file="stack_color_blocks/yellow_plastic_cube/yellow_plastic_cube.obj"/>
+    <mesh name="cube_orange_mesh" file="stack_color_blocks/orange_plastic_cube/orange_plastic_cube.obj"/>
+
+    <material name="cube_blue_mat"   rgba="0.10 0.35 0.95 1" reflectance="0.2"/>
+    <material name="cube_yellow_mat" rgba="0.95 0.85 0.10 1" reflectance="0.2"/>
+    <material name="cube_orange_mat" rgba="0.95 0.55 0.10 1" reflectance="0.2"/>
+  </asset>
+
+  <worldbody>
+    <light name="demo_light" pos="0 0 1.5" dir="0 0 -1"/>
+    <geom name="floor" type="plane" size="2 2 0.1" rgba="0.85 0.85 0.85 1"/>
+
+    <!-- Table matches background GS coordinate frame (table30_02_stack_color_blocks).
+         center z=0.0642, half-height=0.01 → top surface z=0.0742.              -->
+    <geom name="table" pos="0.45 0.06 0.0642" size="0.33 0.525 0.01" type="box"
+          contype="1" conaffinity="1" rgba="0.6 0.45 0.3 1"/>
+
+    <!-- ── CUBE BODIES (two-layer structure) ──────────────────────────────────
+         Outer body (*_gs): freejoint + identity orientation, world pos from keyframe.
+         body_gaussians in YAML maps this body to the pre-rotated .ply.
+         Freejoint MUST be on the outer (top-level) body per MuJoCo constraint.
+
+         Inner body (*): no joint, zero offset from outer.
+         YAML stages target the inner body.
+
+         Cube positions from table30 home keyframe:
+           blue:   (0.497741, -0.100448, 0.0791)
+           yellow: (0.5145,   0.0267,    0.0791)
+           orange: (0.523,    0.1418,    0.0791)                                -->
+
+    <!-- CUBE BLUE -->
+    <body name="cube_blue_gs" pos="0.497741 -0.100448 0.0791">
+      <freejoint name="cube_blue_joint"/>
+      <body name="cube_blue" pos="0 0 0">
+        <geom name="cube_blue_col" type="box" size="0.025 0.025 0.025"
+              mass="0.005" friction="1.2 0.05 0.01"
+              rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <geom name="cube_blue_vis" type="mesh" mesh="cube_blue_mesh" material="cube_blue_mat"
+              density="0"
+              contype="0" conaffinity="0" group="1"/>
+        <site name="cube_blue_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
+      </body>
+    </body>
+
+    <!-- CUBE YELLOW -->
+    <body name="cube_yellow_gs" pos="0.5145 0.0267 0.0791">
+      <freejoint name="cube_yellow_joint"/>
+      <body name="cube_yellow" pos="0 0 0">
+        <geom name="cube_yellow_col" type="box" size="0.025 0.025 0.025"
+              mass="0.005" friction="1.2 0.05 0.01"
+              rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <geom name="cube_yellow_vis" type="mesh" mesh="cube_yellow_mesh" material="cube_yellow_mat"
+              density="0"
+              contype="0" conaffinity="0" group="1"/>
+        <site name="cube_yellow_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
+      </body>
+    </body>
+
+    <!-- CUBE ORANGE -->
+    <body name="cube_orange_gs" pos="0.523 0.1418 0.0791">
+      <freejoint name="cube_orange_joint"/>
+      <body name="cube_orange" pos="0 0 0">
+        <geom name="cube_orange_col" type="box" size="0.025 0.025 0.025"
+              mass="0.005" friction="1.2 0.05 0.01"
+              rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <geom name="cube_orange_vis" type="mesh" mesh="cube_orange_mesh" material="cube_orange_mat"
+              density="0"
+              contype="0" conaffinity="0" group="1"/>
+        <site name="cube_orange_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
+      </body>
+    </body>
+
+    <!-- Camera matching background GS coordinate frame (table30_02_stack_color_blocks) -->
+    <camera name="front" pos="1.070 0.029 0.747"
+            xyaxes="-0.109 0.993 0.038 -0.659 -0.101 0.745" fovy="43.36"/>
+  </worldbody>
+
+  <keyframe>
+    <!-- 6 Robotiq floating-base joints + 6 gripper finger joints
+         + cube_blue_gs freejoint (7) + cube_yellow_gs freejoint (7) + cube_orange_gs freejoint (7) -->
+    <key
+      qpos="
+        0.45 0.06 0.45 0 0 0
+        0.00522882 0.00541525 0.00562153 0.00529892 0.00548528 0.00569143
+        0.497741 -0.100448 0.0791  1 0 0 0
+        0.5145    0.0267   0.0791  1 0 0 0
+        0.523     0.1418   0.0791  1 0 0 0"
+      ctrl="0.45 0.06 0.45 0 0 0 0"
+    />
+  </keyframe>
+</mujoco>

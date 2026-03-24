@@ -1,0 +1,26 @@
+defaults:
+  - cup_on_coaster
+  - _self_
+
+gs_dir: assets/gs/scenes/cup_on_coaster
+bg_dir: third_party/press_da_button/gs_playground/models/robots/manipulation/franka_emika_panda_robotiq/3dgs
+
+env:
+  env:
+    _target_: auto_atom.basis.gs_mujoco_env.GSUnifiedMujocoEnv
+    config:
+      _target_: auto_atom.basis.gs_mujoco_env.GSEnvConfig
+      model_path: assets/xmls/scenes/cup_on_coaster/demo_gs.xml
+      cameras:
+        - name: front
+          width: 640
+          height: 480
+          enable_color: true
+          enable_depth: true
+          enable_mask: false
+          enable_heat_map: false
+      gaussian_render:
+        background_ply: ${bg_dir}/background.ply
+        body_gaussians:
+          cup_gs:     ${gs_dir}/cup.ply
+          coaster_gs: ${gs_dir}/coaster.ply

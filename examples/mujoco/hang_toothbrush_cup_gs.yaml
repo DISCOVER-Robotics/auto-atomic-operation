@@ -1,0 +1,26 @@
+defaults:
+  - hang_toothbrush_cup
+  - _self_
+
+gs_dir: assets/gs/scenes/hang_toothbrush_cup
+bg_dir: third_party/press_da_button/gs_playground/models/robots/manipulation/franka_emika_panda_robotiq/3dgs
+
+env:
+  env:
+    _target_: auto_atom.basis.gs_mujoco_env.GSUnifiedMujocoEnv
+    config:
+      _target_: auto_atom.basis.gs_mujoco_env.GSEnvConfig
+      model_path: assets/xmls/scenes/hang_toothbrush_cup/demo_gs.xml
+      cameras:
+        - name: front
+          width: 640
+          height: 480
+          enable_color: true
+          enable_depth: true
+          enable_mask: false
+          enable_heat_map: false
+      gaussian_render:
+        background_ply: ${bg_dir}/background.ply
+        body_gaussians:
+          rack_gs:           ${gs_dir}/rack.ply
+          toothbrush_cup_gs: ${gs_dir}/toothbrush_cup.ply
