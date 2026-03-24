@@ -50,12 +50,12 @@ python examples/record_demo.py --config-name stack_color_blocks \
 ### Basic usage
 
 ```bash
-# Default config: press_three_buttons_table30_gs
+# Default config: press_three_buttons_gs
 python examples/compare_gs_render.py
 
 # Specify a different GS scene config
-python examples/compare_gs_render.py --config-name cup_on_coaster_table30_gs
-python examples/compare_gs_render.py --config-name stack_color_blocks_table30_gs
+python examples/compare_gs_render.py --config-name cup_on_coaster_gs
+python examples/compare_gs_render.py --config-name stack_color_blocks_gs
 python examples/compare_gs_render.py --config-name hang_toothbrush_cup_gs
 python examples/compare_gs_render.py --config-name wipe_the_table_gs
 python examples/compare_gs_render.py --config-name arrange_flowers_gs

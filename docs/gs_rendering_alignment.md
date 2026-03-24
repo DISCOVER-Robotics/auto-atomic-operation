@@ -161,7 +161,7 @@ The `body_gaussians` keys must match the **outer** (`*_gs`) body names in the XM
 Use `examples/compare_gs_render.py` to render the first frame of a GS scene and compare GS vs native MuJoCo images side-by-side per camera.
 
 ```bash
-# Default config: press_three_buttons_table30_gs
+# Default config: press_three_buttons_gs
 python examples/compare_gs_render.py
 
 # Any other GS scene config (Hydra --config-name override)

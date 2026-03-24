@@ -6,7 +6,7 @@ Results are saved to ``outputs/compare_<config>_<timestamp>.png``.
 
 Usage::
 
-    # Default config: press_three_buttons_table30_gs
+    # Default config: press_three_buttons_gs
     python examples/compare_gs_render.py
 
     # Any other GS scene config (Hydra --config-name override)
@@ -107,7 +107,7 @@ def _save_comparison(
 
 @hydra.main(
     config_path="mujoco",
-    config_name="press_three_buttons_table30_gs",
+    config_name="press_three_buttons_gs",
     version_base=None,
 )
 def main(cfg: DictConfig) -> None:
