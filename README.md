@@ -32,6 +32,10 @@ Requires **Python 3.10+**.
 pip install auto-atomic-operation
 ```
 
+Note: the PyPI release may lag behind the latest source version. You can check the README shown on the [PyPI project page](https://pypi.org/project/auto-atomic-operation/) for the documentation corresponding to that published release.
+
+The PyPI version is relatively stable, but it may not include some newer features, and it does not ship with demos. If you want to use the latest features and demos, install from source instead.
+
 ### Install from source
 
 ```bash
@@ -290,6 +294,10 @@ To integrate a new simulator or real robot, implement three abstract classes fro
 - `SceneBackend` — scene lifecycle, handler resolution, and randomization
 
 See the **[Custom Backend Guide](docs/custom-backend.md)** for a step-by-step walkthrough with annotated code examples. [`auto_atom/mock.py`](auto_atom/mock.py) provides a minimal reference implementation.
+
+## Data Collection
+
+
 
 ## License
 
