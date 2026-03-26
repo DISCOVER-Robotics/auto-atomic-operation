@@ -191,6 +191,15 @@ class SceneBackend(ABC):
             f"Backend does not support named element lookup (requested '{name}')."
         )
 
+    def get_joint_angle(self, name: str) -> float:
+        """Return the current angle (radians) of a named joint.
+
+        Backends should override this.  The default raises ``NotImplementedError``.
+        """
+        raise NotImplementedError(
+            f"Backend does not support joint angle lookup (requested '{name}')."
+        )
+
     def set_interest_objects_and_operations(
         self,
         object_names: List[str],
@@ -712,10 +721,15 @@ class TaskFlowBuilder:
 
     @staticmethod
     def _split_arc(pose: PoseControlConfig) -> List[PoseControlConfig]:
-        """Split a large arc into smaller sub-arcs of at most ``arc.max_step`` each."""
+        """Split a large arc into smaller sub-arcs of at most ``arc.max_step`` each.
 
+        Absolute arcs are NOT split — they re-resolve each control step at runtime
+        to track the remaining delta, so a single action suffices.
+        """
         arc = pose.arc
         assert arc is not None
+        if arc.absolute:
+            return [pose]
         total = abs(arc.angle)
         n_steps = max(1, math.ceil(total / arc.max_step))
         step_angle = arc.angle / n_steps
@@ -1181,15 +1195,12 @@ class TaskRunner:
     ) -> ControlResult:
         if action.kind == "pose" and action.pose is not None:
             # Snapshot-based references: resolve once and cache.
-            # Arc poses are always snapshot-based (target computed from EEF at action start).
-            is_snapshot = (
-                action.pose.reference
-                in {
-                    PoseReference.EEF_WORLD,
-                    PoseReference.EEF,
-                }
-                or action.pose.arc is not None
-            )
+            # Relative arcs are snapshot-based; absolute arcs re-resolve each tick.
+            is_arc = action.pose.arc is not None
+            is_snapshot = action.pose.reference in {
+                PoseReference.EEF_WORLD,
+                PoseReference.EEF,
+            } or (is_arc and not action.pose.arc.absolute)
             if is_snapshot and action.resolved_pose is not None:
                 resolved_pose = action.resolved_pose
             else:
@@ -1232,12 +1243,30 @@ class TaskRunner:
             pivot_local = PoseState(position=arc.pivot)
             pivot_world_pos = compose_pose(reference_pose, pivot_local).position
 
+        # Resolve angle: absolute mode computes delta from current joint angle,
+        # clamped to max_step so it converges over multiple control ticks.
+        angle = arc.angle
+        if arc.absolute:
+            if not isinstance(arc.pivot, str):
+                raise ValueError(
+                    "Arc absolute mode requires pivot to be a joint name (str)."
+                )
+            if backend is None:
+                raise RuntimeError(
+                    "Arc absolute mode requires a backend for joint angle lookup."
+                )
+            current_joint = backend.get_joint_angle(arc.pivot)
+            delta = arc.angle - current_joint
+            # Clamp to max_step so the gripper traces the arc incrementally
+            sign = 1.0 if delta >= 0 else -1.0
+            angle = sign * min(abs(delta), arc.max_step)
+
         current_eef = operator.get_end_effector_pose()
         rotated = rotate_pose_around_axis(
             current_eef,
             pivot_world_pos,
             arc.axis,
-            arc.angle,
+            angle,
         )
         return PoseControlConfig(
             position=rotated.position,

@@ -611,20 +611,25 @@ class MujocoTaskBackend(SceneBackend):
                 position=tuple(float(v) for v in pos),
                 orientation=tuple(float(v) for v in quat),
             )
-        # Try joint — compute world anchor from parent body + joint local pos
+        # Try joint — compute world anchor from the PARENT body's frame.
+        # The joint anchor is fixed in the parent frame; using the joint's own
+        # body would give wrong results when the joint has already rotated.
         jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
         if jid >= 0:
-            parent_bid = model.jnt_bodyid[jid]
-            body_pos = data.xpos[parent_bid]
-            body_rot = data.xmat[parent_bid].reshape(3, 3)
-            jnt_local = model.jnt_pos[jid]
-            world_pos = body_pos + body_rot @ jnt_local
-            body_quat_wxyz = data.xquat[parent_bid]
+            joint_bid = model.jnt_bodyid[jid]
+            parent_bid = model.body_parentid[joint_bid]
+            parent_pos = data.xpos[parent_bid]
+            parent_rot = data.xmat[parent_bid].reshape(3, 3)
+            # Anchor in parent frame = body's local offset + joint's local pos
+            body_local = model.body_pos[joint_bid]
+            anchor_in_parent = body_local + model.jnt_pos[jid]
+            world_pos = parent_pos + parent_rot @ anchor_in_parent
+            parent_quat_wxyz = data.xquat[parent_bid]
             qx, qy, qz, qw = (
-                body_quat_wxyz[1],
-                body_quat_wxyz[2],
-                body_quat_wxyz[3],
-                body_quat_wxyz[0],
+                parent_quat_wxyz[1],
+                parent_quat_wxyz[2],
+                parent_quat_wxyz[3],
+                parent_quat_wxyz[0],
             )
             return PoseState(
                 position=tuple(float(v) for v in world_pos),
@@ -633,6 +638,14 @@ class MujocoTaskBackend(SceneBackend):
         raise KeyError(
             f"No site, body, or joint named '{name}' found in the MuJoCo model."
         )
+
+    def get_joint_angle(self, name: str) -> float:
+        model, data = self.env.model, self.env.data
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if jid < 0:
+            raise KeyError(f"No joint named '{name}' found in the MuJoCo model.")
+        qadr = model.jnt_qposadr[jid]
+        return float(data.qpos[qadr])
 
     def is_object_grasped(self, operator_name: str, object_name: str) -> bool:
         operator = self.get_operator_handler(operator_name)

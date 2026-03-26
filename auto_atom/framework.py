@@ -119,7 +119,14 @@ class ArcControlConfig(BaseModel, extra="forbid"):
     axis: Position
     """Unit-direction of the rotation axis (x, y, z)."""
     angle: float
-    """Rotation angle in radians.  Positive follows the right-hand rule around ``axis``."""
+    """Rotation angle in radians.  Positive follows the right-hand rule around ``axis``.
+    When ``absolute`` is False (default), this is a relative rotation from the current
+    EEF position.  When ``absolute`` is True and ``pivot`` is a joint name, this is
+    the target joint angle and the runtime computes the relative rotation automatically."""
+    absolute: bool = False
+    """When True, ``angle`` is treated as an absolute target joint angle (radians)
+    instead of a relative rotation.  Requires ``pivot`` to be a joint name so the
+    runtime can read the current joint angle and compute the delta."""
     max_step: float = 0.2
     """Maximum arc sub-step in radians (~11.5 deg).  Smaller values produce smoother
     arcs at the cost of more waypoints."""

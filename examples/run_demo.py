@@ -21,11 +21,12 @@ Any value can be overridden from the command line via Hydra, e.g.::
 """
 
 import sys
-from pathlib import Path
 import hydra
+from pathlib import Path
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from auto_atom.runtime import ComponentRegistry, TaskFileConfig, TaskRunner
+from itertools import count
 
 
 def _list_demos() -> None:
@@ -59,8 +60,9 @@ def main(cfg: DictConfig) -> None:
         print(runner.reset())
         print()
 
-        while True:
+        for i in count():
             update = runner.update()
+            print(f"Step {i}:" + "=" * 40)
             print(update)
             # input("Press Enter to continue...")
             if update.done:
