@@ -20,6 +20,7 @@ from .framework import (
     OPERATION_CONDITIONS,
     OperationConditionType,
     OperationConstraint,
+    Orientation,
     PoseControlConfig,
     PoseRandomRange,
     PoseReference,
@@ -503,6 +504,8 @@ class StageExecutionPlan:
     """The validated stage configuration to execute."""
     operator_name: str
     """The resolved operator name that will execute this stage."""
+    last_orientation_before: Optional[Orientation] = None
+    """The last configured orientation from preceding stages, for inheritance."""
 
     @property
     def stage_name(self) -> str:
@@ -585,16 +588,18 @@ class TaskFlowBuilder:
 
     def build(self, context: ExecutionContext) -> List[StageExecutionPlan]:
         plans: List[StageExecutionPlan] = []
+        last_orientation: Optional[Orientation] = None
         for index, stage in enumerate(context.config.stages):
             operator_name = self._select_operator(stage, context.backend)
-            self.build_actions(stage)
             plans.append(
                 StageExecutionPlan(
                     stage_index=index,
                     stage=stage,
                     operator_name=operator_name,
+                    last_orientation_before=last_orientation,
                 )
             )
+            _, last_orientation = self.build_actions(stage, last_orientation)
         return plans
 
     @staticmethod
@@ -605,15 +610,21 @@ class TaskFlowBuilder:
         return stage.operator
 
     @staticmethod
-    def build_actions(stage: StageConfig) -> List[PrimitiveAction]:
+    def build_actions(
+        stage: StageConfig,
+        last_orientation: Optional[Orientation] = None,
+    ) -> tuple[List[PrimitiveAction], Optional[Orientation]]:
         control = TaskFlowBuilder._normalize_control(stage)
 
         if stage.operation in {Operation.MOVE, Operation.PUSH, Operation.PRESS}:
-            actions: List[PrimitiveAction] = TaskFlowBuilder._build_pose_actions(
-                TaskFlowBuilder._require_moves(stage, control, "pre_move")
+            actions, last_orientation = TaskFlowBuilder._build_pose_actions(
+                TaskFlowBuilder._require_moves(stage, control, "pre_move"),
+                last_orientation,
             )
         else:
-            actions = TaskFlowBuilder._build_pose_actions(control.pre_move)
+            actions, last_orientation = TaskFlowBuilder._build_pose_actions(
+                control.pre_move, last_orientation
+            )
 
         if stage.operation == Operation.GRASP:
             actions.append(
@@ -650,8 +661,11 @@ class TaskFlowBuilder:
                 f"Unsupported operation '{stage.operation.value}'."
             )
 
-        actions.extend(TaskFlowBuilder._build_pose_actions(control.post_move))
-        return actions
+        post_actions, last_orientation = TaskFlowBuilder._build_pose_actions(
+            control.post_move, last_orientation
+        )
+        actions.extend(post_actions)
+        return actions, last_orientation
 
     @staticmethod
     def _normalize_control(stage: StageConfig) -> StageControlConfig:
@@ -667,8 +681,16 @@ class TaskFlowBuilder:
         )
 
     @staticmethod
-    def _build_pose_actions(poses: List[PoseControlConfig]) -> List[PrimitiveAction]:
-        return [PrimitiveAction(kind="pose", pose=pose) for pose in poses]
+    def _build_pose_actions(
+        poses: List[PoseControlConfig],
+        last_orientation: Optional[Orientation] = None,
+    ) -> tuple[List[PrimitiveAction], Optional[Orientation]]:
+        actions: List[PrimitiveAction] = []
+        for pose in poses:
+            if pose.orientation:
+                last_orientation = pose.orientation
+            actions.append(PrimitiveAction(kind="pose", pose=pose))
+        return actions, last_orientation
 
     @staticmethod
     def _require_moves(
@@ -996,7 +1018,9 @@ class TaskRunner:
             plan=plan,
             operator=operator,
             target=target,
-            actions=self.builder.build_actions(plan.stage),
+            actions=self.builder.build_actions(
+                plan.stage, plan.last_orientation_before
+            )[0],
             initial_object_pose=initial_object_pose,
         )
 
@@ -1149,15 +1173,25 @@ class TaskRunner:
         )
         current_pose = operator.get_end_effector_pose()
         local_pose = TaskRunner._pose_config_to_local_pose(pose)
+        # When orientation/rotation is omitted, preserve the current EEF world orientation.
+        # This keeps orientation stable even when switching reference frames between waypoints.
+        inherit_orientation = not pose.orientation and not pose.rotation
+        current_local = compose_pose(
+            inverse_pose(reference_pose),
+            current_pose,
+        )
 
         if pose.relative:
-            current_local = compose_pose(
-                inverse_pose(reference_pose),
-                current_pose,
-            )
             target_pose = compose_pose(current_local, local_pose)
         else:
-            target_pose = local_pose
+            target_pose = (
+                PoseState(
+                    position=local_pose.position,
+                    orientation=current_local.orientation,
+                )
+                if inherit_orientation
+                else local_pose
+            )
 
         world_pose = compose_pose(reference_pose, target_pose)
         return PoseControlConfig(

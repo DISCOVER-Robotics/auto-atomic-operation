@@ -87,11 +87,9 @@ task:
             reference: object_world
           # Descend to grasp height (0.006 above cup center)
           - position: [0.0, 0.0, 0.006]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         post_move:
           - position: [0.0, 0.0, 0.2]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: eef_world
         eef:
           close: true
@@ -104,17 +102,14 @@ task:
         pre_move:
           # Approach above coaster (center z=0.07)
           - position: [0.0, 0.0, 0.15]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
           # Lower so cup bottom rests on coaster top
           # coaster top=0.08, cup center when placed=0.08+0.025=0.105
           # offset from coaster center = 0.105 - 0.07 = 0.035
           - position: [0.0, 0.0, 0.035]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         post_move:
           - position: [0.0, 0.0, 0.18]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         eef:
           close: false
