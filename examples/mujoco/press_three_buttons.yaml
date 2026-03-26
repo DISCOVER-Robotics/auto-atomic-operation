@@ -96,11 +96,9 @@ task:
             orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
           - position: [0.0, 0.0, 0.035]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         post_move:
           - position: [0.0, 0.0, 0.12]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
 
     # Stage 2: Press green button
@@ -111,14 +109,11 @@ task:
       param:
         pre_move:
           - position: [0.0, 0.0, 0.12]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
           - position: [0.0, 0.0, 0.035]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         post_move:
           - position: [0.0, 0.0, 0.12]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
 
     # Stage 3: Press pink button
@@ -129,14 +124,11 @@ task:
       param:
         pre_move:
           - position: [0.0, 0.0, 0.12]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
           - position: [0.0, 0.0, 0.035]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         post_move:
           - position: [0.0, 0.0, 0.12]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
 
 operators:

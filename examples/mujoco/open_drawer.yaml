@@ -71,19 +71,16 @@ task:
         pre_move:
           # Step 1: align with handle height (Z drops from 0.15 to 0.132), stay 10 cm in front
           - position: [0.0, -0.10, 0.0]
-            orientation: [-0.5, 0.5, 0.5, 0.5]
             reference: object_world
           # Step 2: advance to grasp position �� EEF at handle center in Y so finger
           #         pads (±42 mm in Z) straddle the handle (±15 mm in Z) and can close on it
           - position: [0.0, 0.0, 0.0]
-            orientation: [-0.5, 0.5, 0.5, 0.5]
             reference: object_world
         eef:
           close: true
         post_move:
           # Pull back 12 cm in −Y (world) to fully open the drawer (joint range 0 → −0.12 m)
           - position: [0.0, -0.12, 0.0]
-            orientation: [-0.5, 0.5, 0.5, 0.5]
             reference: eef_world
 
 operators:

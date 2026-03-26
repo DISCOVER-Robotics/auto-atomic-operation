@@ -78,14 +78,12 @@ task:
             reference: object_world
           # Step 2: advance to grasp position — EEF at handle center in Y
           - position: [0.0, 0.0, 0.0]
-            orientation: [-0.5, 0.5, 0.5, 0.5]
             reference: object_world
         eef:
           close: true
         post_move:
           # Push forward 12 cm in +Y (world) to fully close the drawer (joint range −0.12 → 0)
           - position: [0.0, 0.12, 0.0]
-            orientation: [-0.5, 0.5, 0.5, 0.5]
             reference: eef_world
 
 operators:

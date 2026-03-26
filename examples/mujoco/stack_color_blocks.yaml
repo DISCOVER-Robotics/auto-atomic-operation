@@ -94,11 +94,9 @@ task:
             orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
           - position: [0.0, 0.0, 0.005]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         post_move:
           - position: [0.0, 0.0, 0.2]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: eef_world
         eef:
           close: true
@@ -114,14 +112,11 @@ task:
       param:
         pre_move:
           - position: [0.0, 0.0, 0.15]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
           - position: [0.0, 0.0, 0.05]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         post_move:
           - position: [0.0, 0.0, 0.2]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         eef:
           close: false
@@ -134,14 +129,11 @@ task:
       param:
         pre_move:
           - position: [0.0, 0.0, 0.12]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
           - position: [0.0, 0.0, 0.005]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         post_move:
           - position: [0.0, 0.0, 0.2]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: eef_world
         eef:
           close: true
@@ -155,14 +147,11 @@ task:
       param:
         pre_move:
           - position: [0.0, 0.0, 0.15]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
           - position: [0.0, 0.0, 0.05]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         post_move:
           - position: [0.0, 0.0, 0.2]
-            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
             reference: object_world
         eef:
           close: false
