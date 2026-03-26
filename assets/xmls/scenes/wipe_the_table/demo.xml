@@ -434,16 +434,16 @@
   </worldbody>
 
   <keyframe>
-    <!-- 6 Robotiq floating-base joints + 6 gripper finger joints
+    <!-- Robotiq freejoint (7) + gripper finger joints (6)
          + 3 dynamic body freejoints (7 each) -->
     <key
       qpos="
-        0 0 0.4 0 0 0
+        0 0 0.4 1 0 0 0
         0.00522882 0.00541525 0.00562153 0.00529892 0.00548528 0.00569143
         0.0  0.25 0.12  1 0 0 0
         0.1  0.1  0.12  1 0 0 0
         -0.15 0.15 0.09  1 0 0 0"
-      ctrl="0 0 0.4 0 0 0 0"
+      ctrl="0"
     />
   </keyframe>
 </mujoco>

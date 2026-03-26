@@ -5,19 +5,15 @@
   <include file="robotiq_assets.xml"/>
 
   <worldbody>
-    <!-- Wrapper body for 6-DOF control -->
-    <body name="robotiq_interface" gravcomp="1" pos="0 0 0">
-      <inertial mass="0.1" pos="0 0 0" diaginertia="0.01 0.01 0.01"/>
+    <!-- Mocap body: kinematic target driven by code -->
+    <body name="robotiq_mocap" mocap="true">
+      <geom type="box" size="0.01 0.01 0.01" rgba="0 1 0 0" contype="0" conaffinity="0"/>
+    </body>
 
-      <!-- 6 Degrees of Freedom Joints -->
-      <!-- Translations -->
-      <joint name="root_x" type="slide" axis="1 0 0" damping="15" range="-10 10"/>
-      <joint name="root_y" type="slide" axis="0 1 0" damping="15" range="-20 20"/>
-      <joint name="root_z" type="slide" axis="0 0 1" damping="15" range="0 3"/>
-      <!-- Rotations (ZYX order) -->
-      <joint name="root_rot_z" type="hinge" axis="0 0 1" damping="5" range="-3.1416 3.1416" armature="0.1"/>
-      <joint name="root_rot_y" type="hinge" axis="0 1 0" damping="5" range="-1.5708 1.5708" armature="0.1"/>
-      <joint name="root_rot_x" type="hinge" axis="1 0 0" damping="5" range="-1.5708 1.5708" armature="0.1"/>
+    <!-- Physical body tracked via weld constraint -->
+    <body name="robotiq_interface" gravcomp="1" pos="0 0 0">
+      <freejoint name="robotiq_freejoint"/>
+      <inertial mass="0.1" pos="0 0 0" diaginertia="0.01 0.01 0.01"/>
 
       <!-- Actual Gripper Base with initial orientation offset -->
       <body name="robotiq_base" pos="0 0 0" quat="0 0.707 -0.707 0" childclass="2f85" gravcomp="1">
@@ -122,19 +118,13 @@
   </contact>
 
   <equality>
+    <weld body1="robotiq_mocap" body2="robotiq_interface" solref="0.02 1" solimp="0.95 0.99 0.001"/>
     <connect anchor="-0.0179014 -0.00651468 0.0044" body1="right_follower" body2="right_coupler" solimp="0.95 0.99 0.001" solref="0.005 1"/>
     <connect anchor="-0.0179014 -0.00651468 0.0044" body1="left_follower" body2="left_coupler" solimp="0.95 0.99 0.001" solref="0.005 1"/>
     <joint joint1="right_driver_joint" joint2="left_driver_joint" polycoef="0 1 0 0 0" solimp="0.95 0.99 0.001" solref="0.005 1"/>
   </equality>
 
   <actuator>
-    <!-- 6-DOF Position Controllers for the Base -->
-    <position name="act_root_x" joint="root_x" kp="350" kv="15" forcerange="-100 100" ctrlrange="-10 10"/>
-    <position name="act_root_y" joint="root_y" kp="350" kv="15" forcerange="-100 100" ctrlrange="-20 20"/>
-    <position name="act_root_z" joint="root_z" kp="350" kv="15" forcerange="-100 100" ctrlrange="0 3"/>
-    <position name="act_root_rot_z" joint="root_rot_z" kp="100" kv="3" forcerange="-100 100" ctrlrange="-3.1416 3.1416"/>
-    <position name="act_root_rot_y" joint="root_rot_y" kp="100" kv="3" forcerange="-100 100" ctrlrange="-1.5708 1.5708"/>
-    <position name="act_root_rot_x" joint="root_rot_x" kp="100" kv="3" forcerange="-100 100" ctrlrange="-1.5708 1.5708"/>
     <position class="2f85" name="fingers_actuator" joint="left_driver_joint" forcerange="-10 10" ctrlrange="0 0.82" kp="50" kv="5"/>
   </actuator>
 

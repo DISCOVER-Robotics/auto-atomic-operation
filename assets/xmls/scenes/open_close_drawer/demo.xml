@@ -65,12 +65,12 @@
   </worldbody>
 
   <!-- ===== Initial state ===== -->
-  <!-- qpos layout: 6 arm-base joints (x,y,z,rot_z,rot_y,rot_x) + 6 gripper joints + 1 drawer slide -->
+  <!-- qpos layout: robotiq freejoint (7: x y z qw qx qy qz) + 6 gripper joints + 1 drawer slide -->
   <!-- Arm starts horizontal: rot_x=pi/2 → gripper points +Y toward cabinet, fingers in ±Z (one up/down) -->
   <keyframe>
     <key
-      qpos="0 -0.2 0.15 0 0 1.5707 0.00522882 0.00541525 0.00562153 0.00529892 0.00548528 0.00569143  0"
-      ctrl="0 -0.2 0.15 0 0 1.5707 0"
+      qpos="0 -0.2 0.15 0.7071408 0.7070727 0 0 0.00522882 0.00541525 0.00562153 0.00529892 0.00548528 0.00569143  0"
+      ctrl="0"
     />
   </keyframe>
 </mujoco>

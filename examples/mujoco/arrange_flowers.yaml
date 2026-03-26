@@ -8,15 +8,7 @@ env:
       model_path: assets/xmls/scenes/arrange_flowers/demo.xml
       operators:
         - name: arm
-          arm_actuators:
-            [
-              act_root_x,
-              act_root_y,
-              act_root_z,
-              act_root_rot_z,
-              act_root_rot_y,
-              act_root_rot_x,
-            ]
+          arm_actuators: []
           eef_actuators: [fingers_actuator]
           eef_output_name: eef
           pose_site: eef_pose

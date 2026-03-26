@@ -120,6 +120,8 @@ class PoseControlConfig(BaseModel):
     """The reference frame for the pose control."""
     relative: bool = False
     """Whether the pose control is relative to the current pose. The current pose is determined by the reference frame. """
+    use_slerp: bool = False
+    """Whether to use SLERP interpolation for smooth orientation transitions."""
 
 
 class EefControlConfig(BaseModel, extra="forbid"):

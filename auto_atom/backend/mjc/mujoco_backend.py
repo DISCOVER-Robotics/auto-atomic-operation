@@ -24,7 +24,7 @@ from ...runtime import (
     PoseRandomRange,
     SceneBackend,
 )
-from ...utils.pose import PoseState, compose_pose, inverse_pose, quaternion_to_rpy
+from ...utils.pose import PoseState, compose_pose, inverse_pose
 from ...utils.transformations import quaternion_slerp
 from ...basis.mujoco_env import EnvConfig, UnifiedMujocoEnv
 
@@ -118,12 +118,26 @@ class MujocoOperatorHandler(OperatorHandler):
     """The root body name used to read the operator base pose."""
     eef_site_name: str = "eef_pose"
     """The site name used to read the operator end-effector pose."""
-    eef_ctrl_index: int = 6
+    mocap_body_name: str = "robotiq_mocap"
+    """The mocap body name used to drive the operator base pose."""
+    freejoint_name: str = "robotiq_freejoint"
+    """The freejoint name for the physical base body."""
+    eef_ctrl_index: int = 0
     """The control index corresponding to the gripper or end-effector actuator."""
     control: MujocoControlConfig = field(default_factory=MujocoControlConfig)
     """Control parameters including tolerances, grasp detection, and timeouts."""
     _tool_pose_in_base: PoseState = field(init=False)
     """The fixed transform from the operator base frame to the tool frame."""
+    _mocap_id: int = field(init=False, repr=False)
+    """Index into data.mocap_pos / data.mocap_quat arrays."""
+    _fj_qpos_adr: int = field(init=False, repr=False)
+    """Start index of the freejoint in the qpos array (7 DOF: pos3 + quat_wxyz4)."""
+    _fj_dof_adr: int = field(init=False, repr=False)
+    """Start index of the freejoint in the qvel array (6 DOF)."""
+    _home_mocap_pos: np.ndarray = field(init=False, repr=False)
+    """Home position snapshot from keyframe for the mocap body."""
+    _home_mocap_quat: np.ndarray = field(init=False, repr=False)
+    """Home quaternion (wxyz) snapshot from keyframe for the mocap body."""
     _last_move_key: Optional[str] = None
     """The serialized pose command currently tracked by the motion controller."""
     _last_eef_key: Optional[str] = None
@@ -139,22 +153,50 @@ class MujocoOperatorHandler(OperatorHandler):
     _eef_steps: int = 0
     """The number of simulation steps consumed by the active eef command."""
     _home_ctrl: np.ndarray = field(init=False, repr=False)
-    """The nominal home control vector used to settle the operator at reset time.
-    Initialised from the environment's current ctrl state (i.e. the keyframe)
-    so that home() always returns the arm to the scene-defined initial pose."""
+    """The nominal home control vector (gripper only) from the keyframe."""
 
     @property
     def name(self) -> str:
         return self.operator_name
 
     def __post_init__(self) -> None:
-        # Snapshot the env ctrl at construction time (env has already applied the
-        # keyframe in its __init__).  This ensures home() brings the arm back to
-        # the scene-defined initial position rather than a hard-coded constant.
+        # Resolve mocap body index.
+        body_id = mujoco.mj_name2id(
+            self.env.model, mujoco.mjtObj.mjOBJ_BODY, self.mocap_body_name
+        )
+        if body_id < 0:
+            raise ValueError(f"Mocap body '{self.mocap_body_name}' not found.")
+        self._mocap_id = int(self.env.model.body_mocapid[body_id])
+        if self._mocap_id < 0:
+            raise ValueError(
+                f"Body '{self.mocap_body_name}' is not a mocap body "
+                f"(body_mocapid={self._mocap_id})."
+            )
+
+        # Resolve freejoint addresses.
+        jid = mujoco.mj_name2id(
+            self.env.model, mujoco.mjtObj.mjOBJ_JOINT, self.freejoint_name
+        )
+        if jid < 0:
+            raise ValueError(f"Freejoint '{self.freejoint_name}' not found.")
+        self._fj_qpos_adr = int(self.env.model.jnt_qposadr[jid])
+        self._fj_dof_adr = int(self.env.model.jnt_dofadr[jid])
+
+        # Snapshot home poses from keyframe.
+        self._home_mocap_pos = self.env.data.mocap_pos[self._mocap_id].copy()
+        self._home_mocap_quat = self.env.data.mocap_quat[self._mocap_id].copy()
         self._home_ctrl = np.asarray(
             self.env.data.ctrl[: self.env.model.nu], dtype=np.float64
         ).copy()
         self._tool_pose_in_base = self._compute_tool_pose_in_base()
+
+    def _set_mocap_pose(self, position: tuple, orientation_xyzw: tuple) -> None:
+        """Write a desired base pose to the mocap body (xyzw → wxyz conversion)."""
+        qx, qy, qz, qw = orientation_xyzw
+        self.env.data.mocap_pos[self._mocap_id] = np.asarray(position, dtype=np.float64)
+        self.env.data.mocap_quat[self._mocap_id] = np.array(
+            [qw, qx, qy, qz], dtype=np.float64
+        )
 
     def move_to_pose(
         self,
@@ -202,22 +244,8 @@ class MujocoOperatorHandler(OperatorHandler):
         desired_base_pose = compose_pose(
             desired_eef_pose, inverse_pose(self._tool_pose_in_base)
         )
-        roll, pitch, yaw = quaternion_to_rpy(desired_base_pose.orientation)
-
-        ctrl = np.asarray(self.env.data.ctrl, dtype=np.float64).copy()
-        ctrl[:6] = np.asarray(
-            [
-                desired_base_pose.position[0],
-                desired_base_pose.position[1],
-                desired_base_pose.position[2],
-                yaw,
-                pitch,
-                roll,
-            ],
-            dtype=np.float64,
-        )
-
-        self.env.step(ctrl)
+        self._set_mocap_pose(desired_base_pose.position, desired_base_pose.orientation)
+        self.env.update()
         self._move_steps += 1
 
         current_pose = self.get_end_effector_pose()
@@ -265,7 +293,8 @@ class MujocoOperatorHandler(OperatorHandler):
         self._eef_steps += 1
 
         current = float(np.asarray(self.env.data.ctrl)[self.eef_ctrl_index])
-        actual = float(np.asarray(self.env.data.qpos)[6])
+        eef_qidx = self.env._op_eef_qidx[self.operator_name]
+        actual = float(self.env.data.qpos[eef_qidx[0]]) if len(eef_qidx) > 0 else 0.0
         error = abs(actual - target_ctrl)
         grasped_name = ""
         reached = False
@@ -432,65 +461,50 @@ class MujocoOperatorHandler(OperatorHandler):
 
     def home(self) -> None:
         self.reset_state()
-        arm_qidx, eef_qidx, arm_vidx, eef_vidx, arm_aidx, eef_aidx = (
+        # Restore mocap target to home pose.
+        self.env.data.mocap_pos[self._mocap_id] = self._home_mocap_pos.copy()
+        self.env.data.mocap_quat[self._mocap_id] = self._home_mocap_quat.copy()
+        # Teleport physical body to match (instant, no weld drift).
+        adr = self._fj_qpos_adr
+        self.env.data.qpos[adr : adr + 3] = self._home_mocap_pos
+        self.env.data.qpos[adr + 3 : adr + 7] = self._home_mocap_quat
+        self.env.data.qvel[self._fj_dof_adr : self._fj_dof_adr + 6] = 0.0
+        # Restore gripper ctrl and joint state.
+        _, eef_qidx, _, eef_vidx, _, eef_aidx = (
             self.env._split_component_joint_state_indices(self.operator_name)
         )
         n = min(len(self._home_ctrl), self.env.model.nu)
-        ctrl = np.asarray(self.env.data.ctrl, dtype=np.float64).copy()
-        ctrl[:n] = self._home_ctrl[:n]
-        low = self.env.model.actuator_ctrlrange[:n, 0]
-        high = self.env.model.actuator_ctrlrange[:n, 1]
-        ctrl[:n] = np.clip(ctrl[:n], low, high)
-        self.env.data.ctrl[:n] = ctrl[:n]
-        for i, aidx in enumerate(arm_aidx):
-            if i < len(arm_qidx) and int(aidx) < n:
-                self.env.data.qpos[arm_qidx[i]] = ctrl[int(aidx)]
         for i, aidx in enumerate(eef_aidx):
-            if i < len(eef_qidx) and int(aidx) < n:
-                self.env.data.qpos[eef_qidx[i]] = ctrl[int(aidx)]
-        all_vidx = np.concatenate([arm_vidx, eef_vidx])
-        if len(all_vidx) > 0:
-            self.env.data.qvel[all_vidx] = 0.0
+            ai = int(aidx)
+            if ai < n:
+                self.env.data.ctrl[ai] = self._home_ctrl[ai]
+                if i < len(eef_qidx):
+                    self.env.data.qpos[eef_qidx[i]] = self._home_ctrl[ai]
+        if len(eef_vidx) > 0:
+            self.env.data.qvel[eef_vidx] = 0.0
         mujoco.mj_forward(self.env.model, self.env.data)
 
     def set_pose(self, pose: PoseState) -> None:
         """Force-set the operator base world pose in one step.
 
-        Writes the desired position and orientation directly into both the
-        control vector and the corresponding qpos entries, zeros velocities,
-        and calls ``mj_forward`` so the simulation state is immediately
-        consistent.  The controller state is reset so the next ``move_to_pose``
-        call starts fresh.
+        Sets both the mocap target and the freejoint qpos so the physical body
+        is instantly teleported.  Zeros velocities and calls ``mj_forward`` so
+        the simulation state is immediately consistent.
 
         ``pose`` is interpreted as the desired **base-body** world pose, which
         is the same frame returned by ``get_base_pose``.
         """
-        roll, pitch, yaw = quaternion_to_rpy(pose.orientation)
-        arm_qidx, _, arm_vidx, eef_vidx, arm_aidx, _ = (
-            self.env._split_component_joint_state_indices(self.operator_name)
-        )
-        n = min(len(self._home_ctrl), self.env.model.nu)
-        new_ctrl = np.asarray(self.env.data.ctrl, dtype=np.float64).copy()
-        # ctrl layout: [x, y, z, yaw, pitch, roll, gripper, ...]
-        target = np.asarray(
-            [pose.position[0], pose.position[1], pose.position[2], yaw, pitch, roll],
-            dtype=np.float64,
-        )
-        n_arm = min(len(arm_aidx), len(target))
-        for i in range(n_arm):
-            aidx = int(arm_aidx[i])
-            if aidx < n:
-                new_ctrl[aidx] = target[i]
-        low = self.env.model.actuator_ctrlrange[:n, 0]
-        high = self.env.model.actuator_ctrlrange[:n, 1]
-        new_ctrl[:n] = np.clip(new_ctrl[:n], low, high)
-        self.env.data.ctrl[:n] = new_ctrl[:n]
-        for i, aidx in enumerate(arm_aidx):
-            if i < len(arm_qidx) and int(aidx) < n:
-                self.env.data.qpos[arm_qidx[i]] = new_ctrl[int(aidx)]
-        all_vidx = np.concatenate([arm_vidx, eef_vidx])
-        if len(all_vidx) > 0:
-            self.env.data.qvel[all_vidx] = 0.0
+        qx, qy, qz, qw = pose.orientation
+        pos = np.asarray(pose.position, dtype=np.float64)
+        quat_wxyz = np.array([qw, qx, qy, qz], dtype=np.float64)
+        # Set mocap target.
+        self.env.data.mocap_pos[self._mocap_id] = pos
+        self.env.data.mocap_quat[self._mocap_id] = quat_wxyz
+        # Teleport physical body.
+        adr = self._fj_qpos_adr
+        self.env.data.qpos[adr : adr + 3] = pos
+        self.env.data.qpos[adr + 3 : adr + 7] = quat_wxyz
+        self.env.data.qvel[self._fj_dof_adr : self._fj_dof_adr + 6] = 0.0
         mujoco.mj_forward(self.env.model, self.env.data)
         self.reset_state()
 
@@ -730,7 +744,20 @@ def build_mujoco_backend(
             handler = operator_handlers[operator.name]
             if operator.initial_state.arm is not None:
                 vals = operator.initial_state.arm
-                handler._home_ctrl[: len(vals)] = vals
+                if len(vals) >= 6:
+                    # Convert [x, y, z, yaw, pitch, roll] to mocap pose.
+                    from scipy.spatial.transform import Rotation as R
+
+                    pos = np.array(vals[:3], dtype=np.float64)
+                    quat_xyzw = R.from_euler(
+                        "ZYX", [vals[3], vals[4], vals[5]]
+                    ).as_quat()
+                    quat_wxyz = np.array(
+                        [quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]],
+                        dtype=np.float64,
+                    )
+                    handler._home_mocap_pos = pos
+                    handler._home_mocap_quat = quat_wxyz
             if operator.initial_state.eef is not None:
                 handler._home_ctrl[handler.eef_ctrl_index] = operator.initial_state.eef
     object_names = {stage.object for stage in config.stages if stage.object}

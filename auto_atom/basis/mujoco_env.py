@@ -204,6 +204,7 @@ class UnifiedMujocoEnv:
         else:
             mujoco.mj_resetData(self.model, self.data)
         mujoco.mj_forward(self.model, self.data)
+        self._sync_mocap_to_freejoint()
 
         # Pre-compute per-operator actuator and joint index arrays.
         self._operators = config.operators
@@ -643,6 +644,31 @@ class UnifiedMujocoEnv:
 
         self._pose_validated_components.add(operator_name)
 
+    def _sync_mocap_to_freejoint(self) -> None:
+        """Synchronize mocap bodies with their weld-connected physical bodies.
+
+        After ``mj_resetDataKeyframe`` the physical body has correct xpos/xquat
+        (computed via ``mj_forward`` from the keyframe qpos), but mocap_pos and
+        mocap_quat are NOT set by the keyframe.  This copies the physical body's
+        world pose to the corresponding mocap body so the weld constraint starts
+        in equilibrium.
+        """
+        for i in range(self.model.neq):
+            if self.model.eq_type[i] != mujoco.mjtEq.mjEQ_WELD:
+                continue
+            b1 = int(self.model.eq_obj1id[i])
+            b2 = int(self.model.eq_obj2id[i])
+            mid1 = int(self.model.body_mocapid[b1])
+            mid2 = int(self.model.body_mocapid[b2])
+            if mid1 >= 0:
+                mocap_id, phys_id = mid1, b2
+            elif mid2 >= 0:
+                mocap_id, phys_id = mid2, b1
+            else:
+                continue
+            self.data.mocap_pos[mocap_id] = self.data.xpos[phys_id].copy()
+            self.data.mocap_quat[mocap_id] = self.data.xquat[phys_id].copy()
+
     def reset(self) -> None:
         if self.model.nkey > 0:
             mujoco.mj_resetDataKeyframe(self.model, self.data, 0)
@@ -653,6 +679,7 @@ class UnifiedMujocoEnv:
             if jid >= 0:
                 self.data.qpos[int(self.model.jnt_qposadr[jid])] = qpos_val
         mujoco.mj_forward(self.model, self.data)
+        self._sync_mocap_to_freejoint()
 
     def step(self, action: np.ndarray) -> None:
         action = np.asarray(action, dtype=np.float64).reshape(-1)
