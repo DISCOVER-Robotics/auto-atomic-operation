@@ -1,0 +1,188 @@
+<mujoco model="open_hinge_door_demo">
+  <include file="../../robots/robotiq.xml"/>
+
+  <visual>
+    <map znear="0.001"/>
+  </visual>
+
+  <worldbody>
+    <light name="demo_light0" pos="0.5 1.0 2.5" dir="-0.2 -0.4 -1" diffuse="0.2 0.2 0.2"/>
+    <light name="demo_light1" pos="0.0 1.0 2.5" dir="0 -0.4 -1" diffuse="0.2 0.2 0.2"/>
+    <geom name="floor" type="plane" size="3 3 0.1" rgba="0.85 0.85 0.85 1"/>
+
+    <!-- Front camera: looking from -X toward the cabinet doors -->
+    <camera name="front_cam" pos="-1.2 0 0.9" xyaxes="0 -1 0 0.164 0 0.986" fovy="60"/>
+    <!-- Side camera: looking from +Y toward the cabinet -->
+    <camera name="side_cam" pos="-0.3 1.5 1.0" xyaxes="-0.998 -0.067 0 0.019 -0.286 0.958" fovy="50"/>
+
+    <!-- ===== Cabinet (from DISCOVERSE cabinet_drawers.xml) ===== -->
+    <!-- Original position in DISCOVERSE: (0.915, 0.58, 0.01) -->
+    <!-- Rotated 90 deg around Z so doors face -X (toward the Robotiq gripper) -->
+    <!-- In DISCOVERSE frame: doors face -X. The cabinet's X/Y axes map to our -Y/X. -->
+    <!-- We place cabinet at (0, 0, 0) so that door handles face -X direction. -->
+    <body name="cabinet" pos="0 0 0">
+      <!-- Cabinet frame shelves (horizontal) -->
+      <geom name="cab_shelf_bottom" type="box" size="0.195 0.535 0.019" pos="0 0 0.019" rgba="1 1 1 1" contype="0" conaffinity="0" group="1"/>
+      <geom name="cab_shelf_1"      type="box" size="0.195 0.535 0.0075" pos="0 0 0.38"  rgba="1 1 1 1" contype="0" conaffinity="0" group="1"/>
+      <geom name="cab_shelf_2"      type="box" size="0.195 0.535 0.0075" pos="0 0 0.73"  rgba="1 1 1 1" contype="0" conaffinity="0" group="1"/>
+      <geom name="cab_shelf_3"      type="box" size="0.195 0.535 0.0075" pos="0 0 1.08"  rgba="1 1 1 1" contype="0" conaffinity="0" group="1"/>
+      <geom name="cab_shelf_top"    type="box" size="0.195 0.535 0.019" pos="0 0 1.441"  rgba="1 1 1 1" contype="0" conaffinity="0" group="1"/>
+
+      <!-- Cabinet frame vertical walls -->
+      <geom name="cab_back"    type="box" size="0.195 0.019 0.72" pos="0  0.52  0.735" rgba="1 1 1 1" contype="0" conaffinity="0" group="1"/>
+      <geom name="cab_div_l"   type="box" size="0.195 0.0075 0.72" pos="0  0.169 0.735" rgba="1 1 1 1" contype="0" conaffinity="0" group="1"/>
+      <geom name="cab_div_r"   type="box" size="0.195 0.0075 0.72" pos="0 -0.169 0.735" rgba="1 1 1 1" contype="0" conaffinity="0" group="1"/>
+      <geom name="cab_side"    type="box" size="0.195 0.019 0.72" pos="0 -0.52  0.735" rgba="1 1 1 1" contype="0" conaffinity="0" group="1"/>
+
+      <!-- ===== Drawers (6 total, slide in -X) ===== -->
+      <body name="drawer_1" pos="-0.2 0.342 0.64">
+        <joint name="drawer_1_slide" type="slide" axis="-1 0 0" range="0 0.3" frictionloss="0.05"/>
+        <inertial pos="0.1 0 0" quat="1 0 0 0" mass="0.011566" diaginertia="0.000035528 0.000021045 0.000021045"/>
+        <geom size="0.005 0.007" pos="-0.012 0.01 0" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.010 0.002" pos="-0.022 0.01 0" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.0075 0.158 0.081" pos="0.015 -0.003 -0.005" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.165 0.006 0.035" pos="0.181 0.144 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.165 0.006 0.035" pos="0.181 -0.144 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.006 0.14 0.035" pos="0.33 0 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.16 0.14 0.006" pos="0.175 0 -0.061" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <site name="drawer_1_handle" pos="-0.02 0.01 0" euler="0 0 3.1416" size="0.001" type="sphere"/>
+      </body>
+
+      <body name="drawer_2" pos="-0.2 0.342 0.475">
+        <joint name="drawer_2_slide" type="slide" axis="-1 0 0" range="0 0.3" frictionloss="0.05"/>
+        <inertial pos="0.1 0 0" quat="1 0 0 0" mass="0.011566" diaginertia="0.000035528 0.000021045 0.000021045"/>
+        <geom size="0.005 0.015" pos="-0.015 0.065 0" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.005 0.015" pos="-0.015 -0.065 0" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.005 0.065" pos="-0.03 0 0" euler="1.5708 0 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="10 10 10" rgba=".1 .1 .1 1"/>
+        <geom size="0.0075 0.158 0.081" pos="0.015 -0.003 -0.005" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.165 0.006 0.035" pos="0.181 0.144 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.165 0.006 0.035" pos="0.181 -0.144 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.006 0.14 0.035" pos="0.33 0 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.16 0.14 0.006" pos="0.175 0 -0.061" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <site name="drawer_2_handle" pos="-0.03 0 0" euler="0 0 3.1416" size="0.001" type="sphere"/>
+      </body>
+
+      <body name="drawer_3" pos="-0.2 -0.335 1.175">
+        <joint name="drawer_3_slide" type="slide" axis="-1 0 0" range="0 0.3" frictionloss="0.05"/>
+        <inertial pos="0.1 0 0" quat="1 0 0 0" mass="0.011566" diaginertia="0.000035528 0.000021045 0.000021045"/>
+        <geom size="0.005 0.007" pos="-0.002 -0.005 0" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.010 0.002" pos="-0.012 -0.005 0" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.0075 0.158 0.081" pos="0.015 -0.003 -0.005" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.165 0.006 0.035" pos="0.181 0.144 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.165 0.006 0.035" pos="0.181 -0.144 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.006 0.14 0.035" pos="0.33 0 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.16 0.14 0.006" pos="0.175 0 -0.061" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <site name="drawer_3_handle" pos="-0.01 -0.005 0" euler="0 0 3.1416" size="0.001" type="sphere"/>
+      </body>
+
+      <body name="drawer_4" pos="-0.2 -0.335 1.34">
+        <joint name="drawer_4_slide" type="slide" axis="-1 0 0" range="0 0.3" frictionloss="0.05"/>
+        <inertial pos="0.1 0 0" quat="1 0 0 0" mass="0.011566" diaginertia="0.000035528 0.000021045 0.000021045"/>
+        <geom size="0.005 0.007" pos="-0.002 -0.005 0" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.010 0.002" pos="-0.012 -0.005 0" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.0075 0.158 0.081" pos="0.015 -0.003 -0.005" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.165 0.006 0.035" pos="0.181 0.144 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.165 0.006 0.035" pos="0.181 -0.144 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.006 0.14 0.035" pos="0.33 0 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.16 0.14 0.006" pos="0.175 0 -0.061" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <site name="drawer_4_handle" pos="-0.01 -0.005 0" euler="0 0 3.1416" size="0.001" type="sphere"/>
+      </body>
+
+      <body name="drawer_5" pos="-0.2075 0.003 0.9925">
+        <joint name="drawer_5_slide" type="slide" axis="-1 0 0" range="0 0.3" frictionloss="0.05"/>
+        <inertial pos="0.1 0 0" quat="1 0 0 0" mass="0.011566" diaginertia="0.000035528 0.000021045 0.000021045"/>
+        <geom size="0.005 0.007" pos="-0.002 0 0" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.010 0.002" pos="-0.012 0 0" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.0075 0.158 0.081" pos="0.015 -0.003 -0.005" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.165 0.006 0.035" pos="0.181 0.144 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.165 0.006 0.035" pos="0.181 -0.144 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.006 0.14 0.035" pos="0.33 0 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.16 0.14 0.006" pos="0.175 0 -0.061" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <site name="drawer_5_handle" pos="-0.01 0 0" euler="0 0 3.1416" size="0.001" type="sphere"/>
+      </body>
+
+      <body name="drawer_6" pos="-0.2 0 0.8225">
+        <joint name="drawer_6_slide" type="slide" axis="-1 0 0" range="0 0.9" frictionloss="0.05"/>
+        <inertial pos="0.1 0 0" quat="1 0 0 0" mass="0.011566" diaginertia="0.000035528 0.000021045 0.000021045"/>
+        <geom size="0.005 0.007" pos="-0.002 0 0" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.010 0.002" pos="-0.012 0 0" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.0075 0.158 0.081" pos="0.0075 0 0" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.165 0.006 0.035" pos="0.181 0.144 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.165 0.006 0.035" pos="0.181 -0.144 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.006 0.14 0.035" pos="0.33 0 -0.026" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <geom size="0.16 0.14 0.006" pos="0.165 0 -0.061" type="box" rgba=".9 .9 .8 1" contype="0" conaffinity="0" group="1"/>
+        <site name="drawer_6_handle" pos="-0.01 0 0" euler="0 0 3.1416" size="0.001" type="sphere"/>
+      </body>
+
+      <!-- ===== Hinge doors (5 total, rotate around Z) ===== -->
+      <!-- Door 1: handle world pos = cabinet + (-0.185-0.05, 0-0.117, 0.5575) = (-0.235, -0.117, 0.5575) -->
+      <body name="door" pos="-0.185 0 0.5575">
+        <geom name="door_panel_col" type="box" size="0.01 0.155 0.16" pos="0 0 0" density="0.001" mass="0.05"
+              friction="0.5 0.05 0.01" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+        <geom name="door_panel_vis" type="box" size="0.01 0.155 0.16" pos="0 0 0" rgba="0.9 0.9 0.8 1" density="0" contype="0" conaffinity="0" group="1"/>
+        <joint name="hinge_joint_1" type="hinge" axis="0 0 1" pos="0 0.15 0.08" range="-90 0" frictionloss="0.001"/>
+        <!-- Handle: DISCOVERSE cylinder visuals + box collision wrapper for Robotiq grip -->
+        <body name="handle" pos="-0.05 -0.117 0">
+          <!-- Visual: original DISCOVERSE cylinder knob geometry -->
+          <geom name="handle_stem_vis" size="0.005 0.015" pos="0.015 0 0" euler="0 1.5708 0" type="cylinder"
+                rgba=".1 .1 .1 1" density="0" contype="0" conaffinity="0" group="1"/>
+          <geom name="handle_knob_vis" size="0.010 0.002" pos="-0.002 0 0" euler="0 1.5708 0" type="cylinder"
+                rgba=".1 .1 .1 1" density="0" contype="0" conaffinity="0" group="1"/>
+          <!-- Collision: box wrapper sized for Robotiq finger pads -->
+          <geom name="handle_col" type="box" size="0.018 0.008 0.012" mass="0.02"
+                friction="2.0 0.1 0.01" rgba="0 0 0 0" contype="1" conaffinity="1"
+                condim="4" solimp="2 1 0.01" solref="0.01 1"/>
+          <site name="handle_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
+        </body>
+        <site name="door_site" pos="0 0 0" size="0.004" rgba="0 0 1 0"/>
+      </body>
+
+      <body name="hinge_door_2" pos="-0.185 0 1.255">
+        <geom type="box" size="0.01 0.155 0.16" pos="0 0 0" rgba="0.9 0.9 0.8 1" density="0.001" contype="0" conaffinity="0" group="1"/>
+        <joint name="hinge_joint_2" type="hinge" axis="0 0 1" pos="0 0.15 0.08" range="-90 0" frictionloss="0.001"/>
+        <geom size="0.005 0.010" pos="-0.05 -0.127 0.05" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.005 0.010" pos="-0.05 -0.127 -0.05" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.005 0.065" pos="-0.06 -0.127 0" euler="0 0 1.5708" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="0.01 0.01 0.01" rgba=".1 .1 .1 1"/>
+        <site name="hinge_door_2_handle" pos="-0.06 -0.127 0" euler="0 0 3.1416" size="0.001" type="sphere" rgba="0.7 0.7 0.7 1"/>
+      </body>
+
+      <body name="hinge_door_3" pos="-0.185 0.340 0.9055">
+        <geom type="box" size="0.01 0.155 0.16" pos="0 0 0" rgba="0.9 0.9 0.8 1" density="0.001" contype="0" conaffinity="0" group="1"/>
+        <joint name="hinge_joint_3" type="hinge" axis="0 0 1" pos="0 0.15 0.08" range="-90 0" frictionloss="0.001"/>
+        <geom size="0.005 0.010" pos="-0.055 -0.117 0.05" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.005 0.010" pos="-0.055 -0.117 -0.05" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.005 0.065" pos="-0.065 -0.117 0" euler="0 0 1.5708" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="0.01 0.01 0.01" rgba=".1 .1 .1 1"/>
+        <site name="hinge_door_3_handle" pos="-0.06 -0.117 0" euler="0 0 3.1416" size="0.001" type="sphere" rgba="0.7 0.7 0.7 1"/>
+      </body>
+
+      <body name="hinge_door_4" pos="-0.185 -0.34 0.5575">
+        <geom type="box" size="0.01 0.155 0.16" pos="0 0 0" rgba="0.9 0.9 0.8 1" density="0.001" contype="0" conaffinity="0" group="1"/>
+        <joint name="hinge_joint_4" type="hinge" axis="0 0 1" pos="0 0.15 0" range="-90 0" frictionloss="0.001"/>
+        <geom size="0.005 0.010" pos="-0.04 -0.142 0.05" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.005 0.010" pos="-0.04 -0.142 -0.05" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.005 0.065" pos="-0.05 -0.142 0" euler="0 0 1.5708" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="0.01 0.01 0.01" rgba=".1 .1 .1 1"/>
+        <site name="hinge_door_4_handle" pos="-0.055 -0.142 0" euler="0 0 3.1416" size="0.001" type="sphere" rgba="0.7 0.7 0.7 1"/>
+      </body>
+
+      <body name="hinge_door_5" pos="-0.185 -0.340 0.9075">
+        <geom type="box" size="0.01 0.155 0.16" pos="0 0 0" rgba="0.9 0.9 0.8 1" density="0.001" contype="0" conaffinity="0" group="1"/>
+        <joint name="hinge_joint_5" type="hinge" axis="0 0 1" pos="0 0.15 0.08" range="-90 0" frictionloss="0.001"/>
+        <geom size="0.005 0.010" pos="-0.04 -0.147 0.05" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.005 0.010" pos="-0.04 -0.147 -0.05" euler="0 1.5708 0" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="1 0.005 0.0001" rgba=".1 .1 .1 1"/>
+        <geom size="0.005 0.065" pos="-0.05 -0.147 0" euler="0 0 1.5708" type="cylinder" condim="4" solimp="2 1 0.01" solref="0.001 1" friction="0.01 0.01 0.01" rgba=".1 .1 .1 1"/>
+        <site name="hinge_door_5_handle" pos="-0.05 -0.147 -0.02" euler="0 0 3.1416" size="0.001" type="sphere" rgba="0.7 0.7 0.7 1"/>
+      </body>
+    </body>
+  </worldbody>
+
+  <!-- ===== Initial state ===== -->
+  <!-- qpos: robotiq freejoint (7) + 6 gripper joints + 6 drawer slides + 5 hinge joints = 24 values -->
+  <!-- Robotiq starts in front of door_1 handle: handle world pos ~(-0.235, -0.117, 0.5575) -->
+  <!-- Gripper horizontal with rot_x=pi/2: quat=(0.7071, 0.7071, 0, 0), points +X toward cabinet -->
+  <keyframe>
+    <key
+      qpos="-0.435 -0.117 0.5575 0.7071408 0.7070727 0 0 0.00522882 0.00541525 0.00562153 0.00529892 0.00548528 0.00569143  0 0 0 0 0 0  0 0 0 0 0"
+      ctrl="0"
+    />
+  </keyframe>
+</mujoco>

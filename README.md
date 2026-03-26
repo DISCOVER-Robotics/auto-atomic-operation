@@ -122,6 +122,7 @@ Available configs:
 | `press_three_buttons` | Press three buttons (blue, green, pink) in sequence |
 | `open_drawer` | Pull a drawer open |
 | `close_drawer` | Push a drawer closed (starts from the open position) |
+| `open_hinge_door` | Pull a hinge door open |
 
 Each demo runs in the MuJoCo physics simulator with RGB-D cameras, tactile sensors, and randomized object placement. The scene XML for each demo is at `assets/xmls/scenes/<config>/demo.xml` and can be previewed with:
 
