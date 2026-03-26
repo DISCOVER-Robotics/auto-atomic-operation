@@ -100,6 +100,12 @@ sudo apt-get install git-lfs
 git lfs pull
 ```
 
+List all available demos:
+
+```bash
+python examples/run_demo.py --list
+```
+
 Run any demo by passing its config name:
 
 ```bash

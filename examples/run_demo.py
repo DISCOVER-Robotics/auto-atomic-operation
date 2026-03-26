@@ -4,6 +4,9 @@ Config files live in the ``mujoco/`` subdirectory. The default is
 ``mujoco/pick_and_place.yaml``. Switch tasks with ``--config-name``.
 Any value can be overridden from the command line via Hydra, e.g.::
 
+    # List all available demos
+    python run_demo.py --list
+
     # Run the default pick-and-place demo
     python run_demo.py
 
@@ -17,10 +20,25 @@ Any value can be overridden from the command line via Hydra, e.g.::
     python run_demo.py "task.randomization.cup.x=[-0.03,0.03]"
 """
 
+import sys
+from pathlib import Path
 import hydra
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from auto_atom.runtime import ComponentRegistry, TaskFileConfig, TaskRunner
+
+
+def _list_demos() -> None:
+    config_dir = Path(__file__).parent / "mujoco"
+    names = sorted(p.stem for p in config_dir.glob("*.yaml"))
+    print(f"Available demos ({len(names)}):")
+    for name in names:
+        print(f"  {name}")
+
+
+if "--list" in sys.argv:
+    _list_demos()
+    sys.exit(0)
 
 
 @hydra.main(config_path="mujoco", config_name="pick_and_place", version_base=None)
