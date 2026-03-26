@@ -82,6 +82,48 @@ def rotate_vector(quat: Orientation, vec: Tuple[float, float, float]) -> Positio
     return tuple(float(v) for v in rotated)
 
 
+def rotate_pose_around_axis(
+    pose: PoseState,
+    pivot: Position,
+    axis: Position,
+    angle: float,
+) -> PoseState:
+    """Rotate a pose around an axis passing through a pivot point.
+
+    Both position and orientation are rotated by ``angle`` radians around
+    the axis defined by ``pivot`` (a point on the axis) and ``axis``
+    (a unit direction vector).
+    """
+    pivot_np = np.asarray(pivot, dtype=np.float64)
+    axis_np = np.asarray(axis, dtype=np.float64)
+    axis_np = axis_np / np.linalg.norm(axis_np)
+    pos_np = np.asarray(pose.position, dtype=np.float64)
+
+    # Build rotation quaternion from axis-angle (xyzw order)
+    half = angle / 2.0
+    sin_half = np.sin(half)
+    cos_half = np.cos(half)
+    rot_quat: Orientation = (
+        float(axis_np[0] * sin_half),
+        float(axis_np[1] * sin_half),
+        float(axis_np[2] * sin_half),
+        float(cos_half),
+    )
+    rot_matrix = quaternion_matrix(rot_quat)[:3, :3]
+
+    # Rotate position around pivot
+    offset = pos_np - pivot_np
+    new_pos = pivot_np + rot_matrix.dot(offset)
+    new_position: Position = tuple(float(v) for v in new_pos)
+
+    # Rotate orientation
+    new_orientation = normalize_quaternion(
+        tuple(float(v) for v in quaternion_multiply(rot_quat, pose.orientation))
+    )
+
+    return PoseState(position=new_position, orientation=new_orientation)
+
+
 def normalize_quaternion(quat: Orientation) -> Orientation:
     """Normalize a quaternion and fall back to identity if zero-length."""
     array = np.asarray(quat, dtype=np.float64)

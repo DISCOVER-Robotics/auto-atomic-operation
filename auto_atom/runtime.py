@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional
-
-import numpy as np
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
-
 from .framework import (
+    ArcControlConfig,
     AutoAtomConfig,
     EefControlConfig,
     Operation,
@@ -35,7 +32,11 @@ from .utils.pose import (
     inverse_pose,
     pose_config_to_pose_state,
     quaternion_to_rpy,
+    rotate_pose_around_axis,
 )
+import warnings
+import math
+import numpy as np
 
 
 class StageExecutionStatus(str, Enum):
@@ -179,6 +180,16 @@ class SceneBackend(ABC):
         support contact sensing (e.g. MuJoCo contact pair queries or tactile sensors).
         """
         return False
+
+    def get_element_pose(self, name: str) -> "PoseState":
+        """Return the world pose of a named scene element (site, body, or joint).
+
+        Backends should override this to resolve the name against the physics
+        engine.  The default raises ``NotImplementedError``.
+        """
+        raise NotImplementedError(
+            f"Backend does not support named element lookup (requested '{name}')."
+        )
 
     def set_interest_objects_and_operations(
         self,
@@ -689,8 +700,38 @@ class TaskFlowBuilder:
         for pose in poses:
             if pose.orientation:
                 last_orientation = pose.orientation
-            actions.append(PrimitiveAction(kind="pose", pose=pose))
+            # Split arc poses into small sub-steps so the gripper traces the arc
+            # instead of cutting through the chord.
+            if pose.arc is not None:
+                sub_poses = TaskFlowBuilder._split_arc(pose)
+                for sp in sub_poses:
+                    actions.append(PrimitiveAction(kind="pose", pose=sp))
+            else:
+                actions.append(PrimitiveAction(kind="pose", pose=pose))
         return actions, last_orientation
+
+    @staticmethod
+    def _split_arc(pose: PoseControlConfig) -> List[PoseControlConfig]:
+        """Split a large arc into smaller sub-arcs of at most ``arc.max_step`` each."""
+
+        arc = pose.arc
+        assert arc is not None
+        total = abs(arc.angle)
+        n_steps = max(1, math.ceil(total / arc.max_step))
+        step_angle = arc.angle / n_steps
+        sub_poses: List[PoseControlConfig] = []
+        for _ in range(n_steps):
+            sub_poses.append(
+                PoseControlConfig(
+                    arc=ArcControlConfig(
+                        pivot=arc.pivot,
+                        axis=arc.axis,
+                        angle=step_angle,
+                    ),
+                    reference=pose.reference,
+                )
+            )
+        return sub_poses
 
     @staticmethod
     def _require_moves(
@@ -815,7 +856,9 @@ class TaskRunner:
 
         active = self._active_stage
         action = active.actions[active.action_index]
-        result = self._run_action(active.operator, action, active.target)
+        result = self._run_action(
+            active.operator, action, active.target, context.backend
+        )
         details = {
             "action": action.kind,
             "action_index": active.action_index,
@@ -1134,25 +1177,27 @@ class TaskRunner:
         operator: OperatorHandler,
         action: PrimitiveAction,
         target: Optional[ObjectHandler],
+        backend: SceneBackend = None,
     ) -> ControlResult:
         if action.kind == "pose" and action.pose is not None:
-            # Snapshot-based references: resolve once and cache
-            if (
+            # Snapshot-based references: resolve once and cache.
+            # Arc poses are always snapshot-based (target computed from EEF at action start).
+            is_snapshot = (
                 action.pose.reference
                 in {
                     PoseReference.EEF_WORLD,
                     PoseReference.EEF,
-                    # PoseReference.BASE,
-                    # PoseReference.OBJECT,
                 }
-                and action.resolved_pose is not None
-            ):
+                or action.pose.arc is not None
+            )
+            if is_snapshot and action.resolved_pose is not None:
                 resolved_pose = action.resolved_pose
             else:
                 resolved_pose = TaskRunner._resolve_pose_command(
                     operator=operator,
                     pose=action.pose,
                     target=target,
+                    backend=backend,
                 )
                 action.resolved_pose = resolved_pose
             return operator.move_to_pose(resolved_pose, target)
@@ -1161,11 +1206,55 @@ class TaskRunner:
         raise RuntimeError(f"Invalid primitive action '{action.kind}'.")
 
     @staticmethod
+    def _resolve_arc_command(
+        operator: OperatorHandler,
+        pose: PoseControlConfig,
+        target: Optional[ObjectHandler],
+        backend: Optional[SceneBackend] = None,
+    ) -> PoseControlConfig:
+        """Resolve an arc pose command: rotate the current EEF pose around the pivot."""
+        arc = pose.arc
+        assert arc is not None
+
+        # Resolve pivot: string name → world position via backend lookup
+        if isinstance(arc.pivot, str):
+            if backend is None:
+                raise RuntimeError(
+                    f"Arc pivot '{arc.pivot}' is a name but no backend is available for lookup."
+                )
+            pivot_world_pos = backend.get_element_pose(arc.pivot).position
+        else:
+            reference_pose = TaskRunner._resolve_reference_pose(
+                operator=operator,
+                pose=pose,
+                target=target,
+            )
+            pivot_local = PoseState(position=arc.pivot)
+            pivot_world_pos = compose_pose(reference_pose, pivot_local).position
+
+        current_eef = operator.get_end_effector_pose()
+        rotated = rotate_pose_around_axis(
+            current_eef,
+            pivot_world_pos,
+            arc.axis,
+            arc.angle,
+        )
+        return PoseControlConfig(
+            position=rotated.position,
+            orientation=rotated.orientation,
+            reference=PoseReference.WORLD,
+            relative=False,
+        )
+
+    @staticmethod
     def _resolve_pose_command(
         operator: OperatorHandler,
         pose: PoseControlConfig,
         target: Optional[ObjectHandler],
+        backend: Optional[SceneBackend] = None,
     ) -> PoseControlConfig:
+        if pose.arc is not None:
+            return TaskRunner._resolve_arc_command(operator, pose, target, backend)
         reference_pose = TaskRunner._resolve_reference_pose(
             operator=operator,
             pose=pose,

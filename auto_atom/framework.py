@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 from pydantic import BaseModel, ConfigDict, ImportString, Field
 
 
@@ -105,6 +105,26 @@ class PoseReference(str, Enum):
     """The pose reference is automatically determined based on the context of the operation. For example, if an object is specified in the stage configuration, the reference will be set to OBJECT_WORLD; if no object is specified, the reference will be set to BASE."""
 
 
+class ArcControlConfig(BaseModel, extra="forbid"):
+    """Configuration for arc (revolute) movement around a pivot axis.
+
+    When attached to a ``PoseControlConfig``, the end-effector traces an arc
+    around ``pivot`` instead of moving in a straight line.  The ``position``,
+    ``orientation``, and ``rotation`` fields of the parent config are ignored."""
+
+    pivot: Union[Position, str]
+    """Pivot point for the arc.  Either explicit ``(x, y, z)`` coordinates in the
+    coordinate frame given by the parent's ``reference``, or a **string name** of a
+    site, body, or joint in the scene XML whose world position is used automatically."""
+    axis: Position
+    """Unit-direction of the rotation axis (x, y, z)."""
+    angle: float
+    """Rotation angle in radians.  Positive follows the right-hand rule around ``axis``."""
+    max_step: float = 0.2
+    """Maximum arc sub-step in radians (~11.5 deg).  Smaller values produce smoother
+    arcs at the cost of more waypoints."""
+
+
 class PoseControlConfig(BaseModel):
     """Configuration for the pose control"""
 
@@ -122,6 +142,9 @@ class PoseControlConfig(BaseModel):
     """Whether the pose control is relative to the current pose. The current pose is determined by the reference frame. """
     use_slerp: bool = False
     """Whether to use SLERP interpolation for smooth orientation transitions."""
+    arc: Optional[ArcControlConfig] = None
+    """Optional arc movement configuration. When set, the end-effector traces an arc
+    around the specified pivot instead of moving in a straight line to the target position."""
 
 
 class EefControlConfig(BaseModel, extra="forbid"):

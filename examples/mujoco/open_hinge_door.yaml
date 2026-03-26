@@ -79,9 +79,14 @@ task:
         eef:
           close: true
         post_move:
-          # Pull back 10 cm in -X; hinge constraint converts straight pull into door swing
-          - position: [-0.10, 0.0, 0.0]
-            reference: eef_world
+          # Arc move: rotate gripper around the door hinge by -1.3 rad (~75 deg).
+          # pivot references hinge_joint_1 by name — its world position is resolved
+          # automatically from the MuJoCo XML at runtime.
+          - arc:
+              pivot: hinge_joint_1
+              axis: [0, 0, 1]
+              angle: -1.3
+            reference: world
 
 operators:
   - name: arm

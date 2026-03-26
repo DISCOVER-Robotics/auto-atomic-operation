@@ -587,6 +587,53 @@ class MujocoTaskBackend(SceneBackend):
             known = ", ".join(sorted(self.object_handlers)) or "<empty>"
             raise KeyError(f"Unknown object '{name}'. Known objects: {known}") from exc
 
+    def get_element_pose(self, name: str) -> PoseState:
+        """Look up a named site, body, or joint and return its world pose.
+
+        Resolution order: site → body → joint.  For joints the anchor
+        position in world frame is computed from the parent body pose and
+        the joint's local ``pos`` attribute.
+        """
+        model, data = self.env.model, self.env.data
+        # Try site
+        sid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, name)
+        if sid >= 0:
+            pos, quat = self.env.get_site_pose(name)
+            return PoseState(
+                position=tuple(float(v) for v in pos),
+                orientation=tuple(float(v) for v in quat),
+            )
+        # Try body
+        bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+        if bid >= 0:
+            pos, quat = self.env.get_body_pose(name)
+            return PoseState(
+                position=tuple(float(v) for v in pos),
+                orientation=tuple(float(v) for v in quat),
+            )
+        # Try joint — compute world anchor from parent body + joint local pos
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if jid >= 0:
+            parent_bid = model.jnt_bodyid[jid]
+            body_pos = data.xpos[parent_bid]
+            body_rot = data.xmat[parent_bid].reshape(3, 3)
+            jnt_local = model.jnt_pos[jid]
+            world_pos = body_pos + body_rot @ jnt_local
+            body_quat_wxyz = data.xquat[parent_bid]
+            qx, qy, qz, qw = (
+                body_quat_wxyz[1],
+                body_quat_wxyz[2],
+                body_quat_wxyz[3],
+                body_quat_wxyz[0],
+            )
+            return PoseState(
+                position=tuple(float(v) for v in world_pos),
+                orientation=(float(qx), float(qy), float(qz), float(qw)),
+            )
+        raise KeyError(
+            f"No site, body, or joint named '{name}' found in the MuJoCo model."
+        )
+
     def is_object_grasped(self, operator_name: str, object_name: str) -> bool:
         operator = self.get_operator_handler(operator_name)
         target = self.get_object_handler(object_name)
