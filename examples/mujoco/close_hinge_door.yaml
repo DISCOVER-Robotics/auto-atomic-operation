@@ -48,3 +48,10 @@ task:
               angle: 0
               absolute: true
             reference: world
+
+operators:
+  - name: arm
+    initial_state:
+      arm:
+        position: [-0.7324714064598083, 0.16528670489788055, 0.5574991106987]
+        orientation: [-0.019415181130170822, 0.7068436145782471, 0.01941005513072014, 0.7068369388580322]

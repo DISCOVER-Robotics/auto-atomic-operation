@@ -57,7 +57,6 @@ task:
 # --- Operator declarations ---
 operators:
   - name: arm_a
-    role: manipulator
 ```
 
 > [!NOTE]
@@ -422,7 +421,7 @@ task:
 
 operators:
   - name: arm_a
-    role: manipulator
+
 ```
 
 Because the file is processed by Hydra you can use all standard Hydra features. For example, to override fields at runtime:

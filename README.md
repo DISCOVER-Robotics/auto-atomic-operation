@@ -203,7 +203,6 @@ task:
 
 operators:
   - name: arm_a
-    role: manipulator
 ```
 
 ### 2. Run the task

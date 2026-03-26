@@ -45,6 +45,4 @@ task:
 
 operators:
   - name: arm_a
-    role: manipulator
   - name: observer
-    role: monitor

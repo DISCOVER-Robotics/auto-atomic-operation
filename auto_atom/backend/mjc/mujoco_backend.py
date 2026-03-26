@@ -264,7 +264,11 @@ class MujocoOperatorHandler(OperatorHandler):
             else "pose_reached",
             "operator": self.name,
             "target": target.name if target else "",
-            "pose": pose.model_dump(mode="json"),
+            "target_pose": pose.model_dump(mode="json"),
+            "current_pose": {
+                "position": list(current_pose.position),
+                "orientation": list(current_pose.orientation),
+            },
             "position_error": pos_error,
             "orientation_error": float(ori_error),
         }

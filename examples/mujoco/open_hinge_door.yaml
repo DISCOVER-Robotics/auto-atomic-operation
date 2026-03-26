@@ -50,6 +50,3 @@ task:
               # For smooth simulation, we set a max step for the arc.
               max_step: 0.1
             reference: world
-operators:
-    initial_state:
-      arm: [0, 0, 0, 0, 0, 0]

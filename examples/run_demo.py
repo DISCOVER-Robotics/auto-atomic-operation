@@ -27,6 +27,7 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from auto_atom.runtime import ComponentRegistry, TaskFileConfig, TaskRunner
 from itertools import count
+from pprint import pprint
 
 
 def _list_demos() -> None:
@@ -57,21 +58,21 @@ def main(cfg: DictConfig) -> None:
 
     try:
         print("Reset task")
-        print(runner.reset())
+        pprint(runner.reset())
         print()
 
         for i in count():
             # input("Press Enter to continue...")
             update = runner.update()
             print(f"Step {i}:" + "=" * 40)
-            print(update)
+            pprint(update, sort_dicts=False)
             if update.done:
                 break
 
         print()
         print("Execution records:")
         for record in runner.records:
-            print(record)
+            pprint(record)
     finally:
         runner.close()
 

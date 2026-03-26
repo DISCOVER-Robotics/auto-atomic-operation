@@ -820,7 +820,25 @@ class TaskRunner:
         self._stage_index = 0
         self._active_stage = None
         self._records = []
-        return self._build_pending_update()
+
+        # Get initial poses for all operators
+        initial_poses = {}
+        for plan in self._plan:
+            operator_name = plan.operator_name
+            try:
+                operator = context.backend.get_operator_handler(operator_name)
+                current_pose = operator.get_end_effector_pose()
+                initial_poses[operator_name] = {
+                    "position": list(current_pose.position),
+                    "orientation": list(current_pose.orientation),
+                }
+            except Exception:
+                pass  # Skip if operator not found or pose unavailable
+
+        update = self._build_pending_update()
+        if initial_poses:
+            update.details["initial_poses"] = initial_poses
+        return update
 
     def update(self) -> TaskUpdate:
         context = self._require_context()
