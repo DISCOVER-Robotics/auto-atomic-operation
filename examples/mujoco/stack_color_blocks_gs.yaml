@@ -7,9 +7,9 @@ gs_dir: assets/gs/scenes/stack_color_blocks
 
 env:
   env:
-    _target_: auto_atom.basis.gs_mujoco_env.GSUnifiedMujocoEnv
+    _target_: auto_atom.basis.mjc.gs_mujoco_env.GSUnifiedMujocoEnv
     config:
-      _target_: auto_atom.basis.gs_mujoco_env.GSEnvConfig
+      _target_: auto_atom.basis.mjc.gs_mujoco_env.GSEnvConfig
       model_path: assets/xmls/scenes/stack_color_blocks/demo_gs.xml
       cameras:
         - name: front

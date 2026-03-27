@@ -7,9 +7,9 @@ gs_dir: assets/gs/scenes/cup_on_coaster
 
 env:
   env:
-    _target_: auto_atom.basis.gs_mujoco_env.GSUnifiedMujocoEnv
+    _target_: auto_atom.basis.mjc.gs_mujoco_env.GSUnifiedMujocoEnv
     config:
-      _target_: auto_atom.basis.gs_mujoco_env.GSEnvConfig
+      _target_: auto_atom.basis.mjc.gs_mujoco_env.GSEnvConfig
       model_path: assets/xmls/scenes/cup_on_coaster/demo_gs.xml
       cameras:
         - name: front

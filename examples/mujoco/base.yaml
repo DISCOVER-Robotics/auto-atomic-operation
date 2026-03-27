@@ -4,9 +4,9 @@
 env:
   _target_: auto_atom.runtime.ComponentRegistry.register_env
   env:
-    _target_: auto_atom.basis.mujoco_env.UnifiedMujocoEnv
+    _target_: auto_atom.basis.mjc.mujoco_env.UnifiedMujocoEnv
     config:
-      _target_: auto_atom.basis.mujoco_env.EnvConfig
+      _target_: auto_atom.basis.mjc.mujoco_env.EnvConfig
       operators:
         - name: arm
           arm_actuators: []

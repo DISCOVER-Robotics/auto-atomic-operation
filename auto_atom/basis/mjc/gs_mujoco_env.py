@@ -9,9 +9,9 @@ section:
 .. code-block:: yaml
 
     env:
-      _target_: auto_atom.basis.gs_mujoco_env.GSUnifiedMujocoEnv
+      _target_: auto_atom.basis.mjc.gs_mujoco_env.GSUnifiedMujocoEnv
       config:
-        _target_: auto_atom.basis.gs_mujoco_env.GSEnvConfig
+        _target_: auto_atom.basis.mjc.gs_mujoco_env.GSEnvConfig
         model_path: assets/xmls/scenes/pick_and_place/demo.xml
         ...
         gaussian_render:
@@ -35,7 +35,7 @@ import torch
 from typing import Any, Dict, List
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from gaussian_renderer import GSRendererMuJoCo
-from auto_atom.basis.mujoco_env import EnvConfig, UnifiedMujocoEnv
+from auto_atom.basis.mjc.mujoco_env import EnvConfig, UnifiedMujocoEnv
 
 
 class GaussianRenderConfig(BaseModel):

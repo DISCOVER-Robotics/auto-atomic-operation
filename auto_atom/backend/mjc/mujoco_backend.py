@@ -27,7 +27,7 @@ from ...runtime import (
 )
 from ...utils.pose import PoseState, compose_pose, inverse_pose
 from ...utils.transformations import quaternion_slerp
-from ...basis.mujoco_env import EnvConfig, UnifiedMujocoEnv
+from ...basis.mjc.mujoco_env import EnvConfig, UnifiedMujocoEnv
 
 
 class MujocoToleranceConfig(BaseModel):
