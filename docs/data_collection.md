@@ -86,7 +86,7 @@ pip install -e ./airdc"[mujoco,assis]"
 将`auto-atomic-operation`软链接到`third_party`目录下：
 
 ```bash
-ln -s <path_to_auto_atomic_operation> airbot_ie/third_party/
+ln -s <path_to_auto_atomic_operation> third_party/
 ```
 
 将`操作任务配置`目录软链接到`airbot_ie/configs/managers/auto_atom`目录下：
@@ -97,7 +97,7 @@ ln -s <path_to_auto_atomic_operation>/examples/mujoco airbot_ie/configs/managers
 
 配置文件主要分为两部分：
 
-- 采集环境（示教器）：`airbot_ie/configs/demonstrators/mujoco/basis`中对仿真环境进行基础配置，包括要采集的数据种类、相机的配置、仿真频率的配置等。这部分不涉及具体的任务逻辑。
+- 采集环境（示教器）：`airbot_ie/configs/demonstrators/mujoco`中对仿真环境进行配置，包括要采集的数据种类、相机的配置、仿真频率的配置等。这部分不涉及具体的任务逻辑。
 - 流程管理器：`airbot_ie/configs/managers/auto_atom`中对采集流程进行配置，包括要采集哪些任务、每个任务的采集细节（如是否使用GS渲染、是否保存视频等）。这部分涉及具体的任务逻辑。
 
 ### 运行
