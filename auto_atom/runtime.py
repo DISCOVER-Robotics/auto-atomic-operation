@@ -18,6 +18,7 @@ from .framework import (
     OperationConditionType,
     OperationConstraint,
     Orientation,
+    Position,
     PoseControlConfig,
     PoseRandomRange,
     PoseReference,
@@ -483,6 +484,16 @@ _MAX_RANDOMIZATION_RETRIES = 100
 
 
 @dataclass
+class ArcExecutionSnapshot:
+    """Shared snapshot state for a split relative arc sequence."""
+
+    start_eef_pose: Optional[PoseState] = None
+    """EEF world pose captured at the start of the parent arc."""
+    pivot_world_pos: Optional[Position] = None
+    """Pivot world position captured at the start of the parent arc."""
+
+
+@dataclass
 class PrimitiveAction:
     """Single primitive control action derived from a stage."""
 
@@ -494,6 +505,10 @@ class PrimitiveAction:
     """The end-effector target for eef actions, or ``None`` for non-eef actions."""
     resolved_pose: Optional[PoseControlConfig] = None
     """The runtime-resolved pose after applying reference-frame conversion, when available."""
+    arc_snapshot: Optional[ArcExecutionSnapshot] = None
+    """Shared snapshot state for split relative arcs."""
+    arc_cumulative_angle: Optional[float] = None
+    """Cumulative angle from the parent arc start to this sub-action."""
 
 
 @dataclass
@@ -732,8 +747,23 @@ class TaskFlowBuilder:
             # instead of cutting through the chord.
             if pose.arc is not None:
                 sub_poses = TaskFlowBuilder._split_arc(pose)
-                for sp in sub_poses:
-                    actions.append(PrimitiveAction(kind="pose", pose=sp))
+                if pose.arc.absolute:
+                    for sp in sub_poses:
+                        actions.append(PrimitiveAction(kind="pose", pose=sp))
+                else:
+                    arc_snapshot = ArcExecutionSnapshot()
+                    cumulative_angle = 0.0
+                    for sp in sub_poses:
+                        assert sp.arc is not None
+                        cumulative_angle += sp.arc.angle
+                        actions.append(
+                            PrimitiveAction(
+                                kind="pose",
+                                pose=sp,
+                                arc_snapshot=arc_snapshot,
+                                arc_cumulative_angle=cumulative_angle,
+                            )
+                        )
             else:
                 actions.append(PrimitiveAction(kind="pose", pose=pose))
         return actions, last_orientation
@@ -1253,6 +1283,7 @@ class TaskRunner:
                     pose=action.pose,
                     target=target,
                     backend=backend,
+                    action=action,
                 )
                 action.resolved_pose = resolved_pose
             return operator.move_to_pose(resolved_pose, target)
@@ -1266,30 +1297,16 @@ class TaskRunner:
         pose: PoseControlConfig,
         target: Optional[ObjectHandler],
         backend: Optional[SceneBackend] = None,
+        action: Optional[PrimitiveAction] = None,
     ) -> PoseControlConfig:
         """Resolve an arc pose command: rotate the current EEF pose around the pivot."""
         arc = pose.arc
         assert arc is not None
 
-        # Resolve pivot: string name → world position via backend lookup
-        if isinstance(arc.pivot, str):
-            if backend is None:
-                raise RuntimeError(
-                    f"Arc pivot '{arc.pivot}' is a name but no backend is available for lookup."
-                )
-            pivot_world_pos = backend.get_element_pose(arc.pivot).position
-        else:
-            reference_pose = TaskRunner._resolve_reference_pose(
-                operator=operator,
-                pose=pose,
-                target=target,
-            )
-            pivot_local = PoseState(position=arc.pivot)
-            pivot_world_pos = compose_pose(reference_pose, pivot_local).position
-
         # Resolve angle: absolute mode computes delta from current joint angle,
         # clamped to max_step so it converges over multiple control ticks.
         angle = arc.angle
+        current_eef: PoseState
         if arc.absolute:
             if not isinstance(arc.pivot, str):
                 raise ValueError(
@@ -1304,8 +1321,31 @@ class TaskRunner:
             # Clamp to max_step so the gripper traces the arc incrementally
             sign = 1.0 if delta >= 0 else -1.0
             angle = sign * min(abs(delta), arc.max_step)
-
-        current_eef = operator.get_end_effector_pose()
+            pivot_world_pos = backend.get_element_pose(arc.pivot).position
+            current_eef = operator.get_end_effector_pose()
+        elif action is not None and action.arc_snapshot is not None:
+            snapshot = action.arc_snapshot
+            if snapshot.pivot_world_pos is None:
+                snapshot.pivot_world_pos = TaskRunner._resolve_arc_pivot_world_pos(
+                    operator=operator,
+                    pose=pose,
+                    target=target,
+                    backend=backend,
+                )
+            if snapshot.start_eef_pose is None:
+                snapshot.start_eef_pose = operator.get_end_effector_pose()
+            pivot_world_pos = snapshot.pivot_world_pos
+            current_eef = snapshot.start_eef_pose
+            if action.arc_cumulative_angle is not None:
+                angle = action.arc_cumulative_angle
+        else:
+            pivot_world_pos = TaskRunner._resolve_arc_pivot_world_pos(
+                operator=operator,
+                pose=pose,
+                target=target,
+                backend=backend,
+            )
+            current_eef = operator.get_end_effector_pose()
         rotated = rotate_pose_around_axis(
             current_eef,
             pivot_world_pos,
@@ -1325,9 +1365,12 @@ class TaskRunner:
         pose: PoseControlConfig,
         target: Optional[ObjectHandler],
         backend: Optional[SceneBackend] = None,
+        action: Optional[PrimitiveAction] = None,
     ) -> PoseControlConfig:
         if pose.arc is not None:
-            return TaskRunner._resolve_arc_command(operator, pose, target, backend)
+            return TaskRunner._resolve_arc_command(
+                operator, pose, target, backend, action
+            )
         reference_pose = TaskRunner._resolve_reference_pose(
             operator=operator,
             pose=pose,
@@ -1395,6 +1438,29 @@ class TaskRunner:
                 raise ValueError("Pose reference OBJECT requires a target object.")
             return target.get_pose()
         raise NotImplementedError(f"Unsupported pose reference '{reference.value}'.")
+
+    @staticmethod
+    def _resolve_arc_pivot_world_pos(
+        operator: OperatorHandler,
+        pose: PoseControlConfig,
+        target: Optional[ObjectHandler],
+        backend: Optional[SceneBackend] = None,
+    ) -> Position:
+        arc = pose.arc
+        assert arc is not None
+        if isinstance(arc.pivot, str):
+            if backend is None:
+                raise RuntimeError(
+                    f"Arc pivot '{arc.pivot}' is a name but no backend is available for lookup."
+                )
+            return backend.get_element_pose(arc.pivot).position
+        reference_pose = TaskRunner._resolve_reference_pose(
+            operator=operator,
+            pose=pose,
+            target=target,
+        )
+        pivot_local = PoseState(position=arc.pivot)
+        return compose_pose(reference_pose, pivot_local).position
 
     @staticmethod
     def _pose_config_to_local_pose(pose: PoseControlConfig) -> PoseState:
