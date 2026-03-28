@@ -163,6 +163,10 @@ class MujocoOperatorHandler(OperatorHandler):
     _move_steps: int = 0
     _move_start_orientation: Optional[tuple] = None
     _move_target_orientation: Optional[tuple] = None
+    _move_best_pos_error: float = field(default=float("inf"), init=False, repr=False)
+    _move_best_ori_error: float = field(default=float("inf"), init=False, repr=False)
+    _move_stall_count: int = field(default=0, init=False, repr=False)
+    _move_step_scale: float = field(default=1.0, init=False, repr=False)
     _eef_steps: int = 0
     _home_ctrl: np.ndarray = field(init=False, repr=False)
 
@@ -194,6 +198,10 @@ class MujocoOperatorHandler(OperatorHandler):
         if self._last_move_key != key:
             self._last_move_key = key
             self._move_steps = 0
+            self._move_best_pos_error = float("inf")
+            self._move_best_ori_error = float("inf")
+            self._move_stall_count = 0
+            self._move_step_scale = 1.0
             # Save start and target orientations for SLERP interpolation
             current_eef = self.get_end_effector_pose()
             self._move_start_orientation = current_eef.orientation
@@ -205,6 +213,28 @@ class MujocoOperatorHandler(OperatorHandler):
         desired_pos = np.asarray(pose.position, dtype=np.float64)
         desired_ori = tuple(float(v) for v in pose.orientation)
 
+        current_pos_err = float(
+            np.linalg.norm(
+                np.asarray(current_eef.position, dtype=np.float64) - desired_pos
+            )
+        )
+        current_ori_err = quaternion_angular_distance(
+            current_eef.orientation, desired_ori
+        )
+        improved = current_pos_err < (
+            self._move_best_pos_error - 1e-4
+        ) or current_ori_err < (self._move_best_ori_error - 1e-3)
+        if improved:
+            self._move_best_pos_error = min(self._move_best_pos_error, current_pos_err)
+            self._move_best_ori_error = min(self._move_best_ori_error, current_ori_err)
+            self._move_stall_count = 0
+            self._move_step_scale = min(1.0, self._move_step_scale * 1.1)
+        else:
+            self._move_stall_count += 1
+            if self._move_stall_count >= 8:
+                self._move_step_scale = max(0.1, self._move_step_scale * 0.5)
+                self._move_stall_count = 0
+
         max_linear_step = float(
             pose.max_linear_step
             if pose.max_linear_step > 0.0
@@ -215,6 +245,8 @@ class MujocoOperatorHandler(OperatorHandler):
             if pose.max_angular_step > 0.0
             else self.control.cartesian_max_angular_step
         )
+        max_linear_step *= self._move_step_scale
+        max_angular_step *= self._move_step_scale
 
         if max_linear_step > 0.0:
             current_pos = np.asarray(current_eef.position, dtype=np.float64)

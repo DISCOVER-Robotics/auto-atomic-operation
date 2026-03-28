@@ -63,6 +63,7 @@ examples/
 ├── run_demo.py                    # Unified Hydra-based runner
 └── mujoco/
     ├── pick_and_place.yaml        # Pick and place a block (default)
+    ├── pick_and_place_franka.yaml # Pick and place a block with a Franka arm
     ├── cup_on_coaster.yaml        # Pick a cup and place it on a coaster
     ├── stack_color_blocks.yaml    # Stack three colored blocks
     ├── press_three_buttons.yaml   # Press three buttons in sequence
@@ -81,6 +82,8 @@ Uses the in-memory mock backend — ideal for testing task logic in isolation.
 
 ### MuJoCo demos
 
+#### Robotiq tasks
+
 | | |
 |:---:|:---:|
 | ![pick_and_place](assets/videos/pick_and_place.gif) | ![cup_on_coaster](assets/videos/cup_on_coaster.gif) |
@@ -91,6 +94,13 @@ Uses the in-memory mock backend — ideal for testing task logic in isolation.
 | `open_drawer` | `close_drawer` |
 | ![open_hinge_door](assets/videos/open_hinge_door.gif) | ![close_hinge_door](assets/videos/close_hinge_door.gif) |
 | `open_hinge_door` | `close_hinge_door` |
+
+#### Franka task
+
+| |
+|:---:|
+| ![pick_and_place_franka](assets/videos/pick_and_place_franka.gif) |
+| `pick_and_place_franka` |
 
 Make sure to install Git LFS and pull the assets after cloning:
 
@@ -116,9 +126,11 @@ python examples/run_demo.py --config-name <config>
 
 Available configs:
 
+Robotiq:
+
 | Config | Description |
 | ------ | ----------- |
-| `pick_and_place` (default) | Pick a block and place it at a target location |
+| `pick_and_place` (default) | Pick a block and place it at a target location with the Robotiq gripper setup |
 | `cup_on_coaster` | Pick a cup from a randomized position and place it on a coaster |
 | `stack_color_blocks` | Stack three colored blocks: blue on orange, then yellow on blue |
 | `press_three_buttons` | Press three buttons (blue, green, pink) in sequence |
@@ -126,6 +138,12 @@ Available configs:
 | `close_drawer` | Push a drawer closed (starts from the open position) |
 | `open_hinge_door` | Pull a hinge door open |
 | `close_hinge_door` | Push a hinge door closed (starts from the open position) |
+
+Franka:
+
+| Config | Description |
+| ------ | ----------- |
+| `pick_and_place_franka` | Pick a block and place it at a target location with a Franka arm |
 
 Each demo runs in the MuJoCo physics simulator with RGB-D cameras, tactile sensors, and randomized object placement. The scene XML for each demo is at `assets/xmls/scenes/<config>/demo.xml` and can be previewed with:
 
