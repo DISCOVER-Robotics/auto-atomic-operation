@@ -57,6 +57,7 @@ def main(cfg: DictConfig) -> None:
     runner = TaskRunner().from_config(task_file)
 
     rounds = cfg.get("rounds", 1)
+    use_input = cfg.get("use_input", False)
     round_summaries = []
 
     try:
@@ -72,7 +73,8 @@ def main(cfg: DictConfig) -> None:
             print()
 
             for i in count():
-                # input("Press Enter to continue...")
+                if use_input:
+                    input("Press Enter to continue...")
                 update = runner.update()
                 print(f"Step {i}:" + "=" * 40)
                 pprint(update, sort_dicts=False)

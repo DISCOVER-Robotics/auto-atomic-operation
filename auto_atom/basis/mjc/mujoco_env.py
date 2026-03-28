@@ -293,18 +293,21 @@ class UnifiedMujocoEnv(MujocoBasis):
     ) -> None:
         """Advance one control step toward the target EEF pose (base frame).
 
-        Joint mode: IK solve → write ctrl → step physics.
+        Joint mode: solve IK every step from current qpos. The solver's
+        ``max_joint_delta`` clamp limits per-step joint displacement, so
+        the arm smoothly converges without branch jumps.
         Mocap mode: convert to world base-body pose → write mocap → update.
-        Also updates the observable target pose for observations.
         """
         s = self._get_op(op_name)
-        s.target_pos_in_base = np.asarray(target_pos_b, dtype=np.float32)
-        s.target_quat_in_base = np.asarray(target_quat_b, dtype=np.float32)
+        new_pos = np.asarray(target_pos_b, dtype=np.float32)
+        new_quat = np.asarray(target_quat_b, dtype=np.float32)
+        s.target_pos_in_base = new_pos
+        s.target_quat_in_base = new_quat
 
         if s.joint_mode:
             eef_in_base = PoseState(
-                position=tuple(float(v) for v in target_pos_b),
-                orientation=tuple(float(v) for v in target_quat_b),
+                position=tuple(float(v) for v in new_pos),
+                orientation=tuple(float(v) for v in new_quat),
             )
             arm_qidx = self._op_arm_qidx[op_name]
             current_arm_qpos = self.data.qpos[arm_qidx].copy()

@@ -715,6 +715,7 @@ def build_mujoco_backend(
     task: AutoAtomConfig | Dict[str, Any],
     operators: List[OperatorConfig] | List[Dict[str, Any]],
     ik_solver: Optional[IKSolver] = None,
+    handler_kwargs: Optional[Dict[str, Any]] = None,
 ) -> MujocoTaskBackend:
     config = (
         task
@@ -733,11 +734,13 @@ def build_mujoco_backend(
             f"Registered environment '{config.env_name}' must be a UnifiedMujocoEnv, got {type(env).__name__}."
         )
 
+    extra = handler_kwargs or {}
     operator_handlers = {
         operator.name: MujocoOperatorHandler(
             operator_name=operator.name,
             env=env,
             ik_solver=ik_solver,
+            **extra,
         )
         for operator in operator_configs
     }

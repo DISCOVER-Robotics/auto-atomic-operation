@@ -1,0 +1,69 @@
+defaults:
+  - base_franka
+  - _self_
+
+env:
+  name: mujoco_pick_place_franka_demo
+  env:
+    config:
+      model_path: assets/xmls/scenes/pick_and_place/demo_franka.xml
+      mask_objects: ["source_block", "target_pedestal"]
+      viewer:
+        lookat: [0.04, 0.0, 0.1]
+        distance: 0.55
+        azimuth: 135
+        elevation: -28
+        step_delay: 0.03
+        hold_seconds: 1.0
+
+task:
+  env_name: mujoco_pick_place_franka_demo
+  randomization:
+    source_block:
+      x: [-0.03, 0.03]
+      y: [-0.03, 0.03]
+      collision_radius: 0.04
+  stages:
+    - name: pick_source
+      object: source_block
+      operation: pick
+      operator: arm
+      param:
+        pre_move:
+          - position: [0.0, 0.0, 0.12]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+          - position: [0.0, 0.0, 0.006]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+        post_move:
+          - position: [0.0, 0.0, 0.2]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: eef_world
+        eef:
+          close: true
+    - name: place_source
+      object: target_pedestal
+      operation: place
+      operator: arm
+      param:
+        pre_move:
+          - position: [0.0, 0.0, 0.12]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+          - position: [0.0, 0.0, 0.058]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+        post_move:
+          - position: [0.0, 0.0, 0.16]
+            orientation: [-0.70710678, 0.70710678, 0.0, 0.0]
+            reference: object_world
+        eef:
+          close: false
+
+operators:
+  - name: arm
+    initial_state:
+      base_pose:
+        position: [-0.45, -0.06, 0.0]
+        orientation: [0, 0, 0, 1]
