@@ -741,13 +741,23 @@ class TaskFlowBuilder:
     ) -> tuple[List[PrimitiveAction], Optional[Orientation]]:
         actions: List[PrimitiveAction] = []
         for pose in poses:
+            effective_pose = pose
             if pose.orientation:
                 last_orientation = pose.orientation
+            elif pose.rotation:
+                last_orientation = euler_to_quaternion(
+                    tuple(float(v) for v in pose.rotation)
+                )
+            elif last_orientation is not None:
+                effective_pose = pose.model_copy(
+                    update={"orientation": last_orientation}
+                )
+
             # Split arc poses into small sub-steps so the gripper traces the arc
             # instead of cutting through the chord.
-            if pose.arc is not None:
-                sub_poses = TaskFlowBuilder._split_arc(pose)
-                if pose.arc.absolute:
+            if effective_pose.arc is not None:
+                sub_poses = TaskFlowBuilder._split_arc(effective_pose)
+                if effective_pose.arc.absolute:
                     for sp in sub_poses:
                         actions.append(PrimitiveAction(kind="pose", pose=sp))
                 else:
@@ -765,7 +775,7 @@ class TaskFlowBuilder:
                             )
                         )
             else:
-                actions.append(PrimitiveAction(kind="pose", pose=pose))
+                actions.append(PrimitiveAction(kind="pose", pose=effective_pose))
         return actions, last_orientation
 
     @staticmethod
