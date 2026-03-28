@@ -149,6 +149,14 @@ class PoseControlConfig(BaseModel):
     """Whether the pose control is relative to the current pose. The current pose is determined by the reference frame. """
     use_slerp: bool = False
     """Whether to use SLERP interpolation for smooth orientation transitions."""
+    max_linear_step: float = 0.0
+    """Maximum Cartesian translation step (metres) applied per control tick.
+    When > 0, the runtime moves toward the target position incrementally instead
+    of commanding the full translation at once."""
+    max_angular_step: float = 0.0
+    """Maximum orientation step (radians) applied per control tick.
+    When > 0, the runtime SLERPs toward the target orientation incrementally
+    instead of commanding the full rotation at once."""
     arc: Optional[ArcControlConfig] = None
     """Optional arc movement configuration. When set, the end-effector traces an arc
     around the specified pivot instead of moving in a straight line to the target position."""

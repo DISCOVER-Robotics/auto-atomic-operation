@@ -1357,6 +1357,9 @@ class TaskRunner:
             orientation=rotated.orientation,
             reference=PoseReference.WORLD,
             relative=False,
+            use_slerp=pose.use_slerp,
+            max_linear_step=pose.max_linear_step,
+            max_angular_step=pose.max_angular_step,
         )
 
     @staticmethod
@@ -1404,6 +1407,9 @@ class TaskRunner:
             orientation=world_pose.orientation,
             reference=PoseReference.WORLD,
             relative=False,
+            use_slerp=pose.use_slerp,
+            max_linear_step=pose.max_linear_step,
+            max_angular_step=pose.max_angular_step,
         )
 
     @staticmethod

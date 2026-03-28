@@ -71,6 +71,12 @@ class MujocoControlConfig(BaseModel):
     """Tolerance thresholds for control."""
     grasp: MujocoGraspConfig = MujocoGraspConfig()
     """Grasp detection parameters."""
+    cartesian_max_linear_step: float = 0.0
+    """Default Cartesian translation step (metres) per control tick for pose moves.
+    Set to <= 0 to disable runtime Cartesian position segmentation."""
+    cartesian_max_angular_step: float = 0.0
+    """Default Cartesian orientation step (radians) per control tick for pose moves.
+    Set to <= 0 to disable runtime Cartesian orientation segmentation."""
 
 
 @dataclass
@@ -195,45 +201,72 @@ class MujocoOperatorHandler(OperatorHandler):
         if isinstance(target, MujocoObjectHandler):
             self._last_target = target
 
-        # Use SLERP interpolation for smooth orientation changes (if enabled)
-        if (
+        current_eef = self.get_end_effector_pose()
+        desired_pos = np.asarray(pose.position, dtype=np.float64)
+        desired_ori = tuple(float(v) for v in pose.orientation)
+
+        max_linear_step = float(
+            pose.max_linear_step
+            if pose.max_linear_step > 0.0
+            else self.control.cartesian_max_linear_step
+        )
+        max_angular_step = float(
+            pose.max_angular_step
+            if pose.max_angular_step > 0.0
+            else self.control.cartesian_max_angular_step
+        )
+
+        if max_linear_step > 0.0:
+            current_pos = np.asarray(current_eef.position, dtype=np.float64)
+            pos_delta = desired_pos - current_pos
+            pos_dist = float(np.linalg.norm(pos_delta))
+            if pos_dist > max_linear_step:
+                desired_pos = current_pos + pos_delta * (max_linear_step / pos_dist)
+
+        ori_error = quaternion_angular_distance(current_eef.orientation, desired_ori)
+        if max_angular_step > 0.0 and ori_error > max_angular_step:
+            desired_ori = quaternion_slerp(
+                current_eef.orientation,
+                desired_ori,
+                max_angular_step / ori_error,
+                shortestpath=True,
+            )
+        elif (
             pose.use_slerp
             and self._move_start_orientation
             and self._move_target_orientation
         ):
-            current_eef = self.get_end_effector_pose()
-            # Calculate interpolation fraction based on orientation error
-            ori_error = quaternion_angular_distance(
-                current_eef.orientation, self._move_target_orientation
-            )
-            # Use smaller steps when error is large for smoother motion
+            # Legacy smooth-orientation mode when no explicit angular step is set.
             alpha = min(0.1, 0.05 / max(ori_error, 0.01))
-            interpolated_ori = quaternion_slerp(
+            desired_ori = quaternion_slerp(
                 current_eef.orientation,
                 self._move_target_orientation,
                 alpha,
                 shortestpath=True,
             )
-            desired_eef_pose = PoseState(
-                position=pose.position, orientation=interpolated_ori
-            )
-        else:
-            desired_eef_pose = PoseState(
-                position=pose.position, orientation=pose.orientation
-            )
 
-        tgt_pos_b, tgt_quat_b = self.env.world_to_base(
+        desired_eef_pose = PoseState(
+            position=tuple(float(v) for v in desired_pos),
+            orientation=tuple(float(v) for v in desired_ori),
+        )
+
+        cmd_pos_b, cmd_quat_b = self.env.world_to_base(
             self.operator_name,
             np.asarray(desired_eef_pose.position, dtype=np.float32),
             np.asarray(desired_eef_pose.orientation, dtype=np.float32),
         )
         self.env.step_operator_toward_target(
             self.operator_name,
-            tgt_pos_b,
-            tgt_quat_b,
+            cmd_pos_b,
+            cmd_quat_b,
         )
         self._move_steps += 1
 
+        tgt_pos_b, tgt_quat_b = self.env.world_to_base(
+            self.operator_name,
+            np.asarray(pose.position, dtype=np.float32),
+            np.asarray(pose.orientation, dtype=np.float32),
+        )
         cur_pos_b, cur_quat_b = self.env.get_operator_eef_pose_in_base(
             self.operator_name
         )
@@ -747,9 +780,16 @@ def build_mujoco_backend(
         ik_extra = (
             op_extra.get("ik", {}) if isinstance(op_extra.get("ik"), dict) else {}
         )
+        control_extra = (
+            op_extra.get("control", {})
+            if isinstance(op_extra.get("control"), dict)
+            else {}
+        )
+        control_cfg = MujocoControlConfig.model_validate(control_extra)
         operator_handlers[operator.name] = MujocoOperatorHandler(
             operator_name=operator.name,
             env=env,
+            control=control_cfg,
             ik_solver=ik_solver,
             joint_control_mode=str(
                 ik_extra.get(

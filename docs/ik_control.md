@@ -18,6 +18,10 @@
 ```
 TaskRunner.update()
   └─ operator.move_to_pose(target_eef_pose_world)
+      ├─ 若配置了 Cartesian step 限幅:
+      │    ├─ 当前位置 → 目标位姿做笛卡尔分段
+      │    ├─ 位置按直线小步逼近
+      │    └─ 姿态按 SLERP 小步逼近
       └─ env.world_to_base(target) → target_eef_pose_base
           └─ env.step_operator_toward_target(target_eef_pose_base)
               ├─ 首次到达该目标时 ik_solver.solve(target_pose_base, current_qpos)
@@ -40,6 +44,13 @@ TaskRunner.update()
 |------|--------|------|
 | 每步重求 IK | `per_step_ik` | 每个控制周期都从当前 qpos 出发重新做一次 IK |
 | 一次求解 + 关节插值 | `solve_once_interpolate` | 目标改变时只解一次 IK，再按关节位移大小自适应计算插值步数 |
+
+此外，pose 控制现在还支持独立于 joint mode 的笛卡尔分段：
+
+- 位置按 operator 默认的 `control.cartesian_max_linear_step`，或 waypoint 自己的 `max_linear_step` 做直线分段
+- 姿态按 operator 默认的 `control.cartesian_max_angular_step`，或 waypoint 自己的 `max_angular_step` 做 SLERP 分段
+
+这层分段发生在 IK 之前，目的是约束末端轨迹形状，而不是只约束关节轨迹形状。
 
 #### 一次求解 + 关节插值
 
@@ -140,9 +151,24 @@ env:
 
 backend: auto_atom.backend.mjc.ik.mink_ik_solver.build_franka_backend
 
+stages:
+  - name: pick_source
+    param:
+      pre_move:
+        - position: [0.0, 0.0, 0.12]
+          orientation: [-0.7071, 0.7071, 0.0, 0.0]
+          reference: object_world
+          max_linear_step: 0.02
+          max_angular_step: 0.18
+        - position: [0.0, 0.0, 0.006]
+          orientation: [-0.7071, 0.7071, 0.0, 0.0]
+          reference: object_world
+          max_linear_step: 0.005
+          max_angular_step: 0.08
+
 operators:
   - name: arm
-    ik:                             # IK 超参（可选，均有默认值）
+    ik:
       joint_control_mode: solve_once_interpolate
       joint_interp_speed: 0.05
       n_iterations: 300
@@ -157,6 +183,10 @@ operators:
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
+| `control.cartesian_max_linear_step` | `0.0` | 默认笛卡尔位置分段步长上限（m/tick）。大于 0 时，末端位置按直线小步逼近 |
+| `control.cartesian_max_angular_step` | `0.0` | 默认笛卡尔姿态分段步长上限（rad/tick）。大于 0 时，末端姿态按 SLERP 小步逼近 |
+| `pose.max_linear_step` | `0.0` | 单个 waypoint 的笛卡尔位置分段步长。若 > 0，则覆盖 operator 默认值 |
+| `pose.max_angular_step` | `0.0` | 单个 waypoint 的笛卡尔姿态分段步长。若 > 0，则覆盖 operator 默认值 |
 | `joint_control_mode` | `solve_once_interpolate` | Joint 模式执行策略。可选 `solve_once_interpolate` 或 `per_step_ik` |
 | `joint_interp_speed` | `0.05` | 当 `joint_control_mode=solve_once_interpolate` 时，每个 control step 允许的最大单关节位移上限（rad/step），系统据此自适应计算插值步数 |
 | `n_iterations` | 300 | 每次 solve 的 mink 迭代步数。越大求解越精确，但越慢 |
@@ -169,6 +199,9 @@ operators:
 ### 参数调优指南
 
 **机械臂运动太慢：**
+- 增大 `control.cartesian_max_linear_step`（如 0.015），减少位置分段数
+- 增大 `control.cartesian_max_angular_step`（如 0.2），减少姿态分段数
+- 或者直接给远距离 waypoint 设置更大的 `max_linear_step` / `max_angular_step`
 - 对于 `solve_once_interpolate`，增大 `joint_interp_speed`（如 0.1），让插值更快到终点
 - 增大 `max_joint_delta`（如 1.2），允许每步走更远
 - 降低 `update_freq`（如 50），增加每步的物理仿真时间，使 PD 控制器有更多时间跟踪
