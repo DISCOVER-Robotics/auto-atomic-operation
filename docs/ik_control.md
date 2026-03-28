@@ -174,6 +174,13 @@ def solve(target_pose_in_base, current_qpos) -> Optional[np.ndarray]:
 “一次求解后是否继续做关节插值执行”是在 `UnifiedMujocoEnv.step_operator_toward_target()`
 这一层决定的，而不是在 solver 内部完成的。
 
+如果换成解析 IK：
+
+- 通常可以避免“迭代没有真正收敛好”这一类问题
+- 但仍然可能遇到解分支选择、关节限位、轨迹连续性和执行层跟踪的问题
+
+所以解析解能减少这类收敛问题，但不能自动解决所有运动控制问题。
+
 ### posture_task 的作用
 
 每次 solve 时，posture target 被更新为当前 seed（即 current_qpos）。这意味着：
