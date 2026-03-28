@@ -79,6 +79,16 @@ class _OperatorState:
         default_factory=lambda: np.array([0, 0, 0, 1], dtype=np.float32)
     )
 
+    # Joint-mode execution strategy.
+    joint_control_mode: str = "per_step_ik"
+    joint_interp_speed: float = 0.05
+    planned_joint_start_qpos: Optional[np.ndarray] = None
+    planned_joint_target_qpos: Optional[np.ndarray] = None
+    planned_joint_progress: int = 0
+    planned_joint_steps_total: int = 1
+    planned_target_pos_in_base: Optional[np.ndarray] = None
+    planned_target_quat_in_base: Optional[np.ndarray] = None
+
 
 class UnifiedMujocoEnv(MujocoBasis):
     """MuJoCo environment with operator pose control and observation capture."""
@@ -100,6 +110,8 @@ class UnifiedMujocoEnv(MujocoBasis):
         ik_solver: Optional["IKSolver"] = None,
         mocap_body: str = "",
         freejoint: str = "",
+        joint_control_mode: str = "per_step_ik",
+        joint_interp_speed: float = 0.05,
     ) -> None:
         """Register an operator and snapshot its home state.
 
@@ -160,6 +172,17 @@ class UnifiedMujocoEnv(MujocoBasis):
 
         home_ctrl = np.asarray(self.data.ctrl[: self.model.nu], dtype=np.float64).copy()
 
+        control_mode = str(joint_control_mode)
+        if control_mode not in {"per_step_ik", "solve_once_interpolate"}:
+            raise ValueError(
+                f"Unsupported joint_control_mode '{joint_control_mode}' for operator '{op_name}'."
+            )
+        interp_speed = float(joint_interp_speed)
+        if interp_speed <= 0.0:
+            raise ValueError(
+                f"joint_interp_speed must be > 0 for operator '{op_name}', got {joint_interp_speed}."
+            )
+
         state = _OperatorState(
             joint_mode=joint_mode,
             ik_solver=ik_solver,
@@ -177,6 +200,17 @@ class UnifiedMujocoEnv(MujocoBasis):
             fj_dof_adr=fj_dof_adr,
             target_pos_in_base=tool_pos.copy(),
             target_quat_in_base=tool_quat.copy(),
+            joint_control_mode=control_mode,
+            joint_interp_speed=interp_speed,
+            planned_joint_start_qpos=home_arm_qpos.copy()
+            if home_arm_qpos is not None
+            else None,
+            planned_joint_target_qpos=home_arm_qpos.copy()
+            if home_arm_qpos is not None
+            else None,
+            planned_joint_steps_total=1,
+            planned_target_pos_in_base=tool_pos.copy(),
+            planned_target_quat_in_base=tool_quat.copy(),
         )
         self._operator_states[op_name] = state
 
@@ -311,10 +345,72 @@ class UnifiedMujocoEnv(MujocoBasis):
             )
             arm_qidx = self._op_arm_qidx[op_name]
             current_arm_qpos = self.data.qpos[arm_qidx].copy()
-            joint_targets = s.ik_solver.solve(eef_in_base, current_arm_qpos)
-            if joint_targets is None:
-                self.update()
-                return
+
+            if s.joint_control_mode == "solve_once_interpolate":
+                target_changed = (
+                    s.planned_target_pos_in_base is None
+                    or not np.allclose(
+                        new_pos,
+                        s.planned_target_pos_in_base,
+                        atol=1e-6,
+                        rtol=0.0,
+                    )
+                    or s.planned_target_quat_in_base is None
+                    or abs(
+                        float(
+                            np.dot(
+                                new_quat.astype(np.float64),
+                                s.planned_target_quat_in_base.astype(np.float64),
+                            )
+                        )
+                    )
+                    < (1.0 - 1e-6)
+                )
+                need_plan = (
+                    target_changed
+                    or s.planned_joint_target_qpos is None
+                    or s.planned_joint_start_qpos is None
+                    or s.planned_joint_progress >= s.planned_joint_steps_total
+                )
+
+                if need_plan:
+                    joint_targets = s.ik_solver.solve(eef_in_base, current_arm_qpos)
+                    if joint_targets is None:
+                        self.update()
+                        return
+                    s.planned_joint_start_qpos = current_arm_qpos.copy()
+                    s.planned_joint_target_qpos = np.asarray(
+                        joint_targets, dtype=np.float64
+                    ).copy()
+                    s.planned_joint_progress = 0
+                    max_abs_delta = float(
+                        np.max(
+                            np.abs(
+                                s.planned_joint_target_qpos - s.planned_joint_start_qpos
+                            )
+                        )
+                    )
+                    s.planned_joint_steps_total = max(
+                        1, int(np.ceil(max_abs_delta / s.joint_interp_speed))
+                    )
+                    s.planned_target_pos_in_base = new_pos.copy()
+                    s.planned_target_quat_in_base = new_quat.copy()
+
+                start_qpos = np.asarray(s.planned_joint_start_qpos, dtype=np.float64)
+                final_qpos = np.asarray(s.planned_joint_target_qpos, dtype=np.float64)
+                s.planned_joint_progress = min(
+                    s.planned_joint_progress + 1, s.planned_joint_steps_total
+                )
+                alpha = float(s.planned_joint_progress) / float(
+                    s.planned_joint_steps_total
+                )
+                joint_targets = (1.0 - alpha) * start_qpos + alpha * final_qpos
+            else:
+                joint_targets = s.ik_solver.solve(eef_in_base, current_arm_qpos)
+                if joint_targets is None:
+                    self.update()
+                    return
+
             arm_aidx = self._op_arm_aidx[op_name]
             ctrl = np.asarray(self.data.ctrl, dtype=np.float64).copy()
             ctrl[arm_aidx] = joint_targets
@@ -353,10 +449,20 @@ class UnifiedMujocoEnv(MujocoBasis):
             joint_targets = s.ik_solver.solve(eef_in_base, current_arm_qpos)
             if joint_targets is not None:
                 self.data.qpos[arm_qidx] = joint_targets
+                s.planned_joint_start_qpos = np.asarray(
+                    joint_targets, dtype=np.float64
+                ).copy()
+                s.planned_joint_target_qpos = np.asarray(
+                    joint_targets, dtype=np.float64
+                ).copy()
+                s.planned_joint_progress = 1
+                s.planned_joint_steps_total = 1
             if len(arm_vidx) > 0:
                 self.data.qvel[arm_vidx] = 0.0
             s.target_pos_in_base = eef_pos_b.astype(np.float32)
             s.target_quat_in_base = eef_quat_b.astype(np.float32)
+            s.planned_target_pos_in_base = eef_pos_b.astype(np.float32)
+            s.planned_target_quat_in_base = eef_quat_b.astype(np.float32)
         else:
             self._write_mocap_pose(s, pos_w, quat_w_f32, sync_freejoint=True)
 
@@ -378,6 +484,10 @@ class UnifiedMujocoEnv(MujocoBasis):
             arm_aidx = self._op_arm_aidx[op_name]
             if s.home_arm_qpos is not None:
                 self.data.qpos[arm_qidx] = s.home_arm_qpos
+                s.planned_joint_start_qpos = s.home_arm_qpos.copy()
+                s.planned_joint_target_qpos = s.home_arm_qpos.copy()
+                s.planned_joint_progress = 1
+                s.planned_joint_steps_total = 1
             if len(arm_vidx) > 0:
                 self.data.qvel[arm_vidx] = 0.0
             for i, aidx in enumerate(arm_aidx):
@@ -416,6 +526,8 @@ class UnifiedMujocoEnv(MujocoBasis):
         home_eef_pos_b, home_eef_quat_b = self.get_operator_eef_pose_in_base(op_name)
         s.target_pos_in_base = home_eef_pos_b
         s.target_quat_in_base = home_eef_quat_b
+        s.planned_target_pos_in_base = home_eef_pos_b.copy()
+        s.planned_target_quat_in_base = home_eef_quat_b.copy()
 
     def set_operator_home_eef_pose(
         self, op_name: str, pos_w: np.ndarray, quat_w: np.ndarray
@@ -438,6 +550,10 @@ class UnifiedMujocoEnv(MujocoBasis):
             joint_targets = s.ik_solver.solve(eef_in_base, current_arm_qpos)
             if joint_targets is not None:
                 s.home_arm_qpos = joint_targets.copy()
+                s.planned_joint_start_qpos = joint_targets.copy()
+                s.planned_joint_target_qpos = joint_targets.copy()
+                s.planned_joint_progress = 1
+                s.planned_joint_steps_total = 1
         else:
             base_body_pos, base_body_quat_xyzw = self._eef_in_base_to_base_body_world(
                 s, *self._world_to_base(pos_w, quat_w, s.base_pos, s.base_quat)

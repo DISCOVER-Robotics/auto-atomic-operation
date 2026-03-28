@@ -63,9 +63,11 @@ task:
 operators:
   - name: arm
     ik:
-      n_iterations: 300    # IK integration steps per solve
-      dt: 0.1              # virtual timestep per IK step (s)
-      position_cost: 1.0   # EEF position tracking weight
-      orientation_cost: 1.0 # EEF orientation tracking weight
-      posture_cost: 1e-4   # joint posture regularization weight
-      max_joint_delta: 0.8 # max per-joint displacement per solve (rad)
+      joint_control_mode: solve_once_interpolate # per_step_ik | solve_once_interpolate
+      joint_interp_speed: 0.05 # max per-joint delta (rad) per control step during interpolation
+      n_iterations: 300        # IK integration steps per solve
+      dt: 0.1                  # virtual timestep per IK step (s)
+      position_cost: 1.0       # EEF position tracking weight
+      orientation_cost: 1.0    # EEF orientation tracking weight
+      posture_cost: 1e-4       # joint posture regularization weight
+      max_joint_delta: 0.8     # max per-joint displacement per solve (rad)

@@ -63,6 +63,9 @@ task:
 
 operators:
   - name: arm
+    ik:
+      joint_control_mode: solve_once_interpolate
+      joint_interp_speed: 0.05
     initial_state:
       base_pose:
         position: [-0.45, -0.06, 0.0]

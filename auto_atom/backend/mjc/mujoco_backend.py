@@ -145,6 +145,10 @@ class MujocoOperatorHandler(OperatorHandler):
     ik_solver: Optional[IKSolver] = None
     """Optional IK solver. When provided alongside non-empty arm_actuators,
     the handler operates in joint-space control mode."""
+    joint_control_mode: str = "per_step_ik"
+    """Joint-mode execution strategy: ``per_step_ik`` or ``solve_once_interpolate``."""
+    joint_interp_speed: float = 0.05
+    """Approximate max per-joint delta (rad) applied per control step when interpolating."""
 
     # Shared state.
     _last_move_key: Optional[str] = None
@@ -171,6 +175,8 @@ class MujocoOperatorHandler(OperatorHandler):
             ik_solver=self.ik_solver,
             mocap_body=self.mocap_body_name,
             freejoint=self.freejoint_name,
+            joint_control_mode=self.joint_control_mode,
+            joint_interp_speed=self.joint_interp_speed,
         )
 
     def move_to_pose(
@@ -735,15 +741,34 @@ def build_mujoco_backend(
         )
 
     extra = handler_kwargs or {}
-    operator_handlers = {
-        operator.name: MujocoOperatorHandler(
+    operator_handlers = {}
+    for operator in operator_configs:
+        op_extra = operator.model_extra or {}
+        ik_extra = (
+            op_extra.get("ik", {}) if isinstance(op_extra.get("ik"), dict) else {}
+        )
+        operator_handlers[operator.name] = MujocoOperatorHandler(
             operator_name=operator.name,
             env=env,
             ik_solver=ik_solver,
-            **extra,
+            joint_control_mode=str(
+                ik_extra.get(
+                    "joint_control_mode",
+                    extra.get("joint_control_mode", "per_step_ik"),
+                )
+            ),
+            joint_interp_speed=float(
+                ik_extra.get(
+                    "joint_interp_speed",
+                    extra.get("joint_interp_speed", 0.1),
+                )
+            ),
+            **{
+                k: v
+                for k, v in extra.items()
+                if k not in {"joint_control_mode", "joint_interp_speed"}
+            },
         )
-        for operator in operator_configs
-    }
 
     # Apply initial_state overrides.
     for operator in operator_configs:
