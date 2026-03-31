@@ -25,6 +25,8 @@ task:
 operators:
   - name: arm
 
+policy:
+  _target_: auto_atom.ConfigDrivenDemoPolicy
+
 rounds: 1
-max_updates: 5
 use_input: false

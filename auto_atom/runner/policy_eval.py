@@ -11,7 +11,7 @@ import numpy as np
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
-from auto_atom import PolicyEvaluator
+from auto_atom import ConfigDrivenDemoPolicy, PolicyEvaluator
 
 from .common import (
     ExampleLoopHooks,
@@ -21,17 +21,6 @@ from .common import (
     print_final_summary,
     run_example_rounds,
 )
-
-
-class NoOpPolicy:
-    """Fallback example policy that keeps the current low-level controls unchanged."""
-
-    def reset(self) -> None:
-        return None
-
-    def act(self, observation: Any, **_: Any) -> Any:
-        _ = observation
-        return None
 
 
 def _default_observation_getter(context) -> Any:
@@ -132,20 +121,30 @@ if "--list" in sys.argv:
 
 @hydra.main(
     config_path=str(get_config_dir()),
-    config_name="policy_eval_mock",
+    config_name="pick_and_place",
     version_base=None,
 )
 def main(cfg: DictConfig) -> None:
     task_file = prepare_task_file(cfg)
     policy_cfg = cfg.get("policy")
-    policy = instantiate(policy_cfg) if policy_cfg is not None else NoOpPolicy()
-    max_updates = int(cfg.get("max_updates", 100))
+    policy = (
+        instantiate(policy_cfg) if policy_cfg is not None else ConfigDrivenDemoPolicy()
+    )
+    action_applier = getattr(policy, "action_applier", _default_action_applier)
+    observation_getter = getattr(
+        policy,
+        "observation_getter",
+        _default_observation_getter,
+    )
+    max_updates_cfg = cfg.get("max_updates")
+    max_updates = None if max_updates_cfg is None else int(max_updates_cfg)
     rounds = int(cfg.get("rounds", 1))
     use_input = bool(cfg.get("use_input", False))
+    get_obs = bool(cfg.get("get_obs", False))
 
     evaluator = PolicyEvaluator(
-        action_applier=_default_action_applier,
-        observation_getter=_default_observation_getter,
+        action_applier=action_applier,
+        observation_getter=observation_getter,
     ).from_config(task_file)
 
     try:
@@ -155,14 +154,19 @@ def main(cfg: DictConfig) -> None:
             hooks=ExampleLoopHooks(
                 reset_fn=evaluator.reset,
                 step_fn=lambda _step, update: evaluator.update(
-                    _call_policy(policy, evaluator.get_observation(), update, evaluator)
+                    _call_policy(
+                        policy,
+                        evaluator.get_observation() if get_obs else {},
+                        update,
+                        evaluator,
+                    )
                 ),
-                summarize_fn=lambda update,
-                steps_used,
-                max_updates: evaluator.summarize(
-                    update,
-                    max_updates=max_updates,
-                    updates_used=steps_used,
+                summarize_fn=lambda update, steps_used, max_updates: (
+                    evaluator.summarize(
+                        update,
+                        max_updates=max_updates,
+                        updates_used=steps_used,
+                    )
                 ),
                 records_fn=lambda: evaluator.records,
                 before_round_fn=lambda _r: getattr(policy, "reset", lambda: None)(),

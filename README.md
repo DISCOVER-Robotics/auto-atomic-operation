@@ -90,10 +90,10 @@ Uses the in-memory mock backend — ideal for testing task logic in isolation.
 ### Policy evaluation example
 
 ```bash
-aao_eval --config-name policy_eval_mock
+aao_eval --config-name pick_and_place
 ```
 
-Runs a policy-driven rollout evaluator that reuses the framework's stage success conditions and shared result types.
+Runs a policy-driven rollout evaluator that reuses the framework's stage success conditions and shared result types. When the config does not define `policy`, `aao_eval` defaults to `auto_atom.ConfigDrivenDemoPolicy`, so normal demo configs can be evaluated directly without creating a separate eval config.
 
 ### MuJoCo demos
 

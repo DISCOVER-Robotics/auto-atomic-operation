@@ -131,4 +131,62 @@ def print_final_summary(round_summaries: Sequence[ExecutionSummary]) -> None:
         print(f"    completed stages: {summary.completed_stage_count.tolist()}")
         print(f"    final stage: {summary.final_stage_name}")
         print(f"    final success: {summary.final_success.tolist()}")
+        failure_lines = _format_failure_lines(summary)
+        for line in failure_lines:
+            print(f"    {line}")
     print("=" * 60)
+
+
+def _format_failure_lines(summary: ExecutionSummary) -> List[str]:
+    lines: List[str] = []
+    failed_by_env = {
+        record.env_index: record
+        for record in summary.records
+        if record.status == "failed"
+        or getattr(record.status, "value", None) == "failed"
+    }
+
+    for env_index, final_success in enumerate(summary.final_success.tolist()):
+        if final_success is True:
+            continue
+
+        failure_record = failed_by_env.get(env_index)
+        if failure_record is not None:
+            reason = _extract_failure_reason(failure_record.details)
+            stage_name = failure_record.stage_name or "<unknown>"
+            if reason:
+                lines.append(
+                    f"failure reason (env {env_index}, stage {stage_name}): {reason}"
+                )
+            else:
+                lines.append(
+                    f"failure reason (env {env_index}, stage {stage_name}): unknown"
+                )
+            continue
+
+        if (
+            summary.max_updates is not None
+            and summary.final_done.tolist()[env_index] is False
+        ):
+            stage_name = summary.final_stage_name[env_index] or "<unknown>"
+            lines.append(
+                f"failure reason (env {env_index}, stage {stage_name}): reached max_updates={summary.max_updates} before completion"
+            )
+            continue
+
+        stage_name = summary.final_stage_name[env_index] or "<unknown>"
+        lines.append(f"failure reason (env {env_index}, stage {stage_name}): unknown")
+
+    return lines
+
+
+def _extract_failure_reason(details: object) -> Optional[str]:
+    if not isinstance(details, dict):
+        return None
+    reason = details.get("failure_reason")
+    if isinstance(reason, str) and reason:
+        return reason
+    event = details.get("event")
+    if isinstance(event, str) and event:
+        return event
+    return None

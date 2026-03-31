@@ -13,7 +13,7 @@ from .framework import (
     TaskFileConfig,
 )
 from .mock import MockOperatorHandler, MockSceneBackend
-from .policy_eval import PolicyEvaluator
+from .policy_eval import ConfigDrivenDemoPolicy, PolicyEvaluator
 from .runtime import (
     ComponentRegistry,
     ControlResult,
@@ -39,6 +39,7 @@ __all__ = [
     "ComponentRegistry",
     "ControlResult",
     "ControlSignal",
+    "ConfigDrivenDemoPolicy",
     "ExecutionContext",
     "ExecutionRecord",
     "ExecutionSummary",

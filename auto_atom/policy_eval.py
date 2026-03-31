@@ -16,15 +16,18 @@ from .framework import (
     TaskFileConfig,
 )
 from .runtime import (
+    ControlSignal,
     ExecutionContext,
     ExecutionRecord,
     ExecutionSummary,
     ObjectHandler,
     OperatorHandler,
+    PrimitiveAction,
     SceneBackend,
     StageExecutionPlan,
     StageExecutionStatus,
     TaskFlowBuilder,
+    TaskRunner,
     TaskUpdate,
     _EnvRuntimeState,
     _build_execution_summary,
@@ -42,6 +45,181 @@ class _PolicyStageState:
     target: Optional[ObjectHandler]
     initial_object_pose: Optional[PoseState] = None
     completion_pose: Optional[PoseControlConfig] = None
+
+
+@dataclass
+class ConfigDrivenEnvAction:
+    """One primitive action emitted by the config-driven demo policy."""
+
+    stage_index: int
+    action: PrimitiveAction
+
+
+@dataclass
+class ConfigDrivenPolicyAction:
+    """Batched primitive actions for all envs in one evaluator tick."""
+
+    env_actions: List[Optional[ConfigDrivenEnvAction]]
+
+
+@dataclass
+class PolicyActionFeedback:
+    """Optional per-env execution feedback returned by a policy action applier."""
+
+    signals: List[Optional[ControlSignal]]
+    details: List[Dict[str, Any]]
+    stage_action_sequence_done: List[bool]
+
+
+class ConfigDrivenDemoPolicy:
+    """Policy that replays the same config-derived primitive actions as TaskRunner."""
+
+    def __init__(self, builder: Optional[TaskFlowBuilder] = None) -> None:
+        self.builder = builder or TaskFlowBuilder()
+        self._cached_stage_indices: List[Optional[int]] = []
+        self._cached_actions: List[List[PrimitiveAction]] = []
+        self._action_indices: List[int] = []
+
+    def reset(self) -> None:
+        self._cached_stage_indices = []
+        self._cached_actions = []
+        self._action_indices = []
+
+    def act(
+        self,
+        observation: Any,
+        update: TaskUpdate,
+        evaluator: "PolicyEvaluator",
+    ) -> ConfigDrivenPolicyAction:
+        _ = observation
+        batch_size = evaluator.batch_size
+        self._ensure_capacity(batch_size)
+        env_actions: List[Optional[ConfigDrivenEnvAction]] = []
+
+        for env_index in range(batch_size):
+            if bool(update.done[env_index]):
+                env_actions.append(None)
+                continue
+
+            stage_index = int(update.stage_index[env_index])
+            if stage_index < 0:
+                env_actions.append(None)
+                continue
+
+            actions = self._get_stage_actions(env_index, stage_index, evaluator)
+            action_index = min(self._action_indices[env_index], len(actions) - 1)
+            env_actions.append(
+                ConfigDrivenEnvAction(
+                    stage_index=stage_index,
+                    action=actions[action_index],
+                )
+            )
+
+        return ConfigDrivenPolicyAction(env_actions=env_actions)
+
+    def action_applier(
+        self,
+        context: ExecutionContext,
+        action: Any,
+        env_mask: Optional[np.ndarray] = None,
+    ) -> PolicyActionFeedback:
+        if action is None:
+            return PolicyActionFeedback(
+                signals=[None for _ in range(context.backend.batch_size)],
+                details=[{} for _ in range(context.backend.batch_size)],
+                stage_action_sequence_done=[
+                    False for _ in range(context.backend.batch_size)
+                ],
+            )
+        if not isinstance(action, ConfigDrivenPolicyAction):
+            raise TypeError(
+                "ConfigDrivenDemoPolicy.action_applier expects "
+                "ConfigDrivenPolicyAction."
+            )
+        mask = self._normalize_mask(context.backend.batch_size, env_mask)
+        if len(action.env_actions) != context.backend.batch_size:
+            raise ValueError(
+                "ConfigDrivenPolicyAction batch size does not match backend batch size."
+            )
+        feedback = PolicyActionFeedback(
+            signals=[None for _ in range(context.backend.batch_size)],
+            details=[{} for _ in range(context.backend.batch_size)],
+            stage_action_sequence_done=[
+                False for _ in range(context.backend.batch_size)
+            ],
+        )
+
+        for env_index, env_action in enumerate(action.env_actions):
+            if not mask[env_index] or env_action is None:
+                continue
+            plan = context.plan[env_action.stage_index]
+            operator = context.backend.get_operator_handler(plan.operator_name)
+            target = context.backend.get_object_handler(plan.stage.object)
+            result = TaskRunner._run_action(
+                env_index=env_index,
+                operator=operator,
+                action=env_action.action,
+                target=target,
+                backend=context.backend,
+                env_mask=self._single_env_mask(context.backend.batch_size, env_index),
+            )
+            if result.signals[env_index] == ControlSignal.REACHED:
+                actions = self._cached_actions[env_index]
+                next_index = self._action_indices[env_index] + 1
+                feedback.stage_action_sequence_done[env_index] = next_index >= len(
+                    actions
+                )
+                self._action_indices[env_index] = min(
+                    next_index, max(len(actions) - 1, 0)
+                )
+            feedback.signals[env_index] = result.signals[env_index]
+            feedback.details[env_index] = dict(result.details[env_index])
+        return feedback
+
+    def _ensure_capacity(self, batch_size: int) -> None:
+        if len(self._cached_stage_indices) == batch_size:
+            return
+        self._cached_stage_indices = [None for _ in range(batch_size)]
+        self._cached_actions = [[] for _ in range(batch_size)]
+        self._action_indices = [0 for _ in range(batch_size)]
+
+    def _get_stage_actions(
+        self,
+        env_index: int,
+        stage_index: int,
+        evaluator: "PolicyEvaluator",
+    ) -> List[PrimitiveAction]:
+        if self._cached_stage_indices[env_index] != stage_index:
+            plan = evaluator.stage_plans[stage_index]
+            self._cached_actions[env_index] = deepcopy(
+                self.builder.build_actions(
+                    plan.stage,
+                    plan.last_orientation_before,
+                )[0]
+            )
+            self._cached_stage_indices[env_index] = stage_index
+            self._action_indices[env_index] = 0
+        return self._cached_actions[env_index]
+
+    @staticmethod
+    def _normalize_mask(
+        batch_size: int,
+        env_mask: Optional[np.ndarray],
+    ) -> np.ndarray:
+        if env_mask is None:
+            return np.ones(batch_size, dtype=bool)
+        mask = np.asarray(env_mask, dtype=bool).reshape(-1)
+        if len(mask) != batch_size:
+            raise ValueError(
+                f"env_mask must have shape ({batch_size},), got {mask.shape}"
+            )
+        return mask
+
+    @staticmethod
+    def _single_env_mask(batch_size: int, env_index: int) -> np.ndarray:
+        mask = np.zeros(batch_size, dtype=bool)
+        mask[env_index] = True
+        return mask
 
 
 class PolicyEvaluator:
@@ -71,6 +249,14 @@ class PolicyEvaluator:
     def records(self) -> List[ExecutionRecord]:
         return list(self._records)
 
+    @property
+    def batch_size(self) -> int:
+        return self._require_context().backend.batch_size
+
+    @property
+    def stage_plans(self) -> List[StageExecutionPlan]:
+        return list(self._plan)
+
     def from_yaml(self, path: str | Path) -> "PolicyEvaluator":
         return self.from_config(load_task_file(path))
 
@@ -87,6 +273,7 @@ class PolicyEvaluator:
             task_file=config,
         )
         self._plan = self.builder.build(self._context)
+        self._context.plan = self._plan
         self._context.backend.setup(self._context.config)
         self._env_states = [_EnvRuntimeState() for _ in range(backend.batch_size)]
         self._policy_states = [None for _ in range(backend.batch_size)]
@@ -123,11 +310,16 @@ class PolicyEvaluator:
     def update(self, action: Any, env_mask: Optional[np.ndarray] = None) -> TaskUpdate:
         context = self._require_context()
         mask = self._normalize_mask(env_mask)
-        self.action_applier(context, action, mask)
+        feedback = self.action_applier(context, action, mask)
         for env_index, enabled in enumerate(mask):
             if not enabled or self._env_states[env_index].done:
                 continue
-            self._update_env(env_index, self._env_states[env_index], context)
+            self._update_env(
+                env_index,
+                self._env_states[env_index],
+                context,
+                action_feedback=feedback,
+            )
         self._set_interest_focus()
         return self._build_task_update()
 
@@ -161,6 +353,7 @@ class PolicyEvaluator:
         env_index: int,
         state: _EnvRuntimeState,
         context: ExecutionContext,
+        action_feedback: Optional[PolicyActionFeedback] = None,
     ) -> None:
         if state.stage_cursor >= len(self._plan):
             state.done = True
@@ -197,6 +390,39 @@ class PolicyEvaluator:
             state.phase_step = None
 
         assert policy_state is not None
+        if action_feedback is not None:
+            signal = action_feedback.signals[env_index]
+            if signal in {ControlSignal.TIMED_OUT, ControlSignal.FAILED}:
+                details = {
+                    "env_index": env_index,
+                    **action_feedback.details[env_index],
+                }
+                failure = TaskRunner._build_action_failure_details(
+                    policy_state.plan,
+                    details,
+                    signal,
+                )
+                self._record_failure(env_index, policy_state.plan, failure)
+                self._policy_states[env_index] = None
+                state.done = True
+                state.success = False
+                state.latest_status = StageExecutionStatus.FAILED
+                state.latest_details = failure
+                state.phase = None
+                state.phase_step = None
+                return
+            if not action_feedback.stage_action_sequence_done[env_index]:
+                state.latest_status = StageExecutionStatus.RUNNING
+                state.latest_details = {
+                    "event": "stage_action_sequence_running",
+                    "env_index": env_index,
+                    "evaluation_mode": "policy",
+                    **action_feedback.details[env_index],
+                }
+                state.phase = "policy"
+                state.phase_step = None
+                return
+
         success_failure = _check_stage_condition(
             env_index=env_index,
             context=context,
@@ -239,6 +465,20 @@ class PolicyEvaluator:
                 state.success = True
             else:
                 state.success = None
+            return
+
+        if (
+            action_feedback is not None
+            and action_feedback.stage_action_sequence_done[env_index]
+        ):
+            self._record_failure(env_index, policy_state.plan, success_failure)
+            self._policy_states[env_index] = None
+            state.done = True
+            state.success = False
+            state.latest_status = StageExecutionStatus.FAILED
+            state.latest_details = success_failure
+            state.phase = None
+            state.phase_step = None
             return
 
         state.latest_status = StageExecutionStatus.RUNNING

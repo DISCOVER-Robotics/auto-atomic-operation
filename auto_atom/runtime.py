@@ -255,6 +255,7 @@ class ExecutionContext:
     config: AutoAtomConfig
     backend: SceneBackend
     task_file: TaskFileConfig
+    plan: List["StageExecutionPlan"] = field(default_factory=list)
 
 
 @dataclass
@@ -574,6 +575,7 @@ class TaskRunner:
             task_file=config,
         )
         self._plan = self.builder.build(self._context)
+        self._context.plan = self._plan
         self._context.backend.setup(self._context.config)
         self._env_states = [_EnvRuntimeState() for _ in range(backend.batch_size)]
         self._records = []

@@ -30,7 +30,7 @@ The shared outputs are:
 
 This is useful when you already have a trained policy and want to ask:
 
-- how many stages were completed within `max_updates`
+- how many stages were completed before termination
 - which stage the rollout stopped at
 - whether the whole task succeeded
 - why a rollout failed
@@ -52,8 +52,10 @@ evaluator = PolicyEvaluator(
 ).from_config(task_file)
 
 update = evaluator.reset()
+max_updates = None
+step = -1
 
-for step in range(max_updates):
+for step in range(max_updates or 10**18):
     observation = evaluator.get_observation()
     action = policy.act(observation, update=update, evaluator=evaluator)
     update = evaluator.update(action)
@@ -105,11 +107,17 @@ Use it for final aggregate metrics:
 The package entry point is [auto_atom/runner/policy_eval.py](../auto_atom/runner/policy_eval.py).
 By default, `aao_eval` resolves Hydra configs from `./aao_configs/` relative to the current working directory.
 
-The policy object is expected to support:
+If the config does not provide a `policy` section, `aao_eval` will default to
+`auto_atom.ConfigDrivenDemoPolicy`, so you can directly evaluate a normal demo
+task config without creating a separate evaluation YAML.
+
+When you do provide a custom policy, the object is expected to support:
 
 - optional `reset()`
 - `act(observation)`
 - or `act(observation, update=..., evaluator=...)`
+- optional `action_applier(context, action, env_mask=None)`
+- optional `observation_getter(context)`
 
 You may also provide a plain callable instead of an object with `act()`.
 
@@ -139,6 +147,32 @@ class MyPolicy:
 ```python
 def my_policy(observation, update=None, evaluator=None):
     return action
+```
+
+If the instantiated policy object exposes `action_applier` or `observation_getter`,
+`aao_eval` will prefer those over the built-in defaults.
+
+## Config-Driven Demo Policy
+
+The package includes `auto_atom.ConfigDrivenDemoPolicy`, and `aao_eval` uses it
+by default when `policy` is omitted from the config.
+
+It does not use a learned model. Instead, it rebuilds the same primitive
+`pre_move` / `eef` / `post_move` action sequence that `TaskRunner` uses in
+`aao_demo`, and applies those primitives through the same operator handlers.
+
+This is useful as a consistency check:
+
+- if `aao_demo` succeeds on a task
+- then `aao_eval` with `ConfigDrivenDemoPolicy` should also succeed
+- so you can verify that the stage-completion logic used by `PolicyEvaluator`
+  is aligned with the framework runtime
+
+Optional explicit config:
+
+```yaml
+policy:
+  _target_: auto_atom.ConfigDrivenDemoPolicy
 ```
 
 ## Default Action Applier
@@ -249,11 +283,20 @@ The repository includes:
 - [auto_atom/runner/policy_eval.py](../auto_atom/runner/policy_eval.py)
 - [policy_eval_mock.yaml](../aao_configs/policy_eval_mock.yaml)
 
-Run the mock example:
+Run evaluation directly on a demo config:
+
+```bash
+aao_eval --config-name pick_and_place
+```
+
+Or run the mock example:
 
 ```bash
 aao_eval --config-name policy_eval_mock
 ```
+
+`policy_eval_mock.yaml` explicitly pins `auto_atom.ConfigDrivenDemoPolicy`, but
+that is now equivalent to omitting `policy` entirely.
 
 The mock example is mainly for verifying the control loop and outputs:
 
