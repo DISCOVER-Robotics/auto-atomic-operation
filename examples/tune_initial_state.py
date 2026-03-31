@@ -1,6 +1,6 @@
 """Interactively tune operator initial state (base pose, EEF pose, gripper).
 
-Loads a task config via Hydra (same pattern as ``run_demo.py``), opens the
+Loads a task config via Hydra (same pattern as ``aao_demo``), opens the
 MuJoCo viewer, and provides a tkinter panel for editing poses.  No task
 execution loop is run — this is purely for tuning and visualising the
 initial configuration.

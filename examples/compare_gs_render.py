@@ -16,7 +16,7 @@ Usage::
     # Display the result interactively (pass as Hydra override)
     python examples/compare_gs_render.py show=true
 
-Must be run from the project root (same working directory as run_demo.py).
+Must be run from the project root (same working directory as `aao_demo`).
 """
 
 from __future__ import annotations
@@ -113,7 +113,7 @@ def _save_comparison(
 def main(cfg: DictConfig) -> None:
     show: bool = bool(cfg.get("show", False))
 
-    # ── 1. Instantiate env (same pattern as run_demo.py) ────────────────────
+    # ── 1. Instantiate env (same pattern as aao_demo) ───────────────────────
     raw = OmegaConf.to_container(cfg, resolve=False)
     assert isinstance(raw, dict)
 

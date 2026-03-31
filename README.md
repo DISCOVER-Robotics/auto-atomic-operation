@@ -56,11 +56,16 @@ pip install -e ".[mujoco]"
 
 ## Examples
 
-The [`examples/`](examples/) directory contains a single entry-point script [`run_demo.py`](examples/run_demo.py) and a [`mujoco/`](examples/mujoco/) subdirectory with YAML configs:
+The runnable entry points live under [`auto_atom/runner/`](auto_atom/runner/), while [`examples/mujoco/`](examples/mujoco/) contains the YAML configs they consume:
 
 ```
+auto_atom/
+└── runner/
+    ├── demo.py                   # `aao_demo`
+    ├── policy_eval.py            # `aao_eval`
+    └── common.py                 # shared runner loop / config loading
+
 examples/
-├── run_demo.py                    # Unified Hydra-based runner
 └── mujoco/
     ├── pick_and_place.yaml        # Pick and place a block (default)
     ├── pick_and_place_franka.yaml # Pick and place a block with a Franka arm
@@ -75,10 +80,18 @@ examples/
 ### Mock example (no robot or simulator required)
 
 ```bash
-python examples/run_demo.py --config-name mock
+aao_demo --config-name mock
 ```
 
 Uses the in-memory mock backend — ideal for testing task logic in isolation.
+
+### Policy evaluation example
+
+```bash
+aao_eval --config-name policy_eval_mock
+```
+
+Runs a policy-driven rollout evaluator that reuses the framework's stage success conditions and shared result types.
 
 ### MuJoCo demos
 
@@ -115,13 +128,13 @@ git lfs pull
 List all available demos:
 
 ```bash
-python examples/run_demo.py --list
+aao_demo --list
 ```
 
 Run any demo by passing its config name:
 
 ```bash
-python examples/run_demo.py --config-name <config>
+aao_demo --config-name <config>
 ```
 
 Available configs:
@@ -154,8 +167,8 @@ Each demo runs in the MuJoCo physics simulator with RGB-D cameras, tactile senso
 Config values can be overridden on the command line via Hydra:
 
 ```bash
-python examples/run_demo.py task.seed=0
-python examples/run_demo.py "task.randomization.source_block.x=[-0.05,0.05]"
+aao_demo task.seed=0
+aao_demo "task.randomization.source_block.x=[-0.05,0.05]"
 ```
 
 ### 3D GS Rendering Demos

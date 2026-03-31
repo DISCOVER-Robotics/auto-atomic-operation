@@ -102,7 +102,7 @@ Use it for final aggregate metrics:
 
 ## Policy Interface
 
-The example entry script is [run_policy_eval.py](../examples/run_policy_eval.py).
+The package entry point is [auto_atom/runner/policy_eval.py](../auto_atom/runner/policy_eval.py).
 
 The policy object is expected to support:
 
@@ -142,7 +142,7 @@ def my_policy(observation, update=None, evaluator=None):
 
 ## Default Action Applier
 
-The example script ships with a default action applier that expects:
+The package runner ships with a default action applier that expects:
 
 - `backend.env.step(action, env_mask=...)`
 
@@ -245,13 +245,13 @@ This means policy evaluation is not based on ad-hoc metrics. It uses the same st
 
 The repository includes:
 
-- [run_policy_eval.py](../examples/run_policy_eval.py)
+- [auto_atom/runner/policy_eval.py](../auto_atom/runner/policy_eval.py)
 - [policy_eval_mock.yaml](../examples/mujoco/policy_eval_mock.yaml)
 
 Run the mock example:
 
 ```bash
-python examples/run_policy_eval.py --config-name policy_eval_mock
+aao_eval --config-name policy_eval_mock
 ```
 
 The mock example is mainly for verifying the control loop and outputs:

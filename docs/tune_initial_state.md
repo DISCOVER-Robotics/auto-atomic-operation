@@ -10,7 +10,7 @@ python examples/tune_initial_state.py --config-name cup_on_coaster
 python examples/tune_initial_state.py --config-name stack_color_blocks
 ```
 
-The script accepts the same Hydra overrides as `run_demo.py`.
+The script accepts the same Hydra overrides as `aao_demo`.
 
 ## UI overview
 
