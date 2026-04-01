@@ -175,6 +175,11 @@ aao_demo "task.randomization.source_block.x=[-0.05,0.05]"
 
 ### 3D GS Rendering Demos
 
+Install 3D GS dependencies:
+```bash
+pip install -e ."[gs]"
+```
+
 Run the following command to download the assets for the 3D GS assets for the demos:
 
 ```bash

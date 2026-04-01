@@ -261,7 +261,9 @@
         <site name="blue_duck_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
       </body>
     </body>
+
     <!-- CHICKEN DOLL -->
+    <!--
     <body name="chicken_doll_gs" pos="0.410603 0.143326 0.1052">
       <freejoint name="chicken_doll_joint"/>
       <body name="chicken_doll" pos="0 0 0">
@@ -300,6 +302,7 @@
         <site name="chicken_doll_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
       </body>
     </body>
+    -->
     <!-- DOG -->
     <body name="dog_gs" pos="0.5820 -0.3015 0.2">
       <body name="dog" pos="0 0 0">
@@ -418,6 +421,7 @@
       </body>
     </body>
     <!-- TRANSPARENT TAPE PAPER -->
+    <!--
     <body name="transparent_tape_paper_gs" pos="0.3094 0.1863 0.1">
       <freejoint name="transparent_tape_paper_joint"/>
       <body name="transparent_tape_paper" pos="0 0 0">
@@ -451,23 +455,24 @@
         <site name="transparent_tape_paper_site" pos="0 0 0" size="0.004" rgba="1 0 0 0"/>
       </body>
     </body>
+    -->
 
     <!-- Camera matching background GS coordinate frame (table30_05_wipe_the_table) -->
-    <camera name="front" pos="1.574 0.022 1.073"
+    <camera name="front_cam" pos="1.574 0.022 1.073"
             xyaxes="-0.029 1.000 0.000 -0.488 -0.014 0.872" fovy="43.365"/>
+    <camera name="side_cam" pos="0.488 1.184 0.3"
+            xyaxes="-0.9994 0.0338 0.0000 0.0000 0.0000 1.0000" fovy="43.365"/>
   </worldbody>
 
   <keyframe>
     <!-- 6 Robotiq floating-base joints + 6 gripper finger joints
-         + 3 dynamic body freejoints (7 each)
+         + 1 dynamic body freejoint (7)
          Freejoint positions match outer body positions (inner offset is zero). -->
     <key
       qpos="
         0.45 0.06 0.45 1 0 0 0
         0.00522882 0.00541525 0.00562153 0.00529892 0.00548528 0.00569143
-        0.462898 0.295108 0.0998  1 0 0 0
-        0.410603 0.143326 0.1052  1 0 0 0
-        0.3094 0.1863 0.1  1 0 0 0"
+        0.462898 0.295108 0.0998  1 0 0 0"
       ctrl="0"
     />
   </keyframe>

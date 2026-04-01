@@ -7,7 +7,7 @@ env:
   env:
     config:
       model_path: assets/xmls/scenes/open_close_hinge_door/demo.xml
-      mask_objects: ["handle", "door"]
+      mask_objects: ["handle"]
       operations: ["pull"]
       viewer:
         lookat: [-0.2, 0.0, 0.55]
