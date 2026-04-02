@@ -1,0 +1,251 @@
+<mujoco model="open_door_third_party_demo">
+  <include file="../../robots/robotiq.xml"/>
+
+  <visual>
+    <map znear="0.001"/>
+    <global azimuth="-40" elevation="-30"/>
+  </visual>
+
+  <asset>
+    <texture
+      type="skybox"
+      builtin="gradient"
+      rgb1="1 1 1"
+      rgb2="1 1 1"
+      width="800"
+      height="800"
+    />
+    <texture
+      type="2d"
+      name="groundplane"
+      builtin="checker"
+      mark="edge"
+      rgb1="1 1 1"
+      rgb2="1 1 1"
+      markrgb="0 0 0"
+      width="300"
+      height="300"
+    />
+    <material
+      name="groundplane"
+      texture="groundplane"
+      texuniform="true"
+      texrepeat="5 5"
+      reflectance="0"
+    />
+  </asset>
+
+  <worldbody>
+    <light name="scene_light" pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+
+    <geom
+      name="floor"
+      type="plane"
+      size="0 0 0.05"
+      material="groundplane"
+      contype="1"
+      conaffinity="1"
+    />
+
+    <camera
+      name="front_cam"
+      pos="0.814 -0.615 0.495"
+      xyaxes="0.858 -0.513 0.000 0.251 0.420 0.872"
+      fovy="50"
+    />
+    <camera
+      name="side_cam"
+      pos="2.05 0.05 0.45"
+      xyaxes="-0.149 0.989 0.000 -0.227 -0.034 0.973"
+      fovy="50"
+    />
+
+    <!-- Original door scene geometry from third_party/open_door, kept intact
+         while swapping in the existing Robotiq mocap gripper operator. -->
+    <body
+      name="door_frame_physics"
+      pos="1.490000000 0.100000000 0.000000000"
+      quat="0.707106781 0.000000000 0.000000000 0.707106781"
+    >
+      <geom
+        name="door_frame_physics_left_geom"
+        type="box"
+        pos="0.000000000 0.000000000 0.830000000"
+        size="0.025000000 0.025000000 0.830000000"
+        rgba="0.35 0.25 0.15 1"
+        contype="1"
+        conaffinity="1"
+      />
+      <geom
+        name="door_frame_physics_right_geom"
+        type="box"
+        pos="0.900000000 0.000000000 0.830000000"
+        size="0.025000000 0.025000000 0.830000000"
+        rgba="0.35 0.25 0.15 1"
+        contype="1"
+        conaffinity="1"
+      />
+      <geom
+        name="door_frame_physics_top_geom"
+        type="box"
+        pos="0.450000000 0.000000000 1.655000000"
+        size="0.475000000 0.025000000 0.025000000"
+        rgba="0.35 0.25 0.15 1"
+        contype="1"
+        conaffinity="1"
+      />
+
+      <body name="door_body_phys" pos="0.840000000 0.000000000 0.000000000">
+        <joint
+          name="door_hinge"
+          type="hinge"
+          pos="0 0 0"
+          axis="0 0 -1"
+          limited="true"
+          range="-1.57 0"
+          damping="0.15"
+          frictionloss="0.01"
+          armature="0.001"
+        />
+
+        <inertial
+          pos="-0.420000000 0.000000000 0.815000000"
+          mass="6.0"
+          diaginertia="0.2 0.2 0.2"
+        />
+
+        <geom
+          name="door_panel_geom"
+          type="box"
+          pos="-0.390000000 0.000000000 0.815000000"
+          size="0.410000000 0.015000000 0.805000000"
+          rgba="0.65 0.50 0.35 1"
+          density="350"
+          contype="1"
+          conaffinity="1"
+          friction="0.8 0.1 0.1"
+        />
+
+        <site
+          name="door_push_site"
+          pos="-0.729500000 0.022000000 0.825000000"
+          size="0.012"
+          rgba="0.2 0.2 1 1"
+        />
+
+        <body name="handle_body_phys" pos="-0.719500000 0.000000000 0.825000000">
+          <inertial
+            pos="0 0 0"
+            mass="0.05"
+            diaginertia="0.00005 0.00005 0.00005"
+          />
+
+          <geom
+            name="handle_spindle_geom"
+            type="cylinder"
+            fromto="0 -0.042 0 0 0.042 0"
+            size="0.010"
+            rgba="0.55 0.55 0.55 1"
+            contype="1"
+            conaffinity="1"
+          />
+
+          <geom
+            name="handle_plate_front_geom"
+            type="box"
+            pos="0 0.054 0"
+            size="0.032 0.022 0.102"
+            rgba="0.70 0.82 0.85 0.95"
+            contype="1"
+            conaffinity="1"
+          />
+
+          <geom
+            name="handle_plate_back_geom"
+            type="box"
+            pos="0 -0.054 0"
+            size="0.032 0.022 0.102"
+            rgba="0.70 0.82 0.85 0.95"
+            contype="1"
+            conaffinity="1"
+          />
+
+          <site
+            name="handle_axis_site"
+            pos="0 0 0"
+            size="0.010"
+            rgba="1 1 0 0.8"
+          />
+
+          <body name="handle_lever_body" pos="0 0 -0.02">
+            <inertial
+              pos="0.08 0 0"
+              mass="0.10"
+              diaginertia="0.0001 0.0001 0.0001"
+            />
+
+            <joint
+              name="handle_hinge"
+              type="hinge"
+              pos="0 0 0"
+              axis="0 1 0"
+              limited="true"
+              range="-0.20 0.80"
+              damping="0.4"
+              frictionloss="0.02"
+              armature="0.0005"
+              springref="0"
+              stiffness="2.0"
+            />
+
+            <geom
+              name="handle_lever_front_geom"
+              type="capsule"
+              fromto="0.010 0.080 0 0.175 0.080 0"
+              size="0.012"
+              rgba="0.50 0.90 0.95 1"
+              contype="1"
+              conaffinity="1"
+            />
+
+            <geom
+              name="handle_lever_back_geom"
+              type="capsule"
+              fromto="0.010 -0.080 0 0.135 -0.080 0"
+              size="0.010"
+              rgba="0.50 0.90 0.95 1"
+              contype="1"
+              conaffinity="1"
+            />
+
+            <site
+              name="handle_front_tip_site"
+              pos="0.175 0.080 0.000"
+              size="0.010"
+              rgba="1 0.4 0.2 1"
+            />
+            <site
+              name="handle_grasp_site"
+              pos="0.095000000 0.055000000 0.000000000"
+              size="0.012"
+              rgba="1 0.2 0.2 1"
+            />
+            <site
+              name="handle_press_site"
+              pos="0.095000000 0.080000000 0.000000000"
+              size="0.012"
+              rgba="0.2 1 0.2 1"
+            />
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <keyframe>
+    <key
+      qpos="1.235 0.3155 0.805 0.5 0.5 -0.5 -0.5 0.00522882 0.00541525 0.00562153 0.00529892 0.00548528 0.00569143"
+      ctrl="0"
+    />
+  </keyframe>
+</mujoco>
