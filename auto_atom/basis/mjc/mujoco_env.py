@@ -30,6 +30,8 @@ from auto_atom.basis.mjc.mujoco_basis import (
     EnvConfig,
     MujocoBasis,
 )
+from numpy.typing import NDArray
+
 
 if TYPE_CHECKING:
     from auto_atom.runtime import IKSolver
@@ -1311,34 +1313,28 @@ class BatchedUnifiedMujocoEnv:
                 raise KeyError(
                     f"Observation key '{key}' missing from some env replicas."
                 )
-            data_batch = []
-            for item in items:
-                data = item["data"]
-                if isinstance(data, dict):
-                    merged = batched.setdefault(key, {"data": {}, "t": []})
-                    for subkey, subval in data.items():
-                        merged["data"].setdefault(subkey, []).append(np.asarray(subval))
-                    merged["t"].append(item["t"])
-                else:
-                    data_batch.append(np.asarray(data))
-            if data_batch:
+            first_data = items[0]["data"]
+            if isinstance(first_data, dict):
                 batched[key] = {
-                    "data": np.stack(data_batch, axis=0),
+                    "data": [item["data"] for item in items],
                     "t": np.asarray([item["t"] for item in items]),
                 }
-        for key, item in list(batched.items()):
-            if isinstance(item["data"], dict):
-                item["data"] = {
-                    subkey: np.stack(values, axis=0)
-                    for subkey, values in item["data"].items()
+            else:
+                batched[key] = {
+                    "data": np.stack(
+                        [np.asarray(item["data"]) for item in items], axis=0
+                    ),
+                    "t": np.asarray([item["t"] for item in items]),
                 }
-                item["t"] = np.asarray(item["t"])
         return batched
 
     def get_info(self) -> dict[str, Any]:
         info = self.envs[0].get_info()
         info["batch_size"] = self.batch_size
         return info
+
+    def is_updated(self) -> NDArray[np.bool]:
+        return np.array([env.is_updated() for env in self.envs])
 
     def refresh_viewer(self) -> None:
         self.envs[self.config.viewer_env_index].refresh_viewer()

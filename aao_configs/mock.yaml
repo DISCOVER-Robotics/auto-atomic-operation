@@ -41,6 +41,6 @@ task:
           - position: [0.0, 0.0, 0.3]
             reference: base
 
-operators:
+task_operators:
   - name: arm_a
   - name: observer

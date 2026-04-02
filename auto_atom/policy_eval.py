@@ -262,7 +262,7 @@ class PolicyEvaluator:
         return self.from_config(load_task_file(path))
 
     def from_config(self, config: TaskFileConfig) -> "PolicyEvaluator":
-        backend = config.backend(config.task, config.operators)
+        backend = config.backend(config.task, config.task_operators)
         if not isinstance(backend, SceneBackend):
             raise TypeError(
                 "Task file backend must be an instantiated SceneBackend. "

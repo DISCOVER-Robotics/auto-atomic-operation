@@ -82,7 +82,7 @@ task:
           - position: [0.0, 0.0, 0.12]
             reference: object_world
 
-operators:
+task_operators:
   - name: arm
     initial_state:
       eef: 0.82 # closed gripper for pressing buttons

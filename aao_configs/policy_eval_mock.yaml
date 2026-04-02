@@ -20,7 +20,7 @@ task:
             orientation: [0.0, 0.0, 0.0, 1.0]
             reference: world
 
-operators:
+task_operators:
   - name: arm
 
 policy:

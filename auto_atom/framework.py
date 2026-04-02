@@ -345,11 +345,12 @@ class OperatorConfig(BaseModel):
 class TaskFileConfig(BaseModel):
     """Top-level YAML schema for a runnable task file."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
 
     backend: ImportString
     """The backend to execute this task file. The backend should be registered in the ComponentRegistry and should be compatible with the selected scene."""
     task: AutoAtomConfig
     """The task-level configuration describing stages, scene, and environment selection."""
-    operators: List[OperatorConfig] = Field(default_factory=list)
-    """The operator definitions available to the selected backend for this task file."""
+    task_operators: List[OperatorConfig] = []
+    """The operator definitions available to the selected backend for this task file.
+    Accepts both ``task_operators`` and the legacy alias ``operators`` from YAML."""
