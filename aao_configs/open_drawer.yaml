@@ -6,7 +6,7 @@ scene_name: open_close_drawer
 task_name: open_drawer
 
 env:
-  mask_objects: ["handle", "drawer"]
+  mask_objects: ["handle"]
   operations: ["pull"]
   viewer:
     lookat: [0.0, 0.04, 0.12]

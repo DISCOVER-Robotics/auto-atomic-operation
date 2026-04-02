@@ -17,7 +17,6 @@ env:
     - joint_effort
   sim_freq: 600
   update_freq: 30
-  operations: ["pick", "place", "push", "pull", "press"]
   cameras:
     - name: hand_cam
       width: 640

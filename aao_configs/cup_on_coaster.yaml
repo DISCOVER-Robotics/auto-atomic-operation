@@ -6,6 +6,7 @@ scene_name: cup_on_coaster
 
 env:
   mask_objects: ["cup", "coaster"]
+  operations: ["pick", "place"]
   viewer:
     lookat: [0.04, 0.0, 0.09]
     distance: 0.6

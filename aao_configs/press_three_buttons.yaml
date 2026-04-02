@@ -6,7 +6,7 @@ scene_name: press_three_buttons
 
 env:
   mask_objects: ["button_blue", "button_green", "button_pink"]
-  operations: ["push", "press"]
+  operations: ["press"]
   viewer:
     lookat: [0.06, -0.03, 0.1]
     distance: 0.6

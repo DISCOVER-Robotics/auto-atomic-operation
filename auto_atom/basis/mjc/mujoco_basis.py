@@ -463,7 +463,7 @@ class MujocoBasis:
     ) -> None:
         if len(object_names) != len(operation_names):
             raise ValueError(
-                "object_names and operation_names must have the same length."
+                f"object_names and operation_names must have the same length, got {object_names=} and {operation_names=}"
             )
 
         interest_object_operations: dict[str, str] = {}

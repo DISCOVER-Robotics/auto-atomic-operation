@@ -69,8 +69,8 @@ class GSEnvConfig(EnvConfig):
     render with GS.
     """
 
-    gaussian_render: GaussianRenderConfig
-    """Gaussian Splatting render config (required)."""
+    gaussian_render: GaussianRenderConfig = GaussianRenderConfig()
+    """Gaussian Splatting render config."""
     gs_color_cameras: List[str] = Field(default_factory=list)
     """Names of cameras whose color output uses GS rendering. If empty, all cameras with ``enable_color=True`` are used."""
     gs_depth_cameras: List[str] = Field(default_factory=list)
