@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
-
+import logging
 import mujoco
 import numpy as np
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
-
 from ...basis.mjc.mujoco_env import BatchedUnifiedMujocoEnv, EnvConfig
 from ...framework import (
     ArmPoseConfig,
@@ -572,6 +571,9 @@ class MujocoTaskBackend(SceneBackend):
     )
 
     def __post_init__(self) -> None:
+        logging.getLogger(MujocoTaskBackend.__name__).info(
+            "MujocoTaskBackend random_seed=%s", self.random_seed
+        )
         self._rng = np.random.default_rng(self.random_seed)
 
     @property
