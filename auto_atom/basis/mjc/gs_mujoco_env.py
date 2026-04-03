@@ -554,9 +554,9 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         self._camera_specs = self.envs[0]._camera_specs
         self._camera_ids = self.envs[0]._camera_ids
 
-        # Background cache: (cam_id, w, h) → (bg_rgb, bg_depth) tensors
+        # Background cache: (cam_ids_tuple, w, h) → (bg_rgb, bg_depth) tensors
         self._bg_cache: dict[
-            tuple[int, int, int], tuple[torch.Tensor, torch.Tensor]
+            tuple[tuple[int, ...], int, int], tuple[torch.Tensor, torch.Tensor]
         ] = {}
 
         n_bodies = len(gs_cfg.body_gaussians)
@@ -575,7 +575,12 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         return obs
 
     def _inject_batched_gs_renders(self, obs: dict[str, dict[str, Any]]) -> None:
-        """Batch-render GS color/depth/mask across all envs and inject into *obs*."""
+        """Batch-render GS color/depth/mask across all envs and cameras.
+
+        Cameras are grouped by resolution so that ``batch_env_render`` is
+        called once per resolution group with ``Ncam > 1``, rather than once
+        per camera.
+        """
         gs_color_set = self.config.gs_color_cameras
         gs_depth_set = self.config.gs_depth_cameras
         gs_mask_set = self.config.gs_mask_cameras | self.config.gs_heat_map_cameras
@@ -608,45 +613,65 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         # Update foreground gaussians ONCE for all envs
         fg_gsb = self._fg_gs_renderer.batch_update_gaussians(body_pos, body_quat)
 
+        # ---- Group cameras by resolution for multi-camera batching ----
+        # batch_env_render requires uniform (H, W), so we group by resolution
+        # and render all cameras in a group with a single call.
+        from collections import OrderedDict
+
+        res_groups: OrderedDict[tuple[int, int], list[str]] = OrderedDict()
         for cam_name in all_gs_cams:
             spec = self._camera_specs[cam_name]
-            cam_id = self._camera_ids[cam_name]
-            obs_cam_name = (
-                "camera/" + cam_name.split("_")[0] if structured else cam_name
-            )
-            H, W = spec.height, spec.width
+            key = (spec.height, spec.width)
+            res_groups.setdefault(key, []).append(cam_name)
 
-            # Gather camera params: (Nenv, 1, ...)
+        for (H, W), cam_names in res_groups.items():
+            Ncam = len(cam_names)
+            cam_ids = [self._camera_ids[c] for c in cam_names]
+
+            # Gather camera params: (Nenv, Ncam, ...)
             cam_pos = np.stack(
                 [
-                    np.asarray(env.data.cam_xpos[cam_id], dtype=np.float32)
+                    np.stack(
+                        [
+                            np.asarray(env.data.cam_xpos[cid], dtype=np.float32)
+                            for cid in cam_ids
+                        ]
+                    )
                     for env in self.envs
                 ]
-            ).reshape(self.batch_size, 1, 3)
+            )  # (Nenv, Ncam, 3)
             cam_xmat = np.stack(
                 [
-                    np.asarray(env.data.cam_xmat[cam_id], dtype=np.float32)
+                    np.stack(
+                        [
+                            np.asarray(env.data.cam_xmat[cid], dtype=np.float32)
+                            for cid in cam_ids
+                        ]
+                    )
                     for env in self.envs
                 ]
-            ).reshape(self.batch_size, 1, 9)
+            )  # (Nenv, Ncam, 9)
             fovy = np.broadcast_to(
                 np.asarray(
-                    self.envs[0].model.cam_fovy[cam_id], dtype=np.float32
-                ).reshape(1, 1),
-                (self.batch_size, 1),
-            ).copy()
+                    [self.envs[0].model.cam_fovy[cid] for cid in cam_ids],
+                    dtype=np.float32,
+                ).reshape(1, Ncam),
+                (self.batch_size, Ncam),
+            ).copy()  # (Nenv, Ncam)
 
-            # ------ unified render: color + depth/mask in one pass ------
-            want_color = cam_name in gs_color_set
-            need_mask = cam_name in gs_mask_set and self._gs_mask_renderers
-            need_depth = cam_name in gs_depth_set or need_mask
+            # Determine what this group needs
+            any_color = any(c in gs_color_set for c in cam_names)
+            any_depth = any(c in gs_depth_set for c in cam_names)
+            any_mask = (
+                any(c in gs_mask_set for c in cam_names) and self._gs_mask_renderers
+            )
+            need_depth_render = any_depth or any_mask
 
-            # When both color and depth/mask are needed, render FG once via
-            # _render_batched_camera and reuse full_rgb for color output.
-            fg_depth = bg_depth = full_depth = None
-            if need_depth:
-                fg_rgb_d, fg_depth, bg_rgb_d, bg_depth, full_rgb, full_depth = (
-                    self._render_batched_camera(
+            # ---- Single FG+BG render for all cameras in this group ----
+            fg_rgb = fg_depth = bg_depth = full_rgb = full_depth = alphas = None
+            if need_depth_render:
+                fg_rgb, fg_depth, bg_depth, full_rgb, full_depth, alphas = (
+                    self._render_batched_multicam(
                         fg_gsb,
                         cam_pos,
                         cam_xmat,
@@ -655,11 +680,29 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
                         fovy,
                         body_pos,
                         body_quat,
-                        cam_id,
+                        cam_ids,
                     )
                 )
-                if want_color:
-                    rgb = full_rgb[:, 0]
+            elif any_color:
+                # Color-only group — still batch all cameras
+                bg_imgs = self._get_cached_bg_multicam(
+                    cam_ids, W, H, cam_pos, cam_xmat, fovy, body_pos, body_quat
+                )
+                fg_rgb, _ = self._fg_gs_renderer.batch_env_render(
+                    fg_gsb, cam_pos, cam_xmat, H, W, fovy, bg_imgs=bg_imgs
+                )
+                # fg_rgb: (Nenv, Ncam, H, W, 3)
+
+            # ---- Distribute per-camera outputs ----
+            for cam_idx, cam_name in enumerate(cam_names):
+                spec = self._camera_specs[cam_name]
+                obs_cam_name = (
+                    "camera/" + cam_name.split("_")[0] if structured else cam_name
+                )
+
+                # color
+                if cam_name in gs_color_set and full_rgb is not None:
+                    rgb = full_rgb[:, cam_idx]  # (Nenv, H, W, 3)
                     rgb = torch.clamp(rgb, 0.0, 1.0).mul(255).to(torch.uint8)
                     if self.config.to_numpy:
                         rgb = rgb.cpu().numpy()
@@ -667,55 +710,41 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
                         "data": rgb,
                         "t": timestamps,
                     }
-            elif want_color:
-                # Color-only: no depth/mask needed
-                cached = self._get_cached_bg(
-                    cam_id, W, H, cam_pos, cam_xmat, fovy, body_pos, body_quat
-                )
-                bg_imgs = cached[0] if cached is not None else None
-                fg_rgb, _ = self._fg_gs_renderer.batch_env_render(
-                    fg_gsb,
-                    cam_pos,
-                    cam_xmat,
-                    H,
-                    W,
-                    fovy,
-                    bg_imgs=bg_imgs,
-                )
-                rgb = fg_rgb[:, 0]
-                rgb = torch.clamp(rgb, 0.0, 1.0).mul(255).to(torch.uint8)
-                if self.config.to_numpy:
-                    rgb = rgb.cpu().numpy()
-                obs[f"{obs_cam_name}/color/image_raw"] = {
-                    "data": rgb,
-                    "t": timestamps,
-                }
+                elif cam_name in gs_color_set and fg_rgb is not None:
+                    rgb = fg_rgb[:, cam_idx]
+                    rgb = torch.clamp(rgb, 0.0, 1.0).mul(255).to(torch.uint8)
+                    if self.config.to_numpy:
+                        rgb = rgb.cpu().numpy()
+                    obs[f"{obs_cam_name}/color/image_raw"] = {
+                        "data": rgb,
+                        "t": timestamps,
+                    }
 
-            # ------ depth output ------
-            if cam_name in gs_depth_set and full_depth is not None:
-                # full_depth: (Nenv, 1, H, W, 1) → (Nenv, H, W)
-                depth = full_depth[:, 0, :, :, 0]
-                if self.config.to_numpy:
-                    depth = depth.cpu().numpy()
-                    depth[depth > spec.depth_max] = 0.0
-                else:
-                    depth = torch.where(
-                        depth > spec.depth_max,
-                        torch.zeros_like(depth),
-                        depth,
-                    )
-                obs[f"{obs_cam_name}/aligned_depth_to_color/image_raw"] = {
-                    "data": depth,
-                    "t": timestamps,
-                }
+                # depth
+                if cam_name in gs_depth_set and full_depth is not None:
+                    depth = full_depth[:, cam_idx, :, :, 0]  # (Nenv, H, W)
+                    if self.config.to_numpy:
+                        depth = depth.cpu().numpy()
+                        depth[depth > spec.depth_max] = 0.0
+                    else:
+                        depth = torch.where(
+                            depth > spec.depth_max,
+                            torch.zeros_like(depth),
+                            depth,
+                        )
+                    obs[f"{obs_cam_name}/aligned_depth_to_color/image_raw"] = {
+                        "data": depth,
+                        "t": timestamps,
+                    }
 
-            # ------ mask / heat_map output ------
-            if need_mask and fg_depth is not None:
+            # ---- Mask rendering: one call per object, all cameras ----
+            if any_mask and fg_depth is not None:
                 scene_depth_t = GSUnifiedMujocoEnv._compose_mask_scene_depth(
                     fg_depth=fg_depth,
                     bg_depth=bg_depth,
                 )
-                binary_mask, heat_map = self._render_batched_gs_masks(
+                # scene_depth_t: (Nenv, Ncam, H, W, 1)
+                all_masks, all_heat_maps = self._render_batched_gs_masks_multicam(
                     cam_pos=cam_pos,
                     cam_xmat=cam_xmat,
                     fovy=fovy,
@@ -725,16 +754,23 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
                     body_quat=body_quat,
                     scene_depth_t=scene_depth_t,
                 )
-                if cam_name in self.config.gs_mask_cameras:
-                    obs[f"{obs_cam_name}/mask/image_raw"] = {
-                        "data": binary_mask,
-                        "t": timestamps,
-                    }
-                if cam_name in self.config.gs_heat_map_cameras:
-                    obs[f"{obs_cam_name}/mask/heat_map"] = {
-                        "data": heat_map,
-                        "t": timestamps,
-                    }
+                # all_masks: (Nenv, Ncam, H, W), all_heat_maps: (Nenv, Ncam, H, W, Nops)
+                for cam_idx, cam_name in enumerate(cam_names):
+                    if cam_name not in gs_mask_set:
+                        continue
+                    obs_cam_name = (
+                        "camera/" + cam_name.split("_")[0] if structured else cam_name
+                    )
+                    if cam_name in self.config.gs_mask_cameras:
+                        obs[f"{obs_cam_name}/mask/image_raw"] = {
+                            "data": all_masks[:, cam_idx],
+                            "t": timestamps,
+                        }
+                    if cam_name in self.config.gs_heat_map_cameras:
+                        obs[f"{obs_cam_name}/mask/heat_map"] = {
+                            "data": all_heat_maps[:, cam_idx],
+                            "t": timestamps,
+                        }
 
     # ------------------------------------------------------------------
     # batch GS rendering helpers
@@ -764,9 +800,9 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
             renderers[object_name] = MjxBatchSplatRenderer(mask_cfg, env0.model)
         return renderers
 
-    def _get_cached_bg(
+    def _get_cached_bg_multicam(
         self,
-        cam_id: int,
+        cam_ids: list[int],
         width: int,
         height: int,
         cam_pos: np.ndarray,
@@ -774,25 +810,25 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         fovy: np.ndarray,
         body_pos: np.ndarray,
         body_quat: np.ndarray,
-    ) -> tuple[torch.Tensor, torch.Tensor] | None:
-        """Return cached (bg_rgb, bg_depth), rendering on first call."""
+    ) -> torch.Tensor | None:
+        """Return cached background (rgb, depth) for multiple cameras.
+
+        Cache key is ``(tuple(cam_ids), width, height)``.  Returns
+        ``(bg_rgb, bg_depth)`` each of shape ``(Nenv, Ncam, H, W, C)`` or
+        ``None`` when no background renderer is configured.
+        """
         if self._bg_gs_renderer is None:
             return None
-        cache_key = (cam_id, width, height)
+        cache_key = (tuple(cam_ids), width, height)
         if cache_key not in self._bg_cache:
             bg_gsb = self._bg_gs_renderer.batch_update_gaussians(body_pos, body_quat)
             bg_rgb, bg_depth = self._bg_gs_renderer.batch_env_render(
-                bg_gsb,
-                cam_pos,
-                cam_xmat,
-                height,
-                width,
-                fovy,
+                bg_gsb, cam_pos, cam_xmat, height, width, fovy
             )
             self._bg_cache[cache_key] = (bg_rgb, bg_depth)
         return self._bg_cache[cache_key]
 
-    def _render_batched_camera(
+    def _render_batched_multicam(
         self,
         fg_gsb,
         cam_pos: np.ndarray,
@@ -802,45 +838,50 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         fovy: np.ndarray,
         body_pos: np.ndarray,
         body_quat: np.ndarray,
-        cam_id: int,
+        cam_ids: list[int],
     ) -> tuple[
         torch.Tensor,
         torch.Tensor,
         torch.Tensor | None,
-        torch.Tensor | None,
+        torch.Tensor,
         torch.Tensor,
         torch.Tensor,
     ]:
-        """Batch fg+bg render for one camera across all envs."""
-        bg_rgb = None
-        bg_depth = None
-        cached = self._get_cached_bg(
-            cam_id, width, height, cam_pos, cam_xmat, fovy, body_pos, body_quat
+        """Render FG+BG for *multiple* cameras in a single ``batch_env_render``.
+
+        Parameters have shapes ``(Nenv, Ncam, ...)``.
+
+        Returns
+        -------
+        fg_rgb : (Nenv, Ncam, H, W, 3)
+        fg_depth : (Nenv, Ncam, H, W, 1)
+        bg_depth : (Nenv, Ncam, H, W, 1) or None
+        full_rgb : (Nenv, Ncam, H, W, 3)
+        full_depth : (Nenv, Ncam, H, W, 1)
+        alphas : (Nenv, Ncam, H, W, 1)
+        """
+        cached = self._get_cached_bg_multicam(
+            cam_ids, width, height, cam_pos, cam_xmat, fovy, body_pos, body_quat
         )
         bg_imgs = cached[0] if cached is not None else None
 
         fg_rgb, fg_depth = self._fg_gs_renderer.batch_env_render(
-            fg_gsb,
-            cam_pos,
-            cam_xmat,
-            height,
-            width,
-            fovy,
-            bg_imgs=bg_imgs,
+            fg_gsb, cam_pos, cam_xmat, height, width, fovy, bg_imgs=bg_imgs
         )
         alphas = self._fg_gs_renderer.rasterizations[1]
 
+        bg_depth = None
         if cached is not None:
-            bg_rgb, bg_depth = cached
+            _, bg_depth = cached
             full_rgb = fg_rgb
             full_depth = fg_depth * alphas + bg_depth * (1 - alphas)
         else:
             full_rgb = fg_rgb
             full_depth = fg_depth
 
-        return fg_rgb, fg_depth, bg_rgb, bg_depth, full_rgb, full_depth
+        return fg_rgb, fg_depth, bg_depth, full_rgb, full_depth, alphas
 
-    def _render_batched_gs_masks(
+    def _render_batched_gs_masks_multicam(
         self,
         *,
         cam_pos: np.ndarray,
@@ -852,43 +893,45 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         body_quat: np.ndarray,
         scene_depth_t: torch.Tensor,
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Render GS masks batched across all envs with occlusion culling."""
+        """Render GS masks for all envs × all cameras with occlusion culling.
+
+        Parameters
+        ----------
+        scene_depth_t : (Nenv, Ncam, H, W, 1)
+
+        Returns
+        -------
+        binary_mask : (Nenv, Ncam, H, W) uint8
+        heat_map : (Nenv, Ncam, H, W, Nops) uint8
+        """
         B = self.batch_size
-        # scene_depth_t: (Nenv, 1, H, W, 1) → (Nenv, H, W)
+        # scene_depth_t: (Nenv, Ncam, H, W, 1) → (Nenv, Ncam, H, W)
         if scene_depth_t.ndim == 5:
-            scene_depth = scene_depth_t[:, 0, :, :, 0]
-        elif scene_depth_t.ndim == 4 and scene_depth_t.shape[-1] == 1:
-            scene_depth = scene_depth_t[:, :, :, 0]
-        elif scene_depth_t.ndim == 3:
+            scene_depth = scene_depth_t[..., 0]
+        elif scene_depth_t.ndim == 4:
             scene_depth = scene_depth_t
         else:
             raise TypeError(
-                "scene_depth_t must be (B,1,H,W,1), (B,H,W,1), or (B,H,W), "
+                "scene_depth_t must be (B,Ncam,H,W,1) or (B,Ncam,H,W), "
                 f"got shape {tuple(scene_depth_t.shape)}"
             )
+        Ncam = scene_depth.shape[1]
         scene_depth_np = scene_depth.detach().cpu().numpy()
         scene_depth_np = np.nan_to_num(scene_depth_np, nan=0.0, posinf=0.0, neginf=0.0)
 
-        binary_mask = np.zeros((B, height, width), dtype=np.uint8)
+        binary_mask = np.zeros((B, Ncam, height, width), dtype=np.uint8)
         heat_map = np.zeros(
-            (B, height, width, len(self.config.operations)), dtype=np.uint8
+            (B, Ncam, height, width, len(self.config.operations)), dtype=np.uint8
         )
 
         for object_name, renderer in self._gs_mask_renderers.items():
             gsb = renderer.batch_update_gaussians(body_pos, body_quat)
             alpha_t, obj_depth_t = renderer.batch_env_render(
-                gsb,
-                cam_pos,
-                cam_xmat,
-                height,
-                width,
-                fovy,
+                gsb, cam_pos, cam_xmat, height, width, fovy
             )
-            # alpha_t: (B, 1, H, W, 3), obj_depth_t: (B, 1, H, W, 1)
-            alpha_np = alpha_t[:, 0].detach().cpu().numpy().max(axis=-1)  # (B, H, W)
-            obj_depth_np = (
-                obj_depth_t[:, 0, :, :, 0].detach().cpu().numpy()
-            )  # (B, H, W)
+            # alpha_t: (B, Ncam, H, W, 3), obj_depth_t: (B, Ncam, H, W, 1)
+            alpha_np = alpha_t.detach().cpu().numpy().max(axis=-1)  # (B, Ncam, H, W)
+            obj_depth_np = obj_depth_t[..., 0].detach().cpu().numpy()  # (B, Ncam, H, W)
             obj_depth_np = np.nan_to_num(obj_depth_np, nan=0.0, posinf=0.0, neginf=0.0)
 
             visible_np = alpha_np > self._GS_MASK_ALPHA_THRESHOLD
@@ -899,7 +942,6 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
             visible_np[occluded_np] = False
             binary_mask[visible_np] = 1
 
-            # Per-env heat_map: each env may have different interest objects
             for env_idx, env in enumerate(self.envs):
                 operation_name = env._interest_object_operations.get(object_name)
                 if operation_name is None:
@@ -907,7 +949,8 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
                 if operation_name not in self.config.operations:
                     continue
                 channel_idx = self.config.operations.index(operation_name)
-                heat_map[env_idx, visible_np[env_idx], channel_idx] = 1
+                # visible_np[env_idx]: (Ncam, H, W) bool
+                heat_map[env_idx, ..., channel_idx][visible_np[env_idx]] = 1
 
         return binary_mask, heat_map
 
