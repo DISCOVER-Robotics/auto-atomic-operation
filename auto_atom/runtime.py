@@ -143,7 +143,23 @@ class OperatorHandler(ABC):
         raise NotImplementedError
 
 
+@runtime_checkable
+class EnvProtocol(Protocol):
+    """Minimal environment interface expected by ``SceneBackend.env``."""
+
+    def step(
+        self, action: np.ndarray, env_mask: Optional[np.ndarray] = None
+    ) -> None: ...
+
+    def capture_observation(self) -> Dict[str, Dict[str, Any]]: ...
+
+
 class SceneBackend(ABC):
+    env: EnvProtocol
+    """The underlying environment object managed by this backend.
+    Concrete backends expose the actual env instance here
+    (e.g. ``BatchedUnifiedMujocoEnv`` for MuJoCo)."""
+
     @property
     @abstractmethod
     def batch_size(self) -> int:
@@ -1495,4 +1511,41 @@ def load_task_file(path: str | Path) -> TaskFileConfig:
     raw = OmegaConf.to_container(config, resolve=True)
     if not isinstance(raw, dict):
         raise TypeError(f"YAML root must be a mapping: {config_path}")
+    return TaskFileConfig.model_validate(raw)
+
+
+def load_task_file_hydra(
+    config_name: str,
+    config_dir: str | Path | None = None,
+    overrides: list[str] | None = None,
+) -> TaskFileConfig:
+    """Load a task file using Hydra compose API (supports ``defaults`` merging).
+
+    Unlike :func:`load_task_file` which only reads a single YAML file,
+    this function uses Hydra's compose API so that ``defaults`` lists are
+    properly resolved and merged.
+
+    Parameters
+    ----------
+    config_name:
+        Name of the config (without ``.yaml`` suffix), e.g. ``"pick_and_place"``.
+    config_dir:
+        Absolute or relative path to the config directory.
+        Defaults to ``<cwd>/aao_configs``.
+    overrides:
+        Optional Hydra override strings, e.g. ``["task.seed=123"]``.
+    """
+    from hydra import compose, initialize_config_dir
+    from hydra.utils import instantiate as hydra_instantiate
+
+    resolved_dir = str(Path(config_dir or (Path.cwd() / "aao_configs")).resolve())
+    with initialize_config_dir(config_dir=resolved_dir, version_base=None):
+        cfg = compose(config_name=config_name, overrides=overrides or [])
+
+    if "env" in cfg and cfg.env is not None:
+        hydra_instantiate(cfg.env)
+
+    raw = OmegaConf.to_container(cfg, resolve=True)
+    if not isinstance(raw, dict):
+        raise TypeError("Config root must be a mapping.")
     return TaskFileConfig.model_validate(raw)

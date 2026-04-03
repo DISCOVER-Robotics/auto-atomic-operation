@@ -131,6 +131,19 @@ class MockOperatorHandler(OperatorHandler):
 
 
 @dataclass
+class MockEnv:
+    """Minimal env stub that satisfies the ``SceneBackend.env`` contract."""
+
+    batch_size: int = 1
+
+    def step(self, action: np.ndarray, env_mask: np.ndarray | None = None) -> None:
+        pass
+
+    def capture_observation(self) -> Dict[str, Dict[str, Any]]:
+        return {}
+
+
+@dataclass
 class MockSceneBackend(SceneBackend):
     env_name: str
     batch_size: int = 1
@@ -138,6 +151,10 @@ class MockSceneBackend(SceneBackend):
     objects: Dict[str, MockObjectHandler] = field(default_factory=dict)
     lifecycle_events: List[str] = field(default_factory=list)
     interest_updates: List[Dict[str, List[str]]] = field(default_factory=list)
+    env: MockEnv = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.env = MockEnv(batch_size=self.batch_size)
 
     def setup(self, config: AutoAtomConfig) -> None:
         self.lifecycle_events.append(

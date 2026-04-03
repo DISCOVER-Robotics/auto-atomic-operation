@@ -18,6 +18,7 @@ from .runtime import (
     ComponentRegistry,
     ControlResult,
     ControlSignal,
+    EnvProtocol,
     ExecutionContext,
     ExecutionRecord,
     ExecutionSummary,
@@ -31,6 +32,7 @@ from .runtime import (
     TaskUpdate,
     load_config,
     load_task_file,
+    load_task_file_hydra,
 )
 from .utils.pose import PoseState
 
@@ -43,6 +45,7 @@ __all__ = [
     "ExecutionContext",
     "ExecutionRecord",
     "ExecutionSummary",
+    "EnvProtocol",
     "EefControlConfig",
     "IKSolver",
     "MockOperatorHandler",
@@ -66,4 +69,5 @@ __all__ = [
     "TaskUpdate",
     "load_config",
     "load_task_file",
+    "load_task_file_hydra",
 ]
