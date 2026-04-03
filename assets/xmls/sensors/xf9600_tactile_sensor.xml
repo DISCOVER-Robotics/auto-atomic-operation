@@ -1,0 +1,92 @@
+<mujoco>
+    <default>
+        <default class="tactile_cell">
+            <geom type="sphere" size="0.0005" contype="0" conaffinity="0" condim="4" friction="0 0 0" margin="0.0003" solref="0.001 1" solimp="0.98 0.999 0.0005 0.5 2" rgba="0 1 1 0.2" density="500"/>
+            <site type="sphere" size="0.0005" rgba="0 0 0 0"/>
+        </default>
+    </default>
+
+    <worldbody>
+        <body name="tactile_sensor" pos="0 0 0">
+            <body name="cell_01" pos="-0.00447460887 0.00075830123 0.00355238929"><geom name="touch_geom_01" class="tactile_cell"/><site name="touch_point_01" class="tactile_cell"/></body>
+            <body name="cell_02" pos="-0.00447460790 0.00427915026 0.00355239087"><geom name="touch_geom_02" class="tactile_cell"/><site name="touch_point_02" class="tactile_cell"/></body>
+            <body name="cell_03" pos="-0.00447460648 0.00779999960 0.00355239318"><geom name="touch_geom_03" class="tactile_cell"/><site name="touch_point_03" class="tactile_cell"/></body>
+            <body name="cell_04" pos="-0.00447460505 0.01132084894 0.00355239549"><geom name="touch_geom_04" class="tactile_cell"/><site name="touch_point_04" class="tactile_cell"/></body>
+            <body name="cell_05" pos="-0.00447460359 0.01484169824 0.00355239788"><geom name="touch_geom_05" class="tactile_cell"/><site name="touch_point_05" class="tactile_cell"/></body>
+            <body name="cell_06" pos="-0.00253563500 0.00140591643 0.00506517231"><geom name="touch_geom_06" class="tactile_cell"/><site name="touch_point_06" class="tactile_cell"/></body>
+            <body name="cell_07" pos="-0.00253561768 0.01419409739 0.00506517876"><geom name="touch_geom_07" class="tactile_cell"/><site name="touch_point_07" class="tactile_cell"/></body>
+            <body name="cell_08" pos="-0.00249934586 0.00427915015 0.00507853251"><geom name="touch_geom_08" class="tactile_cell"/><site name="touch_point_08" class="tactile_cell"/></body>
+            <body name="cell_09" pos="-0.00249934338 0.01132084844 0.00507853342"><geom name="touch_geom_09" class="tactile_cell"/><site name="touch_point_09" class="tactile_cell"/></body>
+            <body name="cell_10" pos="-0.00249933351 0.00779999934 0.00507853701"><geom name="touch_geom_10" class="tactile_cell"/><site name="touch_point_10" class="tactile_cell"/></body>
+            <body name="cell_11" pos="0.00000000198 0.01400005624 0.00550000006"><geom name="touch_geom_11" class="tactile_cell"/><site name="touch_point_11" class="tactile_cell"/></body>
+            <body name="cell_12" pos="0.00000000198 0.01132084804 0.00550000006"><geom name="touch_geom_12" class="tactile_cell"/><site name="touch_point_12" class="tactile_cell"/></body>
+            <body name="cell_13" pos="0.00000000199 0.00779999907 0.00550000006"><geom name="touch_geom_13" class="tactile_cell"/><site name="touch_point_13" class="tactile_cell"/></body>
+            <body name="cell_14" pos="0.00000000199 0.00427915006 0.00550000006"><geom name="touch_geom_14" class="tactile_cell"/><site name="touch_point_14" class="tactile_cell"/></body>
+            <body name="cell_15" pos="0.00000000200 0.00159994376 0.00550000006"><geom name="touch_geom_15" class="tactile_cell"/><site name="touch_point_15" class="tactile_cell"/></body>
+            <body name="cell_16" pos="0.00249933351 0.00779999934 0.00507853701"><geom name="touch_geom_16" class="tactile_cell"/><site name="touch_point_16" class="tactile_cell"/></body>
+            <body name="cell_17" pos="0.00249934338 0.01132084844 0.00507853342"><geom name="touch_geom_17" class="tactile_cell"/><site name="touch_point_17" class="tactile_cell"/></body>
+            <body name="cell_18" pos="0.00249934586 0.00427915015 0.00507853251"><geom name="touch_geom_18" class="tactile_cell"/><site name="touch_point_18" class="tactile_cell"/></body>
+            <body name="cell_19" pos="0.00253561768 0.01419409739 0.00506517876"><geom name="touch_geom_19" class="tactile_cell"/><site name="touch_point_19" class="tactile_cell"/></body>
+            <body name="cell_20" pos="0.00253563500 0.00140591643 0.00506517231"><geom name="touch_geom_20" class="tactile_cell"/><site name="touch_point_20" class="tactile_cell"/></body>
+            <body name="cell_21" pos="0.00447460359 0.01484169824 0.00355239788"><geom name="touch_geom_21" class="tactile_cell"/><site name="touch_point_21" class="tactile_cell"/></body>
+            <body name="cell_22" pos="0.00447460505 0.01132084894 0.00355239549"><geom name="touch_geom_22" class="tactile_cell"/><site name="touch_point_22" class="tactile_cell"/></body>
+            <body name="cell_23" pos="0.00447460648 0.00779999960 0.00355239318"><geom name="touch_geom_23" class="tactile_cell"/><site name="touch_point_23" class="tactile_cell"/></body>
+            <body name="cell_24" pos="0.00447460790 0.00427915026 0.00355239087"><geom name="touch_geom_24" class="tactile_cell"/><site name="touch_point_24" class="tactile_cell"/></body>
+            <body name="cell_25" pos="0.00447460887 0.00075830123 0.00355238929"><geom name="touch_geom_25" class="tactile_cell"/><site name="touch_point_25" class="tactile_cell"/></body>
+        </body>
+    </worldbody>
+
+    <sensor>
+        <force name="force_sensor_01" site="touch_point_01" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_02" site="touch_point_02" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_03" site="touch_point_03" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_04" site="touch_point_04" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_05" site="touch_point_05" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_06" site="touch_point_06" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_07" site="touch_point_07" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_08" site="touch_point_08" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_09" site="touch_point_09" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_10" site="touch_point_10" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_11" site="touch_point_11" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_12" site="touch_point_12" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_13" site="touch_point_13" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_14" site="touch_point_14" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_15" site="touch_point_15" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_16" site="touch_point_16" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_17" site="touch_point_17" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_18" site="touch_point_18" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_19" site="touch_point_19" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_20" site="touch_point_20" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_21" site="touch_point_21" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_22" site="touch_point_22" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_23" site="touch_point_23" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_24" site="touch_point_24" cutoff="1000" noise="0.005"/>
+        <force name="force_sensor_25" site="touch_point_25" cutoff="1000" noise="0.005"/>
+
+        <torque name="torque_sensor_01" site="touch_point_01" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_02" site="touch_point_02" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_03" site="touch_point_03" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_04" site="touch_point_04" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_05" site="touch_point_05" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_06" site="touch_point_06" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_07" site="touch_point_07" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_08" site="touch_point_08" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_09" site="touch_point_09" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_10" site="touch_point_10" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_11" site="touch_point_11" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_12" site="touch_point_12" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_13" site="touch_point_13" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_14" site="touch_point_14" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_15" site="touch_point_15" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_16" site="touch_point_16" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_17" site="touch_point_17" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_18" site="touch_point_18" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_19" site="touch_point_19" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_20" site="touch_point_20" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_21" site="touch_point_21" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_22" site="touch_point_22" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_23" site="touch_point_23" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_24" site="touch_point_24" cutoff="1000" noise="0.002"/>
+        <torque name="torque_sensor_25" site="touch_point_25" cutoff="1000" noise="0.002"/>
+    </sensor>
+</mujoco>

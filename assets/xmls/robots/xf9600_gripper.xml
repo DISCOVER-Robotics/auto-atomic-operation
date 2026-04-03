@@ -1,0 +1,808 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="xf9600_gripper">
+  <compiler angle="radian" balanceinertia="true" meshdir="../../meshes/xf9600" texturedir="../../textures/xf9600"/>
+  <option timestep="0.001" gravity="0 0 -9.81" integrator="implicitfast" iterations="80"/>
+
+  <asset>
+    <material name="default_material" rgba="0.7 0.7 0.7 1"/>
+    <material name="collision_material" rgba="1.0 0.28 0.1 0.9"/>
+    <model name="tactile_sensor" file="../sensors/xf9600_tactile_sensor.xml"/>
+  </asset>
+
+  <default>
+    <default class="robot">
+      <joint stiffness="0.0" damping="0.02" frictionloss="0.005" limited="true" />
+      <default class="visual">
+        <geom material="default_material" contype="0" conaffinity="0" group="2" />
+      </default>
+      <default class="collision">
+        <geom material="collision_material" condim="3" contype="2" conaffinity="1" priority="1" group="3"
+              solref="0.015 1" solimp="0.95 0.99 0.001" friction="4 0.8 0.01" margin="0.0" gap="0.0005" />
+
+        <equality solimp="0.95 0.99 0.001" solref="0.015 1" />
+      </default>
+
+      <default class="claw_joint">
+        <joint type="slide" axis="0 0 -1" range=".0 0.01545" damping="0.05" frictionloss="0.002" />
+        <position kp="800" kv="4" ctrlrange=".0 0.04" forcelimited="true" forcerange="-20 20" />
+      </default>
+      <default class="l11j">
+        <joint range="-1.28 1.28" />
+      </default>
+      <default class="l12j">
+        <joint range="-1.28 1.28" />
+      </default>
+      <default class="l61j">
+        <joint range="-1.28 1.28" />
+      </default>
+      <default class="l62j">
+        <joint range="-1.28 1.28" />
+      </default>
+      <default class="l21j">
+        <joint range="-1.28 1.28" />
+      </default>
+      <default class="l22j">
+        <joint range="-1.28 1.28" springref="0" stiffness="2" />
+      </default>
+      <default class="l23j">
+        <joint range="-1.28 1.28" />
+      </default>
+      <default class="l31j">
+        <joint range="-1.28 1.28" />
+      </default>
+      <default class="l32j">
+        <joint range="-1.28 1.28" />
+      </default>
+      <default class="l41j">
+        <joint range="-1.28 1.28" />
+      </default>
+      <default class="l42j">
+        <joint range="-1.28 1.28" />
+      </default>
+      <default class="l51j">
+        <joint range="-1.28 1.28" />
+      </default>
+      <default class="l52j">
+        <joint range="-1.28 1.28" springref="0" stiffness="2" />
+      </default>
+      <default class="l53j">
+        <joint range="-1.28 1.28" />
+      </default>
+    </default>
+    <default class="floor">
+      <geom contype="1" conaffinity="1" group="0" type="plane" size="0 0 0.05" material="groundplane" rgba="1 1 1 0.3" />
+    </default>
+  </default>
+
+  <asset>
+    <mesh name="l53_part1" file="l53_parts/l53_part1.stl" />
+    <mesh name="l53_part2" file="l53_parts/l53_part2.stl" />
+    <mesh name="l53_part3" file="l53_parts/l53_part3.stl" />
+    <mesh name="l53_part4" file="l53_parts/l53_part4.stl" />
+    <mesh name="l53_part5" file="l53_parts/l53_part5.stl" />
+    <mesh name="l53_part6" file="l53_parts/l53_part6.stl" />
+    <mesh name="l53_part7" file="l53_parts/l53_part7.stl" />
+    <mesh name="l53_part8" file="l53_parts/l53_part8.stl" />
+    <mesh name="l53_part9" file="l53_parts/l53_part9.stl" />
+    <mesh name="l53_part10" file="l53_parts/l53_part10.stl" />
+    <mesh name="l53_part11" file="l53_parts/l53_part11.stl" />
+    <mesh name="l53_part12" file="l53_parts/l53_part12.stl" />
+    <mesh name="l53_part13" file="l53_parts/l53_part13.stl" />
+    <mesh name="l53_part14" file="l53_parts/l53_part14.stl" />
+    <mesh name="l53_part15" file="l53_parts/l53_part15.stl" />
+    <mesh name="l53_part16" file="l53_parts/l53_part16.stl" />
+    <mesh name="l53_part17" file="l53_parts/l53_part17.stl" />
+    <mesh name="l53_part18" file="l53_parts/l53_part18.stl" />
+    <mesh name="l53_part19" file="l53_parts/l53_part19.stl" inertia="shell" />
+    <mesh name="l53_part20" file="l53_parts/l53_part20.stl" />
+    <mesh name="l53_part21" file="l53_parts/l53_part21.stl" />
+    <mesh name="l11_part1" file="l11_parts/l11_part1.stl" />
+    <mesh name="l11_part2" file="l11_parts/l11_part2.stl" inertia="shell" />
+    <mesh name="l11_part3" file="l11_parts/l11_part3.stl" />
+    <mesh name="l11_part4" file="l11_parts/l11_part4.stl" />
+    <mesh name="l11_part5" file="l11_parts/l11_part5.stl" />
+    <mesh name="l11_part6" file="l11_parts/l11_part6.stl" inertia="shell" />
+    <mesh name="l11_part7" file="l11_parts/l11_part7.stl" inertia="shell" />
+    <mesh name="l11_part8" file="l11_parts/l11_part8.stl" />
+    <mesh name="l11_part9" file="l11_parts/l11_part9.stl" inertia="shell" />
+    <mesh name="l11_part10" file="l11_parts/l11_part10.stl" inertia="shell" />
+    <mesh name="l11_part11" file="l11_parts/l11_part11.stl" inertia="shell" />
+    <mesh name="l11_part12" file="l11_parts/l11_part12.stl" />
+    <mesh name="l11_part13" file="l11_parts/l11_part13.stl" />
+    <mesh name="l11_part14" file="l11_parts/l11_part14.stl" inertia="shell" />
+    <mesh name="l11_part15" file="l11_parts/l11_part15.stl" />
+    <mesh name="l11_part16" file="l11_parts/l11_part16.stl" />
+    <mesh name="l11_part17" file="l11_parts/l11_part17.stl" />
+    <mesh name="l11_part18" file="l11_parts/l11_part18.stl" inertia="shell" />
+    <mesh name="l11_part19" file="l11_parts/l11_part19.stl" inertia="shell" />
+    <mesh name="l11_part20" file="l11_parts/l11_part20.stl" inertia="shell" />
+    <mesh name="l11_part21" file="l11_parts/l11_part21.stl" />
+    <mesh name="l11_part22" file="l11_parts/l11_part22.stl" />
+    <mesh name="l11_part23" file="l11_parts/l11_part23.stl" inertia="shell" />
+    <mesh name="l11_part24" file="l11_parts/l11_part24.stl" inertia="shell" />
+    <mesh name="l11_part25" file="l11_parts/l11_part25.stl" />
+    <mesh name="l11_part26" file="l11_parts/l11_part26.stl" inertia="shell" />
+    <mesh name="l42_part1" file="l42_parts/l42_part1.stl" />
+    <mesh name="l42_part2" file="l42_parts/l42_part2.stl" />
+    <mesh name="base_link_part1" file="base_link_parts/base_link_part1.stl" />
+    <mesh name="base_link_part2" file="base_link_parts/base_link_part2.stl" />
+    <mesh name="base_link_part3" file="base_link_parts/base_link_part3.stl" />
+    <mesh name="base_link_part4" file="base_link_parts/base_link_part4.stl" />
+    <mesh name="base_link_part5" file="base_link_parts/base_link_part5.stl" />
+    <mesh name="base_link_part6" file="base_link_parts/base_link_part6.stl" />
+    <mesh name="base_link_part7" file="base_link_parts/base_link_part7.stl" inertia="shell" />
+    <mesh name="base_link_part8" file="base_link_parts/base_link_part8.stl" />
+    <mesh name="base_link_part9" file="base_link_parts/base_link_part9.stl" />
+    <mesh name="base_link_part10" file="base_link_parts/base_link_part10.stl" />
+    <mesh name="base_link_part11" file="base_link_parts/base_link_part11.stl" />
+    <mesh name="base_link_part12" file="base_link_parts/base_link_part12.stl" />
+    <mesh name="base_link_part13" file="base_link_parts/base_link_part13.stl" />
+    <mesh name="base_link_part14" file="base_link_parts/base_link_part14.stl" />
+    <mesh name="base_link_part15" file="base_link_parts/base_link_part15.stl" />
+    <mesh name="base_link_part16" file="base_link_parts/base_link_part16.stl" />
+    <mesh name="base_link_part17" file="base_link_parts/base_link_part17.stl" />
+    <mesh name="base_link_part18" file="base_link_parts/base_link_part18.stl" />
+    <mesh name="base_link_part19" file="base_link_parts/base_link_part19.stl" />
+    <mesh name="base_link_part20" file="base_link_parts/base_link_part20.stl" />
+    <mesh name="base_link_part21" file="base_link_parts/base_link_part21.stl" />
+    <mesh name="base_link_part22" file="base_link_parts/base_link_part22.stl" />
+    <mesh name="base_link_part23" file="base_link_parts/base_link_part23.stl" />
+    <mesh name="base_link_part24" file="base_link_parts/base_link_part24.stl" />
+    <mesh name="base_link_part25" file="base_link_parts/base_link_part25.stl" />
+    <mesh name="base_link_part26" file="base_link_parts/base_link_part26.stl" />
+    <mesh name="base_link_part27" file="base_link_parts/base_link_part27.stl" inertia="shell" />
+    <mesh name="base_link_part28" file="base_link_parts/base_link_part28.stl" />
+    <mesh name="base_link_part29" file="base_link_parts/base_link_part29.stl" />
+    <mesh name="base_link_part30" file="base_link_parts/base_link_part30.stl" />
+    <mesh name="base_link_part31" file="base_link_parts/base_link_part31.stl" />
+    <mesh name="base_link_part32" file="base_link_parts/base_link_part32.stl" />
+    <mesh name="base_link_part33" file="base_link_parts/base_link_part33.stl" />
+    <mesh name="base_link_part34" file="base_link_parts/base_link_part34.stl" />
+    <mesh name="base_link_part35" file="base_link_parts/base_link_part35.stl" />
+    <mesh name="base_link_part36" file="base_link_parts/base_link_part36.stl" />
+    <mesh name="base_link_part37" file="base_link_parts/base_link_part37.stl" />
+    <mesh name="base_link_part38" file="base_link_parts/base_link_part38.stl" />
+    <mesh name="base_link_part39" file="base_link_parts/base_link_part39.stl" />
+    <mesh name="base_link_part40" file="base_link_parts/base_link_part40.stl" />
+    <mesh name="base_link_part41" file="base_link_parts/base_link_part41.stl" />
+    <mesh name="base_link_part42" file="base_link_parts/base_link_part42.stl" />
+    <mesh name="base_link_part43" file="base_link_parts/base_link_part43.stl" />
+    <mesh name="base_link_part44" file="base_link_parts/base_link_part44.stl" />
+    <mesh name="base_link_part45" file="base_link_parts/base_link_part45.stl" />
+    <mesh name="base_link_part46" file="base_link_parts/base_link_part46.stl" />
+    <mesh name="base_link_part47" file="base_link_parts/base_link_part47.stl" />
+    <mesh name="base_link_part48" file="base_link_parts/base_link_part48.stl" />
+    <mesh name="base_link_part49" file="base_link_parts/base_link_part49.stl" />
+    <mesh name="base_link_part50" file="base_link_parts/base_link_part50.stl" />
+    <mesh name="base_link_part51" file="base_link_parts/base_link_part51.stl" />
+    <mesh name="base_link_part52" file="base_link_parts/base_link_part52.stl" inertia="shell" />
+    <mesh name="base_link_part53" file="base_link_parts/base_link_part53.stl" />
+    <mesh name="base_link_part54" file="base_link_parts/base_link_part54.stl" />
+    <mesh name="base_link_part55" file="base_link_parts/base_link_part55.stl" />
+    <mesh name="base_link_part56" file="base_link_parts/base_link_part56.stl" />
+    <mesh name="base_link_part57" file="base_link_parts/base_link_part57.stl" />
+    <mesh name="base_link_part58" file="base_link_parts/base_link_part58.stl" />
+    <mesh name="base_link_part59" file="base_link_parts/base_link_part59.stl" />
+    <mesh name="base_link_part60" file="base_link_parts/base_link_part60.stl" />
+    <mesh name="base_link_part61" file="base_link_parts/base_link_part61.stl" />
+    <mesh name="base_link_part62" file="base_link_parts/base_link_part62.stl" />
+    <mesh name="base_link_part63" file="base_link_parts/base_link_part63.stl" />
+    <mesh name="base_link_part64" file="base_link_parts/base_link_part64.stl" />
+    <mesh name="base_link_part65" file="base_link_parts/base_link_part65.stl" />
+    <mesh name="base_link_part66" file="base_link_parts/base_link_part66.stl" />
+    <mesh name="base_link_part67" file="base_link_parts/base_link_part67.stl" />
+    <mesh name="base_link_part68" file="base_link_parts/base_link_part68.stl" inertia="shell" />
+    <mesh name="base_link_part69" file="base_link_parts/base_link_part69.stl" />
+    <mesh name="base_link_part70" file="base_link_parts/base_link_part70.stl" />
+    <mesh name="base_link_part71" file="base_link_parts/base_link_part71.stl" />
+    <mesh name="base_link_part72" file="base_link_parts/base_link_part72.stl" />
+    <mesh name="base_link_part73" file="base_link_parts/base_link_part73.stl" />
+    <mesh name="base_link_part74" file="base_link_parts/base_link_part74.stl" />
+    <mesh name="base_link_part75" file="base_link_parts/base_link_part75.stl" />
+    <mesh name="base_link_part76" file="base_link_parts/base_link_part76.stl" />
+    <mesh name="base_link_part77" file="base_link_parts/base_link_part77.stl" />
+    <mesh name="base_link_part78" file="base_link_parts/base_link_part78.stl" />
+    <mesh name="base_link_part79" file="base_link_parts/base_link_part79.stl" />
+    <mesh name="base_link_part80" file="base_link_parts/base_link_part80.stl" />
+    <mesh name="base_link_part81" file="base_link_parts/base_link_part81.stl" />
+    <mesh name="base_link_part82" file="base_link_parts/base_link_part82.stl" />
+    <mesh name="base_link_part83" file="base_link_parts/base_link_part83.stl" />
+    <mesh name="base_link_part84" file="base_link_parts/base_link_part84.stl" />
+    <mesh name="base_link_part85" file="base_link_parts/base_link_part85.stl" />
+    <mesh name="base_link_part86" file="base_link_parts/base_link_part86.stl" />
+    <mesh name="base_link_part87" file="base_link_parts/base_link_part87.stl" />
+    <mesh name="base_link_part88" file="base_link_parts/base_link_part88.stl" />
+    <mesh name="base_link_part89" file="base_link_parts/base_link_part89.stl" />
+    <mesh name="base_link_part90" file="base_link_parts/base_link_part90.stl" />
+    <mesh name="base_link_part91" file="base_link_parts/base_link_part91.stl" />
+    <mesh name="base_link_part92" file="base_link_parts/base_link_part92.stl" />
+    <mesh name="base_link_part93" file="base_link_parts/base_link_part93.stl" />
+    <mesh name="base_link_part94" file="base_link_parts/base_link_part94.stl" />
+    <mesh name="base_link_part95" file="base_link_parts/base_link_part95.stl" />
+    <mesh name="base_link_part96" file="base_link_parts/base_link_part96.stl" />
+    <mesh name="base_link_part97" file="base_link_parts/base_link_part97.stl" />
+    <mesh name="base_link_part98" file="base_link_parts/base_link_part98.stl" />
+    <mesh name="base_link_part99" file="base_link_parts/base_link_part99.stl" />
+    <mesh name="base_link_part100" file="base_link_parts/base_link_part100.stl" />
+    <mesh name="base_link_part101" file="base_link_parts/base_link_part101.stl" />
+    <mesh name="base_link_part102" file="base_link_parts/base_link_part102.stl" />
+    <mesh name="base_link_part103" file="base_link_parts/base_link_part103.stl" />
+    <mesh name="base_link_part104" file="base_link_parts/base_link_part104.stl" />
+    <mesh name="base_link_part105" file="base_link_parts/base_link_part105.stl" />
+    <mesh name="base_link_part106" file="base_link_parts/base_link_part106.stl" inertia="shell" />
+    <mesh name="base_link_part107" file="base_link_parts/base_link_part107.stl" />
+    <mesh name="base_link_part108" file="base_link_parts/base_link_part108.stl" />
+    <mesh name="base_link_part109" file="base_link_parts/base_link_part109.stl" />
+    <mesh name="base_link_part110" file="base_link_parts/base_link_part110.stl" />
+    <mesh name="base_link_part111" file="base_link_parts/base_link_part111.stl" />
+    <mesh name="base_link_part112" file="base_link_parts/base_link_part112.stl" />
+    <mesh name="base_link_part113" file="base_link_parts/base_link_part113.stl" />
+    <mesh name="base_link_part114" file="base_link_parts/base_link_part114.stl" />
+    <mesh name="base_link_part115" file="base_link_parts/base_link_part115.stl" />
+    <mesh name="base_link_part116" file="base_link_parts/base_link_part116.stl" />
+    <mesh name="base_link_part117" file="base_link_parts/base_link_part117.stl" />
+    <mesh name="base_link_part118" file="base_link_parts/base_link_part118.stl" />
+    <mesh name="base_link_part119" file="base_link_parts/base_link_part119.stl" />
+    <mesh name="base_link_part120" file="base_link_parts/base_link_part120.stl" />
+    <mesh name="base_link_part121" file="base_link_parts/base_link_part121.stl" />
+    <mesh name="base_link_part122" file="base_link_parts/base_link_part122.stl" />
+    <mesh name="base_link_part123" file="base_link_parts/base_link_part123.stl" />
+    <mesh name="base_link_part124" file="base_link_parts/base_link_part124.stl" />
+    <mesh name="base_link_part125" file="base_link_parts/base_link_part125.stl" />
+    <mesh name="base_link_part126" file="base_link_parts/base_link_part126.stl" />
+    <mesh name="base_link_part127" file="base_link_parts/base_link_part127.stl" />
+    <mesh name="base_link_part128" file="base_link_parts/base_link_part128.stl" />
+    <mesh name="base_link_part129" file="base_link_parts/base_link_part129.stl" />
+    <mesh name="base_link_part130" file="base_link_parts/base_link_part130.stl" />
+    <mesh name="base_link_part131" file="base_link_parts/base_link_part131.stl" />
+    <mesh name="base_link_part132" file="base_link_parts/base_link_part132.stl" />
+    <mesh name="base_link_part133" file="base_link_parts/base_link_part133.stl" />
+    <mesh name="base_link_part134" file="base_link_parts/base_link_part134.stl" />
+    <mesh name="base_link_part135" file="base_link_parts/base_link_part135.stl" inertia="shell" />
+    <mesh name="base_link_part136" file="base_link_parts/base_link_part136.stl" />
+    <mesh name="base_link_part137" file="base_link_parts/base_link_part137.stl" />
+    <mesh name="base_link_part138" file="base_link_parts/base_link_part138.stl" />
+    <mesh name="base_link_part139" file="base_link_parts/base_link_part139.stl" />
+    <mesh name="base_link_part140" file="base_link_parts/base_link_part140.stl" />
+    <mesh name="base_link_part141" file="base_link_parts/base_link_part141.stl" />
+    <mesh name="base_link_part142" file="base_link_parts/base_link_part142.stl" />
+    <mesh name="base_link_part143" file="base_link_parts/base_link_part143.stl" />
+    <mesh name="base_link_part144" file="base_link_parts/base_link_part144.stl" />
+    <mesh name="base_link_part145" file="base_link_parts/base_link_part145.stl" />
+    <mesh name="base_link_part146" file="base_link_parts/base_link_part146.stl" />
+    <mesh name="base_link_part147" file="base_link_parts/base_link_part147.stl" />
+    <mesh name="base_link_part148" file="base_link_parts/base_link_part148.stl" />
+    <mesh name="base_link_part149" file="base_link_parts/base_link_part149.stl" />
+    <mesh name="base_link_part150" file="base_link_parts/base_link_part150.stl" />
+    <mesh name="base_link_part151" file="base_link_parts/base_link_part151.stl" />
+    <mesh name="base_link_part152" file="base_link_parts/base_link_part152.stl" />
+    <mesh name="base_link_part153" file="base_link_parts/base_link_part153.stl" />
+    <mesh name="base_link_part154" file="base_link_parts/base_link_part154.stl" />
+    <mesh name="base_link_part155" file="base_link_parts/base_link_part155.stl" />
+    <mesh name="base_link_part156" file="base_link_parts/base_link_part156.stl" />
+    <mesh name="base_link_part157" file="base_link_parts/base_link_part157.stl" />
+    <mesh name="base_link_part158" file="base_link_parts/base_link_part158.stl" />
+    <mesh name="base_link_part159" file="base_link_parts/base_link_part159.stl" />
+    <mesh name="base_link_part160" file="base_link_parts/base_link_part160.stl" />
+    <mesh name="base_link_part161" file="base_link_parts/base_link_part161.stl" />
+    <mesh name="base_link_part162" file="base_link_parts/base_link_part162.stl" inertia="shell" />
+    <mesh name="base_link_part163" file="base_link_parts/base_link_part163.stl" />
+    <mesh name="base_link_part164" file="base_link_parts/base_link_part164.stl" />
+    <mesh name="base_link_part165" file="base_link_parts/base_link_part165.stl" />
+    <mesh name="base_link_part166" file="base_link_parts/base_link_part166.stl" />
+    <mesh name="base_link_part167" file="base_link_parts/base_link_part167.stl" />
+    <mesh name="base_link_part168" file="base_link_parts/base_link_part168.stl" />
+    <mesh name="base_link_part169" file="base_link_parts/base_link_part169.stl" />
+    <mesh name="base_link_part170" file="base_link_parts/base_link_part170.stl" />
+    <mesh name="base_link_part171" file="base_link_parts/base_link_part171.stl" />
+    <mesh name="base_link_part172" file="base_link_parts/base_link_part172.stl" />
+    <mesh name="base_link_part173" file="base_link_parts/base_link_part173.stl" />
+    <mesh name="base_link_part174" file="base_link_parts/base_link_part174.stl" />
+    <mesh name="base_link_part175" file="base_link_parts/base_link_part175.stl" />
+    <mesh name="base_link_part176" file="base_link_parts/base_link_part176.stl" />
+    <mesh name="base_link_part177" file="base_link_parts/base_link_part177.stl" />
+    <mesh name="base_link_part178" file="base_link_parts/base_link_part178.stl" />
+    <mesh name="base_link_part179" file="base_link_parts/base_link_part179.stl" />
+    <mesh name="base_link_part180" file="base_link_parts/base_link_part180.stl" />
+    <mesh name="base_link_part181" file="base_link_parts/base_link_part181.stl" />
+    <mesh name="base_link_part182" file="base_link_parts/base_link_part182.stl" />
+    <mesh name="base_link_part183" file="base_link_parts/base_link_part183.stl" />
+    <mesh name="base_link_part184" file="base_link_parts/base_link_part184.stl" inertia="shell" />
+    <mesh name="base_link_part185" file="base_link_parts/base_link_part185.stl" />
+    <mesh name="base_link_part186" file="base_link_parts/base_link_part186.stl" />
+    <mesh name="base_link_part187" file="base_link_parts/base_link_part187.stl" />
+    <mesh name="base_link_part188" file="base_link_parts/base_link_part188.stl" />
+    <mesh name="base_link_part189" file="base_link_parts/base_link_part189.stl" />
+    <mesh name="base_link_part190" file="base_link_parts/base_link_part190.stl" />
+    <mesh name="base_link_part191" file="base_link_parts/base_link_part191.stl" />
+    <mesh name="base_link_part192" file="base_link_parts/base_link_part192.stl" />
+    <mesh name="base_link_part193" file="base_link_parts/base_link_part193.stl" />
+    <mesh name="base_link_part194" file="base_link_parts/base_link_part194.stl" />
+    <mesh name="base_link_part195" file="base_link_parts/base_link_part195.stl" />
+    <mesh name="base_link_part196" file="base_link_parts/base_link_part196.stl" />
+    <mesh name="base_link_part197" file="base_link_parts/base_link_part197.stl" />
+    <mesh name="base_link_part198" file="base_link_parts/base_link_part198.stl" />
+    <mesh name="base_link_part199" file="base_link_parts/base_link_part199.stl" inertia="shell" />
+    <mesh name="base_link_part200" file="base_link_parts/base_link_part200.stl" inertia="shell" />
+    <mesh name="base_link_part201" file="base_link_parts/base_link_part201.stl" />
+    <mesh name="base_link_part202" file="base_link_parts/base_link_part202.stl" />
+    <mesh name="base_link_part203" file="base_link_parts/base_link_part203.stl" />
+    <mesh name="base_link_part204" file="base_link_parts/base_link_part204.stl" />
+    <mesh name="base_link_part205" file="base_link_parts/base_link_part205.stl" />
+    <mesh name="base_link_part206" file="base_link_parts/base_link_part206.stl" />
+    <mesh name="base_link_part207" file="base_link_parts/base_link_part207.stl" />
+    <mesh name="base_link_part208" file="base_link_parts/base_link_part208.stl" inertia="shell" />
+    <mesh name="base_link_part209" file="base_link_parts/base_link_part209.stl" inertia="shell" />
+    <mesh name="base_link_part210" file="base_link_parts/base_link_part210.stl" />
+    <mesh name="base_link_part211" file="base_link_parts/base_link_part211.stl" />
+    <mesh name="l22_part1" file="l22_parts/l22_part1.stl" inertia="shell" />
+    <mesh name="l22_part2" file="l22_parts/l22_part2.stl" />
+    <mesh name="l22_part3" file="l22_parts/l22_part3.stl" />
+    <mesh name="l22_part4" file="l22_parts/l22_part4.stl" />
+    <mesh name="l22_part5" file="l22_parts/l22_part5.stl" inertia="shell" />
+    <mesh name="l22_part6" file="l22_parts/l22_part6.stl" />
+    <mesh name="l22_part7" file="l22_parts/l22_part7.stl" />
+    <mesh name="l22_part8" file="l22_parts/l22_part8.stl" />
+    <mesh name="l22_part9" file="l22_parts/l22_part9.stl" />
+    <mesh name="l22_part10" file="l22_parts/l22_part10.stl" />
+    <mesh name="l22_part11" file="l22_parts/l22_part11.stl" />
+    <mesh name="l22_part12" file="l22_parts/l22_part12.stl" />
+    <mesh name="l22_part13" file="l22_parts/l22_part13.stl" />
+    <mesh name="l22_part14" file="l22_parts/l22_part14.stl" />
+    <mesh name="l22_part15" file="l22_parts/l22_part15.stl" />
+    <mesh name="l22_part16" file="l22_parts/l22_part16.stl" />
+    <mesh name="l22_part17" file="l22_parts/l22_part17.stl" />
+    <mesh name="l22_part18" file="l22_parts/l22_part18.stl" />
+    <mesh name="l22_part19" file="l22_parts/l22_part19.stl" />
+    <mesh name="l22_part20" file="l22_parts/l22_part20.stl" />
+    <mesh name="l22_part21" file="l22_parts/l22_part21.stl" />
+    <mesh name="l22_part22" file="l22_parts/l22_part22.stl" inertia="shell" />
+    <mesh name="l61_part1" file="l61_parts/l61_part1.stl" />
+    <mesh name="l61_part2" file="l61_parts/l61_part2.stl" inertia="shell" />
+    <mesh name="l61_part3" file="l61_parts/l61_part3.stl" />
+    <mesh name="l61_part4" file="l61_parts/l61_part4.stl" />
+    <mesh name="l61_part5" file="l61_parts/l61_part5.stl" />
+    <mesh name="l61_part6" file="l61_parts/l61_part6.stl" />
+    <mesh name="l61_part7" file="l61_parts/l61_part7.stl" inertia="shell" />
+    <mesh name="l61_part8" file="l61_parts/l61_part8.stl" />
+    <mesh name="l61_part9" file="l61_parts/l61_part9.stl" inertia="shell" />
+    <mesh name="l61_part10" file="l61_parts/l61_part10.stl" />
+    <mesh name="l61_part11" file="l61_parts/l61_part11.stl" />
+    <mesh name="l61_part12" file="l61_parts/l61_part12.stl" />
+    <mesh name="l61_part13" file="l61_parts/l61_part13.stl" inertia="shell" />
+    <mesh name="l61_part14" file="l61_parts/l61_part14.stl" />
+    <mesh name="l61_part15" file="l61_parts/l61_part15.stl" inertia="shell" />
+    <mesh name="l61_part16" file="l61_parts/l61_part16.stl" inertia="shell" />
+    <mesh name="l61_part17" file="l61_parts/l61_part17.stl" inertia="shell" />
+    <mesh name="l61_part18" file="l61_parts/l61_part18.stl" inertia="shell" />
+    <mesh name="l61_part19" file="l61_parts/l61_part19.stl" />
+    <mesh name="l61_part20" file="l61_parts/l61_part20.stl" />
+    <mesh name="l61_part21" file="l61_parts/l61_part21.stl" />
+    <mesh name="left_tactile_part1" file="left_tactile_parts/left_tactile_part1.stl" />
+    <mesh name="left_tactile_part2" file="left_tactile_parts/left_tactile_part2.stl" />
+    <mesh name="left_tactile_part3" file="left_tactile_parts/left_tactile_part3.stl" />
+    <mesh name="left_tactile_part4" file="left_tactile_parts/left_tactile_part4.stl" />
+    <mesh name="left_tactile_part5" file="left_tactile_parts/left_tactile_part5.stl" />
+    <mesh name="left_tactile_part6" file="left_tactile_parts/left_tactile_part6.stl" />
+    <mesh name="left_tactile_part7" file="left_tactile_parts/left_tactile_part7.stl" />
+    <mesh name="left_tactile_part8" file="left_tactile_parts/left_tactile_part8.stl" />
+    <mesh name="left_tactile_part9" file="left_tactile_parts/left_tactile_part9.stl" />
+    <mesh name="left_tactile_part10" file="left_tactile_parts/left_tactile_part10.stl" inertia="shell" />
+    <mesh name="left_tactile_part11" file="left_tactile_parts/left_tactile_part11.stl" />
+    <mesh name="left_tactile_part12" file="left_tactile_parts/left_tactile_part12.stl" inertia="shell" />
+    <mesh name="left_tactile_part13" file="left_tactile_parts/left_tactile_part13.stl" />
+    <mesh name="left_tactile_part14" file="left_tactile_parts/left_tactile_part14.stl" />
+    <mesh name="left_tactile_part15" file="left_tactile_parts/left_tactile_part15.stl" />
+    <mesh name="left_tactile_part16" file="left_tactile_parts/left_tactile_part16.stl" />
+    <mesh name="left_tactile_part17" file="left_tactile_parts/left_tactile_part17.stl" />
+    <mesh name="left_tactile_part18" file="left_tactile_parts/left_tactile_part18.stl" inertia="shell" />
+    <mesh name="left_tactile_part19" file="left_tactile_parts/left_tactile_part19.stl" />
+    <mesh name="left_tactile_part20" file="left_tactile_parts/left_tactile_part20.stl" />
+    <mesh name="left_tactile_part21" file="left_tactile_parts/left_tactile_part21.stl" />
+    <mesh name="left_tactile_part22" file="left_tactile_parts/left_tactile_part22.stl" inertia="shell" />
+    <mesh name="left_tactile_part23" file="left_tactile_parts/left_tactile_part23.stl" inertia="shell" />
+    <mesh name="left_tactile_part24" file="left_tactile_parts/left_tactile_part24.stl" />
+    <mesh name="left_tactile_part25" file="left_tactile_parts/left_tactile_part25.stl" inertia="shell" />
+    <mesh name="left_tactile_part26" file="left_tactile_parts/left_tactile_part26.stl" inertia="shell" />
+    <mesh name="left_tactile_part27" file="left_tactile_parts/left_tactile_part27.stl" inertia="shell" />
+    <mesh name="left_tactile_part28" file="left_tactile_parts/left_tactile_part28.stl" inertia="shell" />
+    <mesh name="left_tactile_part29" file="left_tactile_parts/left_tactile_part29.stl" inertia="shell" />
+    <mesh name="left_tactile_part30" file="left_tactile_parts/left_tactile_part30.stl" inertia="shell" />
+    <mesh name="left_tactile_part31" file="left_tactile_parts/left_tactile_part31.stl" />
+    <mesh name="left_tactile_part32" file="left_tactile_parts/left_tactile_part32.stl" />
+    <mesh name="left_tactile_part33" file="left_tactile_parts/left_tactile_part33.stl" inertia="shell" />
+    <mesh name="left_tactile_part34" file="left_tactile_parts/left_tactile_part34.stl" inertia="shell" />
+    <mesh name="l32_part1" file="l32_parts/l32_part1.stl" />
+    <mesh name="l32_part2" file="l32_parts/l32_part2.stl" />
+    <mesh name="l23_part1" file="l23_parts/l23_part1.stl" />
+    <mesh name="l23_part2" file="l23_parts/l23_part2.stl" />
+    <mesh name="l23_part3" file="l23_parts/l23_part3.stl" />
+    <mesh name="l23_part4" file="l23_parts/l23_part4.stl" />
+    <mesh name="l23_part5" file="l23_parts/l23_part5.stl" />
+    <mesh name="l23_part6" file="l23_parts/l23_part6.stl" />
+    <mesh name="l23_part7" file="l23_parts/l23_part7.stl" />
+    <mesh name="l23_part8" file="l23_parts/l23_part8.stl" />
+    <mesh name="l23_part9" file="l23_parts/l23_part9.stl" />
+    <mesh name="l23_part10" file="l23_parts/l23_part10.stl" />
+    <mesh name="l23_part11" file="l23_parts/l23_part11.stl" inertia="shell" />
+    <mesh name="l23_part12" file="l23_parts/l23_part12.stl" />
+    <mesh name="l23_part13" file="l23_parts/l23_part13.stl" />
+    <mesh name="l23_part14" file="l23_parts/l23_part14.stl" />
+    <mesh name="l23_part15" file="l23_parts/l23_part15.stl" />
+    <mesh name="l23_part16" file="l23_parts/l23_part16.stl" />
+    <mesh name="l23_part17" file="l23_parts/l23_part17.stl" />
+    <mesh name="l23_part18" file="l23_parts/l23_part18.stl" />
+    <mesh name="l23_part19" file="l23_parts/l23_part19.stl" />
+    <mesh name="l23_part20" file="l23_parts/l23_part20.stl" />
+    <mesh name="l23_part21" file="l23_parts/l23_part21.stl" />
+    <mesh name="l23_part22" file="l23_parts/l23_part22.stl" />
+    <mesh name="l23_part23" file="l23_parts/l23_part23.stl" />
+    <mesh name="l23_part24" file="l23_parts/l23_part24.stl" />
+    <mesh name="l12_part1" file="l12_parts/l12_part1.stl" />
+    <mesh name="l12_part2" file="l12_parts/l12_part2.stl" inertia="shell" />
+    <mesh name="right_tactile_part1" file="right_tactile_parts/right_tactile_part1.stl" />
+    <mesh name="right_tactile_part2" file="right_tactile_parts/right_tactile_part2.stl" />
+    <mesh name="right_tactile_part3" file="right_tactile_parts/right_tactile_part3.stl" />
+    <mesh name="right_tactile_part4" file="right_tactile_parts/right_tactile_part4.stl" />
+    <mesh name="right_tactile_part5" file="right_tactile_parts/right_tactile_part5.stl" />
+    <mesh name="right_tactile_part6" file="right_tactile_parts/right_tactile_part6.stl" />
+    <mesh name="right_tactile_part7" file="right_tactile_parts/right_tactile_part7.stl" />
+    <mesh name="right_tactile_part8" file="right_tactile_parts/right_tactile_part8.stl" />
+    <mesh name="right_tactile_part9" file="right_tactile_parts/right_tactile_part9.stl" />
+    <mesh name="right_tactile_part10" file="right_tactile_parts/right_tactile_part10.stl" />
+    <mesh name="right_tactile_part11" file="right_tactile_parts/right_tactile_part11.stl" inertia="shell" />
+    <mesh name="right_tactile_part12" file="right_tactile_parts/right_tactile_part12.stl" />
+    <mesh name="right_tactile_part13" file="right_tactile_parts/right_tactile_part13.stl" />
+    <mesh name="right_tactile_part14" file="right_tactile_parts/right_tactile_part14.stl" inertia="shell" />
+    <mesh name="right_tactile_part15" file="right_tactile_parts/right_tactile_part15.stl" inertia="shell" />
+    <mesh name="right_tactile_part16" file="right_tactile_parts/right_tactile_part16.stl" inertia="shell" />
+    <mesh name="right_tactile_part17" file="right_tactile_parts/right_tactile_part17.stl" />
+    <mesh name="right_tactile_part18" file="right_tactile_parts/right_tactile_part18.stl" />
+    <mesh name="right_tactile_part19" file="right_tactile_parts/right_tactile_part19.stl" inertia="shell" />
+    <mesh name="right_tactile_part20" file="right_tactile_parts/right_tactile_part20.stl" inertia="shell" />
+    <mesh name="right_tactile_part21" file="right_tactile_parts/right_tactile_part21.stl" />
+    <mesh name="right_tactile_part22" file="right_tactile_parts/right_tactile_part22.stl" />
+    <mesh name="right_tactile_part23" file="right_tactile_parts/right_tactile_part23.stl" />
+    <mesh name="right_tactile_part24" file="right_tactile_parts/right_tactile_part24.stl" />
+    <mesh name="right_tactile_part25" file="right_tactile_parts/right_tactile_part25.stl" inertia="shell" />
+    <mesh name="right_tactile_part26" file="right_tactile_parts/right_tactile_part26.stl" inertia="shell" />
+    <mesh name="right_tactile_part27" file="right_tactile_parts/right_tactile_part27.stl" />
+    <mesh name="right_tactile_part28" file="right_tactile_parts/right_tactile_part28.stl" inertia="shell" />
+    <mesh name="right_tactile_part29" file="right_tactile_parts/right_tactile_part29.stl" inertia="shell" />
+    <mesh name="right_tactile_part30" file="right_tactile_parts/right_tactile_part30.stl" inertia="shell" />
+    <mesh name="right_tactile_part31" file="right_tactile_parts/right_tactile_part31.stl" />
+    <mesh name="right_tactile_part32" file="right_tactile_parts/right_tactile_part32.stl" />
+    <mesh name="right_tactile_part33" file="right_tactile_parts/right_tactile_part33.stl" inertia="shell" />
+    <mesh name="right_tactile_part34" file="right_tactile_parts/right_tactile_part34.stl" inertia="shell" />
+    <mesh name="claw_part1" file="claw_parts/claw_part1.stl" />
+    <mesh name="claw_part2" file="claw_parts/claw_part2.stl" />
+    <mesh name="claw_part3" file="claw_parts/claw_part3.stl" />
+    <mesh name="claw_part4" file="claw_parts/claw_part4.stl" />
+    <mesh name="claw_part5" file="claw_parts/claw_part5.stl" />
+    <mesh name="claw_part6" file="claw_parts/claw_part6.stl" />
+    <mesh name="claw_part7" file="claw_parts/claw_part7.stl" inertia="shell" />
+    <mesh name="claw_part8" file="claw_parts/claw_part8.stl" />
+    <mesh name="claw_part9" file="claw_parts/claw_part9.stl" />
+    <mesh name="claw_part10" file="claw_parts/claw_part10.stl" />
+    <mesh name="l41_part1" file="l41_parts/l41_part1.stl" />
+    <mesh name="l41_part2" file="l41_parts/l41_part2.stl" />
+    <mesh name="l41_part3" file="l41_parts/l41_part3.stl" />
+    <mesh name="l41_part4" file="l41_parts/l41_part4.stl" />
+    <mesh name="l41_part5" file="l41_parts/l41_part5.stl" inertia="shell" />
+    <mesh name="l41_part6" file="l41_parts/l41_part6.stl" />
+    <mesh name="l41_part7" file="l41_parts/l41_part7.stl" />
+    <mesh name="l41_part8" file="l41_parts/l41_part8.stl" />
+    <mesh name="l41_part9" file="l41_parts/l41_part9.stl" />
+    <mesh name="l41_part10" file="l41_parts/l41_part10.stl" />
+    <mesh name="l51_part1" file="l51_parts/l51_part1.stl" />
+    <mesh name="l51_part2" file="l51_parts/l51_part2.stl" />
+    <mesh name="l51_part3" file="l51_parts/l51_part3.stl" />
+    <mesh name="l51_part4" file="l51_parts/l51_part4.stl" />
+    <mesh name="l51_part5" file="l51_parts/l51_part5.stl" />
+    <mesh name="l51_part6" file="l51_parts/l51_part6.stl" />
+    <mesh name="l51_part7" file="l51_parts/l51_part7.stl" inertia="shell" />
+    <mesh name="l51_part8" file="l51_parts/l51_part8.stl" />
+    <mesh name="l51_part9" file="l51_parts/l51_part9.stl" />
+    <mesh name="l51_part10" file="l51_parts/l51_part10.stl" inertia="shell" />
+    <mesh name="l51_part11" file="l51_parts/l51_part11.stl" />
+    <mesh name="l51_part12" file="l51_parts/l51_part12.stl" />
+    <mesh name="l51_part13" file="l51_parts/l51_part13.stl" />
+    <mesh name="l51_part14" file="l51_parts/l51_part14.stl" inertia="shell" />
+    <mesh name="l51_part15" file="l51_parts/l51_part15.stl" />
+    <mesh name="l51_part16" file="l51_parts/l51_part16.stl" />
+    <mesh name="l51_part17" file="l51_parts/l51_part17.stl" />
+    <mesh name="l51_part18" file="l51_parts/l51_part18.stl" inertia="shell" />
+    <mesh name="l51_part19" file="l51_parts/l51_part19.stl" />
+    <mesh name="l51_part20" file="l51_parts/l51_part20.stl" />
+    <mesh name="l51_part21" file="l51_parts/l51_part21.stl" />
+    <mesh name="l51_part22" file="l51_parts/l51_part22.stl" />
+    <mesh name="l51_part23" file="l51_parts/l51_part23.stl" />
+    <mesh name="l51_part24" file="l51_parts/l51_part24.stl" />
+    <mesh name="l51_part25" file="l51_parts/l51_part25.stl" />
+    <mesh name="l51_part26" file="l51_parts/l51_part26.stl" inertia="shell" />
+    <mesh name="l51_part27" file="l51_parts/l51_part27.stl" />
+    <mesh name="l51_part28" file="l51_parts/l51_part28.stl" />
+    <mesh name="l51_part29" file="l51_parts/l51_part29.stl" />
+    <mesh name="l51_part30" file="l51_parts/l51_part30.stl" />
+    <mesh name="l51_part31" file="l51_parts/l51_part31.stl" />
+    <mesh name="l51_part32" file="l51_parts/l51_part32.stl" inertia="shell" />
+    <mesh name="l51_part33" file="l51_parts/l51_part33.stl" />
+    <mesh name="l51_part34" file="l51_parts/l51_part34.stl" />
+    <mesh name="l51_part35" file="l51_parts/l51_part35.stl" inertia="shell" />
+    <mesh name="l51_part36" file="l51_parts/l51_part36.stl" />
+    <mesh name="l51_part37" file="l51_parts/l51_part37.stl" />
+    <mesh name="l51_part38" file="l51_parts/l51_part38.stl" inertia="shell" />
+    <mesh name="l51_part39" file="l51_parts/l51_part39.stl" inertia="shell" />
+    <mesh name="l51_part40" file="l51_parts/l51_part40.stl" />
+    <mesh name="l51_part41" file="l51_parts/l51_part41.stl" />
+    <mesh name="l51_part42" file="l51_parts/l51_part42.stl" />
+    <mesh name="l51_part43" file="l51_parts/l51_part43.stl" />
+    <mesh name="l51_part44" file="l51_parts/l51_part44.stl" />
+    <mesh name="l51_part45" file="l51_parts/l51_part45.stl" />
+    <mesh name="l51_part46" file="l51_parts/l51_part46.stl" />
+    <mesh name="l51_part47" file="l51_parts/l51_part47.stl" />
+    <mesh name="l51_part48" file="l51_parts/l51_part48.stl" />
+    <mesh name="l51_part49" file="l51_parts/l51_part49.stl" inertia="shell" />
+    <mesh name="l51_part50" file="l51_parts/l51_part50.stl" inertia="shell" />
+    <mesh name="l51_part51" file="l51_parts/l51_part51.stl" />
+    <mesh name="l51_part52" file="l51_parts/l51_part52.stl" />
+    <mesh name="l51_part53" file="l51_parts/l51_part53.stl" />
+    <mesh name="l51_part54" file="l51_parts/l51_part54.stl" />
+    <mesh name="l62_part1" file="l62_parts/l62_part1.stl" />
+    <mesh name="l62_part2" file="l62_parts/l62_part2.stl" />
+    <mesh name="l31_part1" file="l31_parts/l31_part1.stl" />
+    <mesh name="l31_part2" file="l31_parts/l31_part2.stl" />
+    <mesh name="l31_part3" file="l31_parts/l31_part3.stl" />
+    <mesh name="l31_part4" file="l31_parts/l31_part4.stl" />
+    <mesh name="l31_part5" file="l31_parts/l31_part5.stl" />
+    <mesh name="l31_part6" file="l31_parts/l31_part6.stl" inertia="shell" />
+    <mesh name="l31_part7" file="l31_parts/l31_part7.stl" />
+    <mesh name="l31_part8" file="l31_parts/l31_part8.stl" />
+    <mesh name="l31_part9" file="l31_parts/l31_part9.stl" />
+    <mesh name="l31_part10" file="l31_parts/l31_part10.stl" />
+    <mesh name="l21_part1" file="l21_parts/l21_part1.stl" />
+    <mesh name="l21_part2" file="l21_parts/l21_part2.stl" />
+    <mesh name="l21_part3" file="l21_parts/l21_part3.stl" />
+    <mesh name="l21_part4" file="l21_parts/l21_part4.stl" inertia="shell" />
+    <mesh name="l21_part5" file="l21_parts/l21_part5.stl" />
+    <mesh name="l21_part6" file="l21_parts/l21_part6.stl" />
+    <mesh name="l21_part7" file="l21_parts/l21_part7.stl" inertia="shell" />
+    <mesh name="l21_part8" file="l21_parts/l21_part8.stl" inertia="shell" />
+    <mesh name="l21_part9" file="l21_parts/l21_part9.stl" />
+    <mesh name="l21_part10" file="l21_parts/l21_part10.stl" />
+    <mesh name="l21_part11" file="l21_parts/l21_part11.stl" inertia="shell" />
+    <mesh name="l21_part12" file="l21_parts/l21_part12.stl" />
+    <mesh name="l21_part13" file="l21_parts/l21_part13.stl" inertia="shell" />
+    <mesh name="l21_part14" file="l21_parts/l21_part14.stl" />
+    <mesh name="l21_part15" file="l21_parts/l21_part15.stl" inertia="shell" />
+    <mesh name="l21_part16" file="l21_parts/l21_part16.stl" />
+    <mesh name="l21_part17" file="l21_parts/l21_part17.stl" />
+    <mesh name="l21_part18" file="l21_parts/l21_part18.stl" />
+    <mesh name="l21_part19" file="l21_parts/l21_part19.stl" />
+    <mesh name="l21_part20" file="l21_parts/l21_part20.stl" />
+    <mesh name="l21_part21" file="l21_parts/l21_part21.stl" />
+    <mesh name="l21_part22" file="l21_parts/l21_part22.stl" />
+    <mesh name="l21_part23" file="l21_parts/l21_part23.stl" />
+    <mesh name="l21_part24" file="l21_parts/l21_part24.stl" inertia="shell" />
+    <mesh name="l21_part25" file="l21_parts/l21_part25.stl" />
+    <mesh name="l21_part26" file="l21_parts/l21_part26.stl" />
+    <mesh name="l21_part27" file="l21_parts/l21_part27.stl" inertia="shell" />
+    <mesh name="l21_part28" file="l21_parts/l21_part28.stl" />
+    <mesh name="l21_part29" file="l21_parts/l21_part29.stl" inertia="shell" />
+    <mesh name="l21_part30" file="l21_parts/l21_part30.stl" />
+    <mesh name="l21_part31" file="l21_parts/l21_part31.stl" />
+    <mesh name="l21_part32" file="l21_parts/l21_part32.stl" />
+    <mesh name="l21_part33" file="l21_parts/l21_part33.stl" />
+    <mesh name="l21_part34" file="l21_parts/l21_part34.stl" />
+    <mesh name="l21_part35" file="l21_parts/l21_part35.stl" />
+    <mesh name="l21_part36" file="l21_parts/l21_part36.stl" inertia="shell" />
+    <mesh name="l21_part37" file="l21_parts/l21_part37.stl" />
+    <mesh name="l21_part38" file="l21_parts/l21_part38.stl" />
+    <mesh name="l21_part39" file="l21_parts/l21_part39.stl" inertia="shell" />
+    <mesh name="l21_part40" file="l21_parts/l21_part40.stl" />
+    <mesh name="l21_part41" file="l21_parts/l21_part41.stl" />
+    <mesh name="l21_part42" file="l21_parts/l21_part42.stl" />
+    <mesh name="l21_part43" file="l21_parts/l21_part43.stl" />
+    <mesh name="l21_part44" file="l21_parts/l21_part44.stl" inertia="shell" />
+    <mesh name="l21_part45" file="l21_parts/l21_part45.stl" />
+    <mesh name="l21_part46" file="l21_parts/l21_part46.stl" />
+    <mesh name="l21_part47" file="l21_parts/l21_part47.stl" />
+    <mesh name="l21_part48" file="l21_parts/l21_part48.stl" />
+    <mesh name="l21_part49" file="l21_parts/l21_part49.stl" inertia="shell" />
+    <mesh name="l21_part50" file="l21_parts/l21_part50.stl" />
+    <mesh name="l21_part51" file="l21_parts/l21_part51.stl" />
+    <mesh name="l21_part52" file="l21_parts/l21_part52.stl" inertia="shell" />
+    <mesh name="l21_part53" file="l21_parts/l21_part53.stl" inertia="shell" />
+    <mesh name="l21_part54" file="l21_parts/l21_part54.stl" />
+    <mesh name="l21_part55" file="l21_parts/l21_part55.stl" />
+    <mesh name="l52_part1" file="l52_parts/l52_part1.stl" />
+    <mesh name="l52_part2" file="l52_parts/l52_part2.stl" />
+    <mesh name="l52_part3" file="l52_parts/l52_part3.stl" />
+    <mesh name="l52_part4" file="l52_parts/l52_part4.stl" />
+    <mesh name="l52_part5" file="l52_parts/l52_part5.stl" inertia="shell" />
+    <mesh name="l52_part6" file="l52_parts/l52_part6.stl" />
+    <mesh name="l52_part7" file="l52_parts/l52_part7.stl" inertia="shell" />
+    <mesh name="l52_part8" file="l52_parts/l52_part8.stl" />
+    <mesh name="l52_part9" file="l52_parts/l52_part9.stl" inertia="shell" />
+    <mesh name="l52_part10" file="l52_parts/l52_part10.stl" />
+    <mesh name="l52_part11" file="l52_parts/l52_part11.stl" />
+    <mesh name="l52_part12" file="l52_parts/l52_part12.stl" />
+    <mesh name="l52_part13" file="l52_parts/l52_part13.stl" />
+    <mesh name="l52_part14" file="l52_parts/l52_part14.stl" inertia="shell" />
+    <mesh name="l52_part15" file="l52_parts/l52_part15.stl" />
+    <mesh name="l52_part16" file="l52_parts/l52_part16.stl" />
+    <mesh name="l52_part17" file="l52_parts/l52_part17.stl" />
+    <mesh name="l52_part18" file="l52_parts/l52_part18.stl" />
+    <mesh name="l52_part19" file="l52_parts/l52_part19.stl" inertia="shell" />
+    <mesh name="l52_part20" file="l52_parts/l52_part20.stl" inertia="shell" />
+    <mesh name="l52_part21" file="l52_parts/l52_part21.stl" />
+    <mesh name="l52_part22" file="l52_parts/l52_part22.stl" />
+    <mesh name="l52_part23" file="l52_parts/l52_part23.stl" />
+    <mesh name="left_cam_part1" file="left_cam_parts/left_cam_part1.stl" />
+    <mesh name="left_cam_part2" file="left_cam_parts/left_cam_part2.stl" />
+    <mesh name="left_cam_part3" file="left_cam_parts/left_cam_part3.stl" />
+    <mesh name="left_cam_part4" file="left_cam_parts/left_cam_part4.stl" />
+    <mesh name="right_cam_part1" file="right_cam_parts/right_cam_part1.stl" />
+    <mesh name="right_cam_part2" file="right_cam_parts/right_cam_part2.stl" />
+    <mesh name="right_cam_part3" file="right_cam_parts/right_cam_part3.stl" />
+    <mesh name="right_cam_part4" file="right_cam_parts/right_cam_part4.stl" />
+    <mesh name="base_link.STL" file="base_link.STL" />
+    <mesh name="claw.STL" file="claw.STL" />
+    <mesh name="l11.STL" file="l11.STL" />
+    <mesh name="l12.STL" file="l12.STL" />
+    <mesh name="l61.STL" file="l61.STL" />
+    <mesh name="l62.STL" file="l62.STL" />
+    <mesh name="l21.STL" file="l21.STL" />
+    <mesh name="l22.STL" file="l22.STL" />
+    <mesh name="l23.STL" file="l23.STL" />
+    <mesh name="l31.STL" file="l31.STL" />
+    <mesh name="l32.STL" file="l32.STL" />
+    <mesh name="l41.STL" file="l41.STL" />
+    <mesh name="l42.STL" file="l42.STL" />
+    <mesh name="l51.STL" file="l51.STL" />
+    <mesh name="l52.STL" file="l52.STL" />
+    <mesh name="l53.STL" file="l53.STL" />
+    <mesh name="left_cam.STL" file="left_cam.STL" />
+    <mesh name="right_cam.STL" file="right_cam.STL" />
+    <mesh name="left_tactile.STL" file="left_tactile.STL" />
+    <mesh name="right_tactile.STL" file="right_tactile.STL" />
+  </asset>
+
+  <actuator>
+    <position name="claw_joint" joint="clawj" class="claw_joint" />
+  </actuator>
+
+  <equality>
+    <connect body2="l51" body1="l11" anchor="-0.015601 -0.0035525 0" class="collision" />
+    <connect body2="l21" body1="l61" anchor="-0.015601 0.0035525 0" class="collision" />
+    <connect body2="l23" body1="l31" anchor="-0.014205 0.050022 0" class="collision" />
+    <connect body2="l53" body1="l41" anchor="-0.014263 -0.05006 0" class="collision" />
+  </equality>
+
+
+  <worldbody>
+    <body name="base_link" pos="0 0 0" quat="1 0 0 0" childclass="robot">
+      <geom name="base_link_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="base_link.STL" material="default_material" class="visual"/>
+
+      <body name="claw" pos="-0.042 0 0" quat="5.26835673519653e-09 0.7071067811865462 -5.268356735196549e-09 0.7071067811865488">
+        <inertial pos="-0.000384093170639321 -8.57754285746345E-16 -6.23994419577615E-05" quat="1 0 0 0" mass="0.00214939142420216" diaginertia="7.11308979725899e-07 1.81162721250835e-08 7.0998178744497e-07"/>
+        <joint name="clawj" class="claw_joint"/>
+        <geom name="claw_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="claw.STL" material="default_material" class="visual"/>
+
+        <body name="l11" pos="0 0.035 0" quat="-0.7071067811865462 0 0.7071067811865488 0">
+          <inertial pos="-0.00869218936528415 -0.00199792426642302 -0.0036905433214944" quat="1 0 0 0" mass="0.000518266456463187" diaginertia="2.87514560486621e-09 1.48561629551705e-08 1.64762893729227e-08"/>
+          <joint name="l11j" class="l11j"/>
+          <geom name="l11_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l11.STL" material="default_material" class="visual"/>
+
+          <body name="l12" pos="-0.01560062529516 -0.00355253295553001 0" quat="1 0 0 0">
+            <inertial pos="-3.46944695195361E-18 0 -0.00300073685934333" quat="1 0 0 0" mass="0.000115114238012858" diaginertia="2.111222901092e-09 2.111222901092e-09 2.17647033620583e-10"/>
+            <geom name="l12_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l12.STL" material="default_material" class="visual"/>
+          </body>
+        </body>
+
+        <body name="l61" pos="0 -0.035 0" quat="-0.7071067811865462 0 0.7071067811865488 0">
+          <inertial pos="-0.00879982425346378 0.00200677492170989 -0.00370787768991618" quat="1 0 0 0" mass="0.000511885346966713" diaginertia="2.86973210362641e-09 1.4832635178372e-08 1.64475182578043e-08"/>
+          <joint name="l61j" class="l61j"/>
+          <geom name="l61_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l61.STL" material="default_material" class="visual"/>
+
+          <body name="l62" pos="-0.01560062529516 0.00355253295553001 0" quat="1 0 0 0">
+            <inertial pos="-3.46944695195361E-18 0 -0.00300073685934333" quat="1 0 0 0" mass="0.000115114238012858" diaginertia="2.111222901092e-09 2.111222901092e-09 2.17647033620584e-10"/>
+            <geom name="l62_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l62.STL" material="default_material" class="visual"/>
+          </body>
+        </body>
+      </body>
+
+      <body name="l21" pos="-0.0612 0.02 0" quat="1 0 0 0">
+        <inertial pos="0.00492632006040301 0.016118878868356 8.53824458316327E-05" quat="1 0 0 0" mass="0.00163778794167731" diaginertia="1.06807583854416e-07 4.49584946125979e-08 9.64657839046892e-08"/>
+        <joint name="l21j" class="l21j"/>
+        <geom name="l21_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l21.STL" material="default_material" class="visual"/>
+
+        <body name="l22" pos="0.00749869730176 0.02384888967597 0" quat="1 0 0 0">
+          <inertial pos="-0.0121224137716397 0.0141435871518401 -0.00310761237910269" quat="1 0 0 0" mass="0.00207537956841078" diaginertia="1.79548458825097e-07 1.20410521218554e-07 2.58597213600755e-07"/>
+          <geom name="l22_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l22.STL" material="default_material" class="visual"/>
+
+          <body name="l23" pos="-0.02170236230146 0.02617264737347 0" quat="1 0 0 0">
+            <inertial pos="-0.0144874486599726 -0.0117613787166237 2.95354978831408E-05" quat="1 0 0 0" mass="0.00318032549537155" diaginertia="9.90144804686005e-08 3.1197889177706e-07 3.7254352689162e-07"/>
+            <joint name="l23j" class="l23j"/>
+            <geom name="l23_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l23.STL" material="default_material" class="visual"/>
+            <geom name="right_finger_pad_upper" type="box" size="0.02 0.006 0.006" pos="-0.028 -0.0145 0" class="collision" rgba="1 0 0 0.3"/>
+            <geom name="right_finger_pad_lower" type="box" size="0.02 0.006 0.006" pos="0.012 -0.0145 0" class="collision" rgba="0 1 0 0.3"/>
+
+            <body name="right_tactile" pos="-0.019701 -0.014499 0" quat="0.4999981633974483 0.49999999999662686 -0.49999999999662686 0.5000018366025516">
+              <inertial pos="7.44670002401661E-05 0.00784747372261869 0.00195692056024735" quat="1 0 0 0" mass="0.000814180541801484" diaginertia="1.77999294668352e-08 8.5777623786915e-09 2.12505762180111e-08"/>
+              <attach model="tactile_sensor" prefix="right_"/>
+              <geom name="right_tactile_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="right_tactile.STL" material="default_material" class="visual"/>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <body name="l31" pos="-0.0662 0.01 0" quat="1 0 0 0">
+        <inertial pos="-0.00798741304677959 0.0281273444645686 -0.00307585192135534" quat="1 0 0 0" mass="0.00233330402481019" diaginertia="5.34551328714688e-07 7.69266428940346e-08 5.68867286778116e-07"/>
+        <joint name="l31j" class="l31j"/>
+        <geom name="l31_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l31.STL" material="default_material" class="visual"/>
+
+        <body name="l32" pos="-0.01420496196051 0.05002218563498 0" quat="1 0 0 0">
+          <inertial pos="0 -6.93889390390723E-18 -0.00335393515142834" quat="1 0 0 0" mass="0.000129251404954013" diaginertia="3.08446501904315e-09 3.08446501904315e-09 2.33551346429382e-10"/>
+          <geom name="l32_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l32.STL" material="default_material" class="visual"/>
+        </body>
+      </body>
+
+      <body name="l41" pos="-0.0661415944844277 -0.00996187584710146 0" quat="1 0 0 0">
+        <inertial pos="-0.00804581856235396 -0.0281654686174666 -0.00307585192135534" quat="1 0 0 0" mass="0.00233330402481019" diaginertia="5.34551328714688e-07 7.69266428940347e-08 5.68867286778116e-07"/>
+        <joint name="l41j" class="l41j"/>
+        <geom name="l41_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l41.STL" material="default_material" class="visual"/>
+
+        <body name="l42" pos="-0.0142633674760823 -0.0500603097878785 0" quat="1 0 0 0">
+          <inertial pos="0 6.93889390390723E-18 -0.00335393515142834" quat="1 0 0 0" mass="0.000129251404954013" diaginertia="3.08446501904315e-09 3.08446501904315e-09 2.33551346429382e-10"/>
+          <geom name="l42_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l42.STL" material="default_material" class="visual"/>
+        </body>
+      </body>
+
+      <body name="l51" pos="-0.0612 -0.02 0" quat="1 0 0 0">
+        <inertial pos="0.00493490261130028 -0.0161262435626905 8.52751652600214E-05" quat="1 0 0 0" mass="0.00163778457185244" diaginertia="1.06820768890745e-07 4.49452653027919e-08 9.64657848100493e-08"/>
+        <joint name="l51j" class="l51j"/>
+        <geom name="l51_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l51.STL" material="default_material" class="visual"/>
+
+        <body name="l52" pos="0.00749869730176 -0.02384888967597 0" quat="1 0 0 0">
+          <inertial pos="-0.0121201265305637 -0.0141476906325415 -0.00310757695607646" quat="1 0 0 0" mass="0.00207537980813618" diaginertia="1.79539625767514e-07 1.20419369442548e-07 2.58597227035285e-07"/>
+          <geom name="l52_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l52.STL" material="default_material" class="visual"/>
+
+          <body name="l53" pos="-0.02170236230146 -0.02617264737347 0" quat="1 0 0 0">
+            <inertial pos="-0.0144866815969075 0.011758001647388 5.06221520080064E-05" quat="1 0 0 0" mass="0.00318032549537155" diaginertia="9.90125378526371e-08 3.11980834393023e-07 3.7254352689162e-07"/>
+            <joint name="l53j" class="l53j"/>
+            <geom name="l53_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="l53.STL" material="default_material" class="visual"/>
+            <geom name="left_finger_pad_upper" type="box" size="0.02 0.006 0.006" pos="-0.028 0.0145 0" class="collision" rgba="1 0 0 0.3"/>
+            <geom name="left_finger_pad_lower" type="box" size="0.02 0.006 0.006" pos="0.012 0.0145 0" class="collision" rgba="0 1 0 0.3"/>
+
+            <body name="left_tactile" pos="-0.019701 0.014499 0" quat="0.4999981633974483 -0.49999999999662686 0.49999999999662686 0.5000018366025516">
+              <inertial pos="7.44670002401705E-05 0.00784747372261869 0.00195692056024735" quat="1 0 0 0" mass="0.000814180541801481" diaginertia="1.77999294668351e-08 8.57776237869146e-09 2.1250576218011e-08"/>
+              <attach model="tactile_sensor" prefix="left_"/>
+              <geom name="left_tactile_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="left_tactile.STL" material="default_material" class="visual"/>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <body name="left_cam" pos="0 0 0" quat="1 0 0 0">
+        <inertial pos="-0.0686069459106828 -0.0250212456995469 0.0329716390391645" quat="1 0 0 0" mass="0.00178859726016835" diaginertia="5.04924129889974e-08 4.18636772588613e-08 4.22336158041563e-08"/>
+        <geom name="left_cam_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="left_cam.STL" material="default_material" class="visual"/>
+
+        <body name="cam_left" pos="-0.0675 -0.025 0.0325" euler="1.5708 1.5708 0">
+          <camera name="cam_left" mode="fixed" fovy="42" resolution="640 352" pos="0 0 0" euler="-0.052359876 0 0"/>
+          <site name="cam_left_site" size="0.005" rgba="1 0 0 1" pos="0 0 0" euler="-0.052359876 0 0"/>
+        </body>
+      </body>
+
+      <body name="right_cam" pos="0 0 0" quat="1 0 0 0">
+        <inertial pos="-0.0686069459106828 0.0250212456995469 0.0329716390391645" quat="1 0 0 0" mass="0.00178859726016835" diaginertia="5.04924129890353e-08 4.18636772588991e-08 4.22336158041561e-08"/>
+        <geom name="right_cam_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="right_cam.STL" material="default_material" class="visual"/>
+
+        <body name="cam_right" pos="-0.0675 0.025 0.0325" euler="1.5708 1.5708 0">
+          <camera name="cam_right" mode="fixed" fovy="42" resolution="640 352" pos="0 0 0" euler="-0.052359876 0 0"/>
+          <site name="cam_right_site" size="0.005" rgba="1 0 0 1" pos="0 0 0" euler="-0.052359876 0 0"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
