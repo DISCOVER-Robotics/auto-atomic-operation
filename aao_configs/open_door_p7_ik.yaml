@@ -35,29 +35,30 @@ task:
       operator: arm
       param:
         pre_move:
-          # 1. Approach: in front of handle lever
-          - position: [1.350, 0.316, -0.19]
-            reference: world
+          # 1. Approach: ~14cm in front of handle (relative to handle_body_phys)
+          - position: [-0.14, 0.0955, -0.015]
+            reference: object_world
             orientation: [-0.19902274, 0.68997457, -0.66492774, -0.20541703]
             max_linear_step: 0.04
             max_angular_step: 0.25
-          # 2. Grasp position: TCP aligned so finger pads straddle
-          #    the handle lever (front capsule at world ~[1.41, 0.31, -0.20])
-          - position: [1.420, 0.336, -0.19]
-            reference: world
+          # 2. Grasp position: ~7cm in front of handle
+          - position: [-0.07, 0.1155, -0.015]
+            reference: object_world
             orientation: [-0.19902274, 0.68997457, -0.66492774, -0.20541703]
             max_linear_step: 0.04
             max_angular_step: 0.2
         eef:
           close: true
         post_move:
-          - position: [1.420, 0.336, -0.24]
-            reference: world
+          # 3. Press handle down (relative to EEF at action start)
+          - position: [0.0, 0.0, -0.05]
+            reference: eef_world
             orientation: [-0.19902274, 0.68997457, -0.66492774, -0.20541703]
             max_linear_step: 0.015
             max_angular_step: 0.2
-          - position: [1.6, 0.336, -0.24]
-            reference: world
+          # 4. Push door forward
+          - position: [0.18, 0.0, -0.00]
+            reference: eef_world
             orientation: [-0.19902274, 0.68997457, -0.66492774, -0.20541703]
             max_linear_step: 0.02
             max_angular_step: 0.3
