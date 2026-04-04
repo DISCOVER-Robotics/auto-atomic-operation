@@ -1,5 +1,6 @@
 <mujoco model="press_three_buttons">
   <include file="../../robots/robotiq.xml"/>
+  <compiler meshdir="../../../meshes"/>
 
   <visual>
     <map znear="0.001"/>

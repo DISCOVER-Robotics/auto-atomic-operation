@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Set, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
 from auto_atom.basis.mjc.tactile.tactile_sensor import TactileSensorManager
-import os
 import time
 import numpy as np
 import mujoco
@@ -519,15 +518,9 @@ class MujocoBasis:
 
     @staticmethod
     def _load_model(model_path: Path) -> tuple[Any, Any]:
-        original_dir = os.getcwd()
         xml_path = Path(model_path).resolve()
-        xml_dir = xml_path.parent
-        try:
-            os.chdir(xml_dir)
-            model = mujoco.MjModel.from_xml_path(xml_path.name)
-            data = mujoco.MjData(model)
-        finally:
-            os.chdir(original_dir)
+        model = mujoco.MjModel.from_xml_path(str(xml_path))
+        data = mujoco.MjData(model)
         return model, data
 
     def _init_tactile_manager(self) -> None:

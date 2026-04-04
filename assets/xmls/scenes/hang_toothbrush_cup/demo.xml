@@ -1,5 +1,6 @@
 <mujoco model="hang_toothbrush_cup">
   <include file="../../robots/robotiq.xml"/>
+  <compiler meshdir="../../../meshes"/>
 
   <visual>
     <map znear="0.001"/>

@@ -1,5 +1,6 @@
 <mujoco model="stack_color_blocks_gs">
   <include file="../../robots/robotiq.xml"/>
+  <compiler meshdir="../../../meshes"/>
 
   <visual>
     <map znear="0.001"/>
