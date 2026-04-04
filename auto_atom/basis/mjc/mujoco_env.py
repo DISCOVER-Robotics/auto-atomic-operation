@@ -21,7 +21,7 @@ from auto_atom.utils.transformations import (
     quaternion_matrix,
     quaternion_multiply,
 )
-from auto_atom.utils.pose import PoseState
+from auto_atom.utils.pose import PoseState, quaternion_from_matrix_3x3
 from auto_atom.basis.mjc.mujoco_basis import (
     DataType,
     CameraSpec,
@@ -46,6 +46,10 @@ __all__ = [
     "UnifiedMujocoEnv",
     "BatchedUnifiedMujocoEnv",
 ]
+
+
+def _create_header(time_sec: float) -> dict[str, Any]:
+    return {"stamp": {"sec": int(time_sec), "nanosec": int((time_sec % 1) * 1e9)}}
 
 
 @dataclass
@@ -729,7 +733,8 @@ class UnifiedMujocoEnv(MujocoBasis):
         return self._collect_obs(self.config.structured)
 
     def _collect_obs(self, structured: bool) -> dict[str, dict[str, Any]]:
-        t = int(self.data.time * 1e9) if self.config.stamp_ns else float(self.data.time)
+        sim_time = self.data.time
+        t = int(sim_time * 1e9) if self.config.stamp_ns else float(sim_time)
         obs: dict[str, dict[str, Any]] = {}
 
         for op in self._operators:
@@ -830,8 +835,11 @@ class UnifiedMujocoEnv(MujocoBasis):
                     if structured:
                         obs[f"{op.name}/pose"] = {
                             "data": {
-                                "position": pos.astype(np.float32),
-                                "orientation": quat.astype(np.float32),
+                                "header": _create_header(sim_time),
+                                "pose": {
+                                    "position": pos.astype(np.float32),
+                                    "orientation": quat.astype(np.float32),
+                                },
                             },
                             "t": t,
                         }
@@ -863,8 +871,11 @@ class UnifiedMujocoEnv(MujocoBasis):
                     if structured:
                         obs[f"action/{op.name}/pose"] = {
                             "data": {
-                                "position": tgt_pos,
-                                "orientation": tgt_ori,
+                                "header": _create_header(sim_time),
+                                "pose": {
+                                    "position": tgt_pos,
+                                    "orientation": tgt_ori,
+                                },
                             },
                             "t": t,
                         }
@@ -895,6 +906,7 @@ class UnifiedMujocoEnv(MujocoBasis):
                     if structured:
                         obs[f"{op.name}/imu"] = {
                             "data": {
+                                # "header": _create_header(sim_time),
                                 "linear_acceleration": acc,
                                 "angular_velocity": gyro,
                                 "orientation": imu_quat,
@@ -943,6 +955,8 @@ class UnifiedMujocoEnv(MujocoBasis):
                     }
 
         if DataType.CAMERA in self.config.enabled_sensors:
+            if structured:
+                info = self.get_info()["cameras"]
             for cam_name, renderer in self._renderers.items():
                 cam_id = self._camera_ids[cam_name]
                 spec = self._camera_specs[cam_name]
@@ -984,6 +998,31 @@ class UnifiedMujocoEnv(MujocoBasis):
                             "data": self._build_operation_mask(segmentation),
                             "t": t,
                         }
+                if structured:
+                    cam_info = info[cam_name]
+                    obs[f"{obs_cam_name}/camera_info"] = {
+                        "data": cam_info["camera_info"]["color"],
+                        "t": t,
+                    }
+                    extrinsics = cam_info["camera_extrinsics"]
+                    x, y, z = extrinsics["translation"]
+                    obs[f"{obs_cam_name}/hand_eye/transform"] = {
+                        "data": {
+                            "header": _create_header(sim_time),
+                            "child_frame_id": extrinsics["frame"],
+                            "transform": {
+                                "translation": {
+                                    "x": float(x),
+                                    "y": float(y),
+                                    "z": float(z),
+                                },
+                                "rotation": quaternion_from_matrix_3x3(
+                                    extrinsics["rotation_matrix"]
+                                ),
+                            },
+                        },
+                        "t": t,
+                    }
 
         if structured:
             return {f"/robot/{key}": value for key, value in obs.items()}

@@ -226,6 +226,7 @@ class MujocoBasis:
         if config is None:
             config = EnvConfig.model_validate(kwargs)
         self.config = config
+        self._info = None
         self.model, self.data = self._load_model(config.model_path)
 
         if config.sim_freq is not None:
@@ -768,10 +769,8 @@ class MujocoBasis:
     # Info / lifecycle
     # ------------------------------------------------------------------
 
-    def get_info(self) -> dict[str, Any]:
-        mujoco.mj_forward(self.model, self.data)
-        info: dict[str, Any] = self.config.model_dump(mode="json", exclude={"cameras"})
-        info["cameras"] = {}
+    def _get_camera_info(self) -> Dict[str, dict]:
+        info = {}
         for cam_name, cam_id in self._camera_ids.items():
             spec = self._camera_specs[cam_name]
             fovy_deg = float(self.model.cam_fovy[cam_id])
@@ -820,7 +819,12 @@ class MujocoBasis:
                     0.0,
                 ],
             }
+            info[cam_name] = camera_info
+        return info
 
+    def _get_camera_extrinsics(self) -> Dict[str, dict]:
+        extrinsics = {}
+        for cam_name, cam_id in self._camera_ids.items():
             # Camera frame: prefer same-named site (e.g. optical convention) over cam_xmat.
             cam_site_id = self._camera_frame_site_ids.get(cam_name)
             if cam_site_id is not None:
@@ -845,17 +849,30 @@ class MujocoBasis:
                 extrinsics_frame = frame_name
             else:
                 extrinsics_frame = "world"
+            extrinsics[cam_name] = {
+                "frame": extrinsics_frame,
+                "translation": cam_pos,
+                "rotation_matrix": cam_rot,
+            }
+        return extrinsics
 
+    def get_info(self, cached: bool = True) -> dict[str, Any]:
+        if cached:
+            if self._info is None:
+                self._info = self.get_info(cached=False)
+            return self._info
+        mujoco.mj_forward(self.model, self.data)
+        info: dict[str, Any] = self.config.model_dump(mode="json", exclude={"cameras"})
+        info["cameras"] = {}
+        camera_info = self._get_camera_info()
+        camera_extrinsics = self._get_camera_extrinsics()
+        for cam_name in self._camera_ids:
             info["cameras"][cam_name] = {
                 "camera_info": {
                     stream_type: camera_info for stream_type in ("color", "depth")
                 },
                 # TODO: should separate extrinsics for color and depth?
-                "camera_extrinsics": {
-                    "frame": extrinsics_frame,
-                    "translation": cam_pos,
-                    "rotation_matrix": cam_rot,
-                },
+                "camera_extrinsics": camera_extrinsics[cam_name],
             }
         return info
 
