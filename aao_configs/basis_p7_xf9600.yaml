@@ -1,0 +1,27 @@
+defaults:
+  - basis
+
+env:
+  batch_size: 1
+  enabled_sensors:
+    - pose
+    - joint_position
+    - joint_velocity
+  sim_freq: 200
+  update_freq: 100
+  cameras: []
+  operators:
+    - name: arm
+      arm_actuators:
+        - joint1
+        - joint2
+        - joint3
+        - joint4
+        - joint5
+        - joint6
+        - joint7
+      eef_actuators: [xfg_claw_joint]
+      eef_output_name: eef
+      pose_site: tcp_site
+
+backend: auto_atom.backend.mjc.ik.p7_analytical_ik_solver.build_p7_xf9600_backend

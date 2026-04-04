@@ -1,0 +1,66 @@
+defaults:
+  - basis_p7_xf9600
+  - _self_
+
+scene_name: open_door
+model_name: demo_p7_xf9600
+task_name: open_door_p7_ik
+
+env:
+  sim_freq: 1000
+  update_freq: 100
+  mask_objects: ["handle_lever_body", "handle_body_phys"]
+  operations: ["push"]
+  viewer:
+    lookat: [1.45, 0.12, 0.8]
+    distance: 1.2
+    azimuth: 210
+    elevation: -18
+    step_delay: 0.005
+    hold_seconds: 0.5
+
+task:
+  stages:
+    - name: press_and_push_open
+      object: handle_body_phys
+      operation: push
+      operator: arm
+      param:
+        pre_move:
+          - position: [1.35000000, 0.31604382, -0.17778435]
+            reference: world
+            orientation: [-0.19902274, 0.68997457, -0.66492774, -0.20541703]
+            max_linear_step: 0.04
+            max_angular_step: 0.3
+          - position: [1.43100000, 0.31604382, -0.17778435]
+            reference: world
+            orientation: [-0.19902274, 0.68997457, -0.66492774, -0.20541703]
+            max_linear_step: 0.025
+            max_angular_step: 0.25
+        post_move:
+          - arc:
+              pivot: door_hinge
+              axis: [0, 0, -1]
+              angle: -0.50
+              absolute: true
+              max_step: 0.08
+            reference: world
+          - position: [1.3158, 0.3989, -0.1716]
+            reference: world
+            orientation: [-0.19902274, 0.68997457, -0.66492774, -0.20541703]
+            max_linear_step: 0.03
+            max_angular_step: 0.25
+
+task_operators:
+  - name: arm
+    control:
+      timeout_steps: 3000
+      cartesian_max_linear_step: 0.025
+      cartesian_max_angular_step: 0.3
+      tolerance:
+        position: 0.008
+        orientation: 0.10
+        eef: 0.25
+    ik:
+      joint_control_mode: per_step_ik
+      max_joint_delta: 0.35
