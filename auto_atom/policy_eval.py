@@ -557,12 +557,16 @@ class PolicyEvaluator:
         operation_names: List[str] = []
         for env_index, state in enumerate(self._env_states):
             policy_state = self._policy_states[env_index]
-            if state.done or policy_state is None:
-                object_names.append("")
-                operation_names.append("")
-            else:
+            if policy_state is not None:
                 object_names.append(policy_state.plan.stage.object)
                 operation_names.append(policy_state.plan.stage.operation.value)
+            elif not state.done and state.stage_cursor < len(self._plan):
+                pending_plan = self._plan[state.stage_cursor]
+                object_names.append(pending_plan.stage.object)
+                operation_names.append(pending_plan.stage.operation.value)
+            else:
+                object_names.append("")
+                operation_names.append("")
         context.backend.set_interest_objects_and_operations(
             object_names, operation_names
         )

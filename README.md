@@ -205,6 +205,7 @@ Configuration files related to 3D GS end with `_gs.yaml` and are run in the same
 - **[Data Collection Guide](docs/data_collection.md)** — recording task demos (GIF/MP4) and comparing GS vs native MuJoCo rendering
 - **[Execution Completion Flow](docs/execution_completion_flow.md)** — how `pre_move`, `eef`, and `post_move` decide they are done, how that feeds into stage success/failure, and a flowchart of the control path
 - **[Policy Evaluation](docs/policy_evaluation.md)** — evaluate an external policy model with `PolicyEvaluator`, reuse `TaskUpdate` / `ExecutionRecord` / `ExecutionSummary`, and connect policy outputs to environment actions
+- **[Closed-Loop WS Service](docs/closed_loop_service.md)** — the WebSocket service added in this fork, including `init/reset/step/expert_action`, recording outputs, and how the external `WorldModel_3d` client calls it
 - **[Tune Initial State](docs/tune_initial_state.md)** — interactive tkinter + MuJoCo viewer tool for tuning operator base pose, EEF pose, and gripper before writing the values into task YAML
 - **[XML / Mesh / GS Migration Notes](docs/skills/xml_mesh_gs_migration_notes.md)** — if you want to migrate your own XML, mesh, or Gaussian assets into this project's normalized asset layout, use this as the reference checklist
 
