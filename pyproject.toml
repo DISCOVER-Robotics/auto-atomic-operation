@@ -14,8 +14,14 @@ authors = [
 ]
 dependencies = [
   "hydra-core",
+  "imageio",
+  "msgpack",
+  "msgpack-numpy",
   "numpy",
   "pydantic>=2",
+  "pillow",
+  "rpyc",
+  "websockets",
 ]
 urls = { "repository" = "https://github.com/OpenGHz/auto-atomic-operation.git" }
 
@@ -25,7 +31,7 @@ aao_eval = "auto_atom.runner.policy_eval:main"
 
 [project.optional-dependencies]
 mujoco = ["mujoco"]
-gs = ["gaussian_renderer @ git+https://github.com/OpenGHz/GaussianRenderer.git", "gsplat", "torch", "scipy", "plyfile"]
+gs = ["gaussian_renderer @ git+https://github.com/OpenGHz/GaussianRenderer.git", "gsplat", "torch", "scipy", "plyfile", "ninja"]
 
 
 [tool.setuptools.packages.find]
