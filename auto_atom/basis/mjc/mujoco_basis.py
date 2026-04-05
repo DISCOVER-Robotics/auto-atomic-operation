@@ -11,7 +11,7 @@ from enum import Enum
 from math import tan, pi
 from pathlib import Path
 import copy
-from typing import Any, Callable, Dict, List, Set, Optional
+from typing import Any, Callable, Dict, List, Set, Optional, Tuple
 from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
 from auto_atom.basis.mjc.tactile.tactile_sensor import TactileSensorManager
 import time
@@ -144,6 +144,8 @@ class EnvConfig(BaseModel, frozen=True):
     mask_objects: List[str] = Field(default_factory=list)
     """The object names that are eligible for binary mask and heat-map generation."""
     operations: List[str] = Field(default_factory=list)
+    """The operation names corresponding to the mask objects."""
+    heatmap_operations: List[str] = Field(default_factory=list)
     """The operation names used to assign channels in generated heat maps."""
     stamp_ns: bool = True
     """Whether observation timestamps should be emitted in nanoseconds instead of seconds."""
@@ -173,6 +175,8 @@ class EnvConfig(BaseModel, frozen=True):
     ``model``/``data``).  The framework calls ``bind()`` after loading the
     model.
     """
+    interests: Tuple[List[str], List[str]] = ([], [])
+    """A tuple of two lists: the first list contains the names of interest objects, and the second list contains the names of interest operations."""
 
     @model_validator(mode="after")
     def validate_frequencies(self):
@@ -191,13 +195,31 @@ class EnvConfig(BaseModel, frozen=True):
 
     @model_validator(mode="after")
     def validate_operations(self):
+        enable_heat_map = False
+        enable_mask = False
         for cam_cfg in self.cameras:
             if cam_cfg.enable_heat_map:
-                for field in ("operations", "mask_objects"):
-                    if not getattr(self, field):
-                        raise ValueError(f"{field} must be set when enable_heat_map")
-            if cam_cfg.enable_mask and not self.mask_objects:
-                raise ValueError("mask_objects must be set when enable_mask")
+                enable_heat_map = True
+            if cam_cfg.enable_mask:
+                enable_mask = True
+            if enable_mask and enable_heat_map:
+                break
+        if enable_heat_map:
+            if not self.heatmap_operations:
+                self.heatmap_operations.extend(self.operations)
+            for field in ("operations", "mask_objects"):
+                if field not in self.model_fields_set:
+                    raise ValueError(f"{field} must be set when enable_heat_map")
+        if enable_mask and not self.mask_objects:
+            raise ValueError("mask_objects must be set when enable_mask")
+        return self
+
+    @model_validator(mode="after")
+    def validate_interests(self):
+        if not self.interests[0]:
+            self.interests[0].extend(self.mask_objects)
+        if not self.interests[1]:
+            self.interests[1].extend(self.operations)
         return self
 
     @field_validator("viewer")
@@ -228,7 +250,6 @@ class MujocoBasis:
         self.config = config
         self._info = None
         self.model, self.data = self._load_model(config.model_path)
-
         if config.sim_freq is not None:
             self.model.opt.timestep = 1.0 / config.sim_freq
         self.get_logger().info(
@@ -287,6 +308,7 @@ class MujocoBasis:
         self._renderer_scene_option.sitegroup[:] = 0
         self._interest_object_operations: dict[str, str] = {}
         self._mask_object_pairs = self._build_mask_object_pairs(config.mask_objects)
+        self.set_interest_objects_and_operations(*config.interests)
 
         logger = self.get_logger()
 
@@ -493,9 +515,9 @@ class MujocoBasis:
                 raise ValueError(
                     f"Object '{object_name}' is not configured in mask_objects: {self.config.mask_objects}"
                 )
-            if operation_name not in self.config.operations:
+            if operation_name not in self.config.heatmap_operations:
                 raise ValueError(
-                    f"Operation '{operation_name}' is not configured in operations: {self.config.operations}"
+                    f"Operation '{operation_name}' is not configured in operations: {self.config.heatmap_operations}"
                 )
             interest_object_operations[object_name] = operation_name
 
@@ -503,13 +525,14 @@ class MujocoBasis:
 
     def _build_operation_mask(self, segmentation: np.ndarray) -> np.ndarray:
         operation_mask = np.zeros(
-            (*segmentation.shape[:2], len(self.config.operations)), dtype=np.uint8
+            (*segmentation.shape[:2], len(self.config.heatmap_operations)),
+            dtype=np.uint8,
         )
         if segmentation.ndim != 3 or segmentation.shape[-1] != 2:
             return operation_mask
 
         for object_name, operation_name in self._interest_object_operations.items():
-            channel_idx = self.config.operations.index(operation_name)
+            channel_idx = self.config.heatmap_operations.index(operation_name)
             pair_mask = np.zeros(segmentation.shape[:2], dtype=bool)
             for objtype, objid in self._mask_object_pairs.get(object_name, set()):
                 pair_mask |= (segmentation[..., 0] == objid) & (

@@ -3,4 +3,4 @@ defaults:
   - press_button_basis
   - _self_
 
-object_name: green_blue
+object_name: button_green

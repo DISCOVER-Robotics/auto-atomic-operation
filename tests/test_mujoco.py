@@ -33,6 +33,7 @@ def main(cfg: DictConfig) -> None:
     cameras = env_raw.get("cameras", [])
     mask_objects = env_raw.get("mask_objects", [])
     operations = env_raw.get("operations", [])
+    heatmap_operations = env_raw.get("heatmap_operations", [])
     structured = env_raw.get("structured", False)
 
     print(f"Env type     : {type(env).__name__}")
@@ -55,6 +56,22 @@ def main(cfg: DictConfig) -> None:
                 arr = np.asarray(data)
                 print(f"  {key}: shape={arr.shape} dtype={arr.dtype}")
 
+        # --- helpers for structured image data ---
+        def _decode_image(img_msg, shape, dtype=np.uint8):
+            """Decode a structured image message dict to numpy array."""
+            return np.frombuffer(img_msg["data"], dtype=dtype).reshape(shape)
+
+        def _get_image_array(obs_entry, shape, dtype=np.uint8):
+            """Extract image array from obs entry, handling both raw and structured."""
+            data = obs_entry["data"]
+            if structured:
+                # data is a list of image message dicts (one per env)
+                return np.stack(
+                    [_decode_image(d, shape[1:], dtype) for d in data], axis=0
+                )
+            else:
+                return np.asarray(data)
+
         # --- Validate camera observations ---
         for cam_cfg in cameras:
             cam_name = cam_cfg["name"]
@@ -65,7 +82,7 @@ def main(cfg: DictConfig) -> None:
             if cam_cfg.get("enable_color", False):
                 key = f"{prefix}/color/image_raw"
                 assert key in obs, f"Missing color obs: {key}"
-                color = np.asarray(obs[key]["data"])
+                color = _get_image_array(obs[key], (batch_size, h, w, 3), np.uint8)
                 assert color.shape == (batch_size, h, w, 3), (
                     f"{key}: expected ({batch_size},{h},{w},3), got {color.shape}"
                 )
@@ -75,7 +92,7 @@ def main(cfg: DictConfig) -> None:
             if cam_cfg.get("enable_depth", False):
                 key = f"{prefix}/aligned_depth_to_color/image_raw"
                 assert key in obs, f"Missing depth obs: {key}"
-                depth = np.asarray(obs[key]["data"])
+                depth = _get_image_array(obs[key], (batch_size, h, w), np.float32)
                 assert depth.shape == (batch_size, h, w), (
                     f"{key}: expected ({batch_size},{h},{w}), got {depth.shape}"
                 )
@@ -84,19 +101,20 @@ def main(cfg: DictConfig) -> None:
             if cam_cfg.get("enable_mask", False) and mask_objects:
                 key = f"{prefix}/mask/image_raw"
                 assert key in obs, f"Missing mask obs: {key}"
-                mask = np.asarray(obs[key]["data"])
+                mask = _get_image_array(obs[key], (batch_size, h, w), np.uint8)
                 assert mask.shape == (batch_size, h, w), (
                     f"{key}: expected ({batch_size},{h},{w}), got {mask.shape}"
                 )
                 assert mask.dtype == np.uint8
                 print(f"[PASS] {key}: {mask.shape}")
 
-            if cam_cfg.get("enable_heat_map", False) and operations:
+            if cam_cfg.get("enable_heat_map", False) and heatmap_operations:
+                n_ops = len(heatmap_operations)
                 key = f"{prefix}/mask/heat_map"
                 assert key in obs, f"Missing heat_map obs: {key}"
-                hm = np.asarray(obs[key]["data"])
-                assert hm.shape == (batch_size, h, w, len(operations)), (
-                    f"{key}: expected ({batch_size},{h},{w},{len(operations)}), got {hm.shape}"
+                hm = _get_image_array(obs[key], (batch_size, h, w, n_ops), np.uint8)
+                assert hm.shape == (batch_size, h, w, n_ops), (
+                    f"{key}: expected ({batch_size},{h},{w},{n_ops}), got {hm.shape}"
                 )
                 assert hm.dtype == np.uint8
                 print(f"[PASS] {key}: {hm.shape}")

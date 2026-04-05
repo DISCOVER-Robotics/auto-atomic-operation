@@ -461,7 +461,7 @@ class GSUnifiedMujocoEnv(UnifiedMujocoEnv):
 
         binary_mask = np.zeros((height, width), dtype=np.uint8)
         heat_map = np.zeros(
-            (height, width, len(self.config.operations)), dtype=np.uint8
+            (height, width, len(self.config.heatmap_operations)), dtype=np.uint8
         )
 
         for object_name, renderer in self._gs_mask_renderers.items():
@@ -484,9 +484,9 @@ class GSUnifiedMujocoEnv(UnifiedMujocoEnv):
             operation_name = self._interest_object_operations.get(object_name)
             if operation_name is None:
                 continue
-            if operation_name not in self.config.operations:
+            if operation_name not in self.config.heatmap_operations:
                 continue
-            channel_idx = self.config.operations.index(operation_name)
+            channel_idx = self.config.heatmap_operations.index(operation_name)
             heat_map[visible_np, channel_idx] = 1
 
         return binary_mask, heat_map
@@ -921,7 +921,8 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
 
         binary_mask = np.zeros((B, Ncam, height, width), dtype=np.uint8)
         heat_map = np.zeros(
-            (B, Ncam, height, width, len(self.config.operations)), dtype=np.uint8
+            (B, Ncam, height, width, len(self.config.heatmap_operations)),
+            dtype=np.uint8,
         )
 
         for object_name, renderer in self._gs_mask_renderers.items():
@@ -946,9 +947,9 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
                 operation_name = env._interest_object_operations.get(object_name)
                 if operation_name is None:
                     continue
-                if operation_name not in self.config.operations:
+                if operation_name not in self.config.heatmap_operations:
                     continue
-                channel_idx = self.config.operations.index(operation_name)
+                channel_idx = self.config.heatmap_operations.index(operation_name)
                 # visible_np[env_idx]: (Ncam, H, W) bool
                 heat_map[env_idx, ..., channel_idx][visible_np[env_idx]] = 1
 

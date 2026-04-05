@@ -7,7 +7,7 @@ cam_width: 640
 cam_height: 480
 enable_color: true
 enable_depth: true
-enable_mask: true
+enable_mask: false
 enable_heat_map: true
 
 env:
@@ -48,6 +48,7 @@ env:
       enable_mask: ${enable_mask}
       enable_heat_map: ${enable_heat_map}
   # structured: true
+  heatmap_operations: ["pick", "place", "push", "pull", "press"]
 
 backend: auto_atom.backend.mjc.mujoco_backend.build_mujoco_backend
 
