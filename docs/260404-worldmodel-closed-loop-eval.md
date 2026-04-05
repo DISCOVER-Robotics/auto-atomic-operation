@@ -72,6 +72,7 @@
 - `get_observation()`
   - 返回当前一步的完整 observation dict
   - RGB、depth、mask、heatmap、robot state 都从这里取
+  - 若相机开启 `heat_map`，则 `*/mask/heat_map` 应固定返回完整 5 通道，顺序为 `pick, place, push, pull, press`
 - `update(action)`
   - 是一步动作推进，不负责 horizon / stride
   - receding horizon 由 `WorldModel_3d` 中间层负责
@@ -171,6 +172,13 @@ export NVIDIA_DRIVER_CAPABILITIES=all
 - 场景初始化
 - 一步步推进
 - 返回 observation / summary / records
+
+其中 heatmap 输出契约需要固定为：
+
+- shape: `(H, W, 5)`
+- channel order: `pick, place, push, pull, press`
+- 即使当前任务只涉及部分操作，也不能只返回子集通道
+- 旧式“只返回有 heatmap 的通道”已视为 bug
 
 录像和 trace 由 `WorldModel_3d/closed_loop_eval` 负责：
 
