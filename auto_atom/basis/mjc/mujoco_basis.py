@@ -57,6 +57,10 @@ class CameraSpec(BaseModel, frozen=True):
     reference frame is auto-detected from the camera's attached body (again
     preferring a same-named site over the body itself).  Cameras attached
     directly to the world body keep the world frame."""
+    is_static: bool = False
+    """Whether this camera's GS background is rendered once and cached (static)
+    or re-rendered every frame (dynamic).  Set to ``False`` for moving cameras
+    such as hand-mounted cameras whose viewpoint changes each timestep."""
 
 
 class ViewerConfig(BaseModel, frozen=True):

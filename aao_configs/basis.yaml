@@ -33,6 +33,7 @@ env:
       enable_mask: ${enable_mask}
       enable_heat_map: ${enable_heat_map}
       parent_frame: eef_pose
+      is_static: false
     - name: front_cam
       width: ${cam_width}
       height: ${cam_height}
@@ -40,6 +41,7 @@ env:
       enable_depth: ${enable_depth}
       enable_mask: ${enable_mask}
       enable_heat_map: ${enable_heat_map}
+      is_static: true
     - name: side_cam
       width: ${cam_width}
       height: ${cam_height}
@@ -47,6 +49,7 @@ env:
       enable_depth: ${enable_depth}
       enable_mask: ${enable_mask}
       enable_heat_map: ${enable_heat_map}
+      is_static: true
   # structured: true
   heatmap_operations: ["pick", "place", "push", "pull", "press"]
 

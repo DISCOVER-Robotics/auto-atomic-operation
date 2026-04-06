@@ -212,7 +212,7 @@ git clone --depth 1 https://github.com/OpenGHz/AIRBOT-Data-Collection.git airdc 
 ```
 
 ```bash
-pip install -e ./airdc"[mujoco,assis]"
+pip install -e ./airdc"[assis]"
 ```
 
 将`auto-atomic-operation`软链接到`third_party`目录下：

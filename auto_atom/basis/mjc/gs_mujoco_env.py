@@ -618,13 +618,13 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         # and render all cameras in a group with a single call.
         from collections import OrderedDict
 
-        res_groups: OrderedDict[tuple[int, int], list[str]] = OrderedDict()
+        res_groups: OrderedDict[tuple[int, int, bool], list[str]] = OrderedDict()
         for cam_name in all_gs_cams:
             spec = self._camera_specs[cam_name]
-            key = (spec.height, spec.width)
+            key = (spec.height, spec.width, spec.is_static)
             res_groups.setdefault(key, []).append(cam_name)
 
-        for (H, W), cam_names in res_groups.items():
+        for (H, W, is_static), cam_names in res_groups.items():
             Ncam = len(cam_names)
             cam_ids = [self._camera_ids[c] for c in cam_names]
 
@@ -681,12 +681,21 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
                         body_pos,
                         body_quat,
                         cam_ids,
+                        use_cache=is_static,
                     )
                 )
             elif any_color:
                 # Color-only group — still batch all cameras
                 bg_imgs = self._get_cached_bg_multicam(
-                    cam_ids, W, H, cam_pos, cam_xmat, fovy, body_pos, body_quat
+                    cam_ids,
+                    W,
+                    H,
+                    cam_pos,
+                    cam_xmat,
+                    fovy,
+                    body_pos,
+                    body_quat,
+                    use_cache=is_static,
                 )
                 fg_rgb, _ = self._fg_gs_renderer.batch_env_render(
                     fg_gsb, cam_pos, cam_xmat, H, W, fovy, bg_imgs=bg_imgs
@@ -810,23 +819,31 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         fovy: np.ndarray,
         body_pos: np.ndarray,
         body_quat: np.ndarray,
+        use_cache: bool = True,
     ) -> torch.Tensor | None:
-        """Return cached background (rgb, depth) for multiple cameras.
+        """Return background (rgb, depth) for multiple cameras.
 
-        Cache key is ``(tuple(cam_ids), width, height)``.  Returns
-        ``(bg_rgb, bg_depth)`` each of shape ``(Nenv, Ncam, H, W, C)`` or
-        ``None`` when no background renderer is configured.
+        When *use_cache* is ``True`` (static cameras), the result is cached by
+        ``(tuple(cam_ids), width, height)`` and reused across frames.  When
+        ``False`` (dynamic / moving cameras), the background is re-rendered
+        every call.
+
+        Returns ``(bg_rgb, bg_depth)`` each of shape
+        ``(Nenv, Ncam, H, W, C)`` or ``None`` when no background renderer is
+        configured.
         """
         if self._bg_gs_renderer is None:
             return None
         cache_key = (tuple(cam_ids), width, height)
-        if cache_key not in self._bg_cache:
-            bg_gsb = self._bg_gs_renderer.batch_update_gaussians(body_pos, body_quat)
-            bg_rgb, bg_depth = self._bg_gs_renderer.batch_env_render(
-                bg_gsb, cam_pos, cam_xmat, height, width, fovy
-            )
+        if use_cache and cache_key in self._bg_cache:
+            return self._bg_cache[cache_key]
+        bg_gsb = self._bg_gs_renderer.batch_update_gaussians(body_pos, body_quat)
+        bg_rgb, bg_depth = self._bg_gs_renderer.batch_env_render(
+            bg_gsb, cam_pos, cam_xmat, height, width, fovy
+        )
+        if use_cache:
             self._bg_cache[cache_key] = (bg_rgb, bg_depth)
-        return self._bg_cache[cache_key]
+        return (bg_rgb, bg_depth)
 
     def _render_batched_multicam(
         self,
@@ -839,6 +856,7 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         body_pos: np.ndarray,
         body_quat: np.ndarray,
         cam_ids: list[int],
+        use_cache: bool = True,
     ) -> tuple[
         torch.Tensor,
         torch.Tensor,
@@ -861,7 +879,15 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         alphas : (Nenv, Ncam, H, W, 1)
         """
         cached = self._get_cached_bg_multicam(
-            cam_ids, width, height, cam_pos, cam_xmat, fovy, body_pos, body_quat
+            cam_ids,
+            width,
+            height,
+            cam_pos,
+            cam_xmat,
+            fovy,
+            body_pos,
+            body_quat,
+            use_cache=use_cache,
         )
         bg_imgs = cached[0] if cached is not None else None
 
