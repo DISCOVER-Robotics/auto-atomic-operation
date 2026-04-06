@@ -1,8 +1,6 @@
 defaults:
   - basis
 
-model_name: demo_p7_xf9600
-
 env:
   batch_size: 1
   enabled_sensors:
@@ -21,9 +19,8 @@ env:
         - joint4
         - joint5
         - joint6
-        - joint7
       eef_actuators: [xfg_claw_joint]
       eef_output_name: eef
       pose_site: eef_pose
 
-backend: auto_atom.backend.mjc.ik.p7_analytical_ik_solver.build_p7_xf9600_backend
+backend: auto_atom.backend.mjc.ik.airbot_kdl_ik_solver.build_airbot_play_xf9600_backend

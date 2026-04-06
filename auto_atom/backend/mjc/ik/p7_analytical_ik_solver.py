@@ -19,7 +19,7 @@ class P7AnalyticalIKSolver:
         model: mujoco.MjModel,
         arm_joint_names: List[str],
         flange_site_name: str = "tool_site",
-        tcp_site_name: str = "tcp_site",
+        tcp_site_name: str = "eef_pose",
         max_joint_delta: float = 0.35,
     ) -> None:
         self._arm_joint_names = arm_joint_names
@@ -120,7 +120,7 @@ _P7_ARM_JOINTS = [
 ]
 _P7_ROOT_BODY = "p7_mount"
 _P7_FLANGE_SITE = "tool_site"
-_P7_TCP_SITE = "tcp_site"
+_P7_TCP_SITE = "eef_pose"
 
 
 def build_p7_xf9600_backend(

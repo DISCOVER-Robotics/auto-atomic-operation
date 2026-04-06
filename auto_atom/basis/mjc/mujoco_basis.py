@@ -889,7 +889,9 @@ class MujocoBasis:
                 self._info = self.get_info(cached=False)
             return self._info
         mujoco.mj_forward(self.model, self.data)
-        info: dict[str, Any] = self.config.model_dump(mode="json", exclude={"cameras"})
+        info: dict[str, Any] = self.config.model_dump(
+            mode="json", exclude={"cameras", "pre_step_callbacks"}
+        )
         info["cameras"] = {}
         camera_info = self._get_camera_info()
         camera_extrinsics = self._get_camera_extrinsics()

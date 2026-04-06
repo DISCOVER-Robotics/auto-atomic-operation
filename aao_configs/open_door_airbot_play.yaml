@@ -1,9 +1,10 @@
 defaults:
-  - basis_p7_xf9600
+  - basis_airbot_play_xf9600
   - _self_
 
 scene_name: open_door
-task_name: open_door_p7_ik
+model_name: demo_airbot_play
+task_name: open_door_airbot_play
 
 env:
   sim_freq: 1000
@@ -20,7 +21,7 @@ env:
       lock_zone: 0.05
   viewer:
     lookat: [1.45, 0.12, 0.8]
-    distance: 1.2
+    distance: 1.4
     azimuth: 210
     elevation: -18
     step_delay: 0.005
@@ -34,16 +35,16 @@ task:
       operator: arm
       param:
         pre_move:
-          # 1. Approach: ~14cm in front of handle (relative to handle_body_phys)
-          - position: [-0.14, 0.0955, -0.015]
+          # 1. Approach: ~10cm in front of handle (offsets relative to handle_body_phys)
+          - position: [-0.10, 0.0955, -0.020]
             reference: object_world
-            orientation: [0.68997457, 0.19902274, -0.20541703, 0.66492774]
+            orientation: [0.71328438, -0.02933355, 0.00430715, 0.70024737]
             max_linear_step: 0.04
             max_angular_step: 0.25
-          # 2. Grasp position: ~7cm in front of handle
-          - position: [-0.07, 0.1155, -0.015]
+          # 2. Grasp position: ~5cm in front of handle
+          - position: [-0.05, 0.0955, -0.020]
             reference: object_world
-            orientation: [0.68997457, 0.19902274, -0.20541703, 0.66492774]
+            orientation: [0.71328438, -0.02933355, 0.00430715, 0.70024737]
             max_linear_step: 0.04
             max_angular_step: 0.2
         eef:
@@ -62,7 +63,7 @@ task:
           # 4. Push door open (arc around door_hinge)
           #    World axis = [0,0,-1] (same as local axis)
           #    Negative angle = open door
-          #    -0.35 rad ≈ 20° — within P7 arm reachable workspace
+          #    -0.35 rad ≈ 20° — within reachable workspace
           - arc:
               pivot: door_hinge
               axis: [0, 0, -1]
@@ -70,17 +71,12 @@ task:
               absolute: true
               max_step: 0.15
             reference: world
-          # 5. Retreat upward from current position
-          # - position: [0.0, 0.0, 0.10]
-          #   reference: eef_world
-          #   orientation: [0.68997457, 0.19902274, -0.20541703, 0.66492774]
-          #   max_linear_step: 0.03
-          #   max_angular_step: 0.25
 
 task_operators:
   - name: arm
     control:
       timeout_steps: 3000
+      adaptive_step_scaling: false
       cartesian_max_linear_step: 0.025
       cartesian_max_angular_step: 0.3
       tolerance:
@@ -88,5 +84,7 @@ task_operators:
         orientation: 0.10
         eef: 0.012
     ik:
+      arm_type: play_short
+      eef_type: none
       joint_control_mode: per_step_ik
       max_joint_delta: 0.35
