@@ -1112,7 +1112,7 @@ class UnifiedMujocoEnv(MujocoBasis):
                 {
                     "name": name,
                     "offset": field_size * idx,
-                    "datatype": "FLOAT32",
+                    "datatype": 7,  # sensor_msgs/PointField.FLOAT32
                     "count": 1,
                 }
                 for idx, name in enumerate(feats)
