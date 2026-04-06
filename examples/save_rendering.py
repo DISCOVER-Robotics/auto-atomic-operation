@@ -1,23 +1,23 @@
-"""Save per-camera mask images for visual inspection.
+"""Save per-camera rendering outputs for visual inspection.
 
 This script loads a scene config (GS or native MuJoCo), resets to the initial
-keyframe, renders RGB plus binary masks for every configured camera, and saves
-the outputs under ``outputs/mask_render_<config>_<timestamp>/``.
+keyframe, renders available per-camera outputs, and saves them under
+``outputs/rendering_<backend>_<config>_<timestamp>/``.
 
 Saved files per camera:
 
 - ``<camera>_rgb.png``
-- ``<camera>_mask.png``
-- ``<camera>_overlay.png``
+- ``<camera>_mask.png`` (when mask is available)
+- ``<camera>_overlay.png`` (when mask is available)
 - ``<camera>_heat_<operation>.png`` (when heat-map channels exist)
 
 Usage::
 
-    python examples/save_gs_mask_render.py
-    python examples/save_gs_mask_render.py --config-name press_three_buttons
-    python examples/save_gs_mask_render.py --config-name press_three_buttons_gs
-    python examples/save_gs_mask_render.py show=true
-    python examples/save_gs_mask_render.py +recorder.enabled=true
+    python examples/save_rendering.py
+    python examples/save_rendering.py --config-name press_three_buttons
+    python examples/save_rendering.py --config-name press_three_buttons_gs
+    python examples/save_rendering.py show=true
+    python examples/save_rendering.py +recorder.enabled=true
 """
 
 from __future__ import annotations
@@ -228,14 +228,18 @@ def _make_overlay(rgb: np.ndarray, mask: np.ndarray) -> np.ndarray:
 def _select_video_frame(
     stream: str,
     rgb: np.ndarray,
-    mask: np.ndarray,
-    overlay: np.ndarray,
+    mask: np.ndarray | None,
+    overlay: np.ndarray | None,
 ) -> np.ndarray:
     if stream == "overlay":
+        if overlay is None:
+            return rgb
         return overlay
     if stream == "rgb":
         return rgb
     if stream == "mask":
+        if mask is None:
+            return rgb
         return np.repeat((mask.astype(np.uint8) * 255)[..., None], 3, axis=-1)
     raise ValueError(f"Unsupported recorder.video_stream='{stream}'")
 
@@ -265,7 +269,7 @@ def main(cfg: DictConfig) -> None:
     config_name = HydraConfig.get().job.config_name
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     render_tag = "gs" if use_gs else "mj"
-    out_dir = Path("outputs") / f"mask_render_{render_tag}_{config_name}_{timestamp}"
+    out_dir = Path("outputs") / f"rendering_{render_tag}_{config_name}_{timestamp}"
     out_dir.mkdir(parents=True, exist_ok=True)
     video_frames: dict[str, list[np.ndarray]] = {
         cam_name: [] for cam_name in single_env._camera_specs
@@ -290,12 +294,11 @@ def main(cfg: DictConfig) -> None:
                 if rgb is None:
                     print(f"[warn] No RGB image for camera '{cam_name}', skipping.")
                     continue
-                if binary_mask is None:
-                    print(f"[warn] No mask image for camera '{cam_name}', skipping.")
-                    continue
 
                 rgb = np.asarray(rgb, dtype=np.uint8)
-                binary_mask = np.asarray(binary_mask, dtype=np.uint8)
+                has_mask = binary_mask is not None
+                if has_mask:
+                    binary_mask = np.asarray(binary_mask, dtype=np.uint8)
                 op_names = list(single_env.config.operations)
                 has_heat_map = heat_map is not None
                 if has_heat_map:
@@ -303,12 +306,18 @@ def main(cfg: DictConfig) -> None:
                     heatmap_rgb = _make_heatmap_rgb(heat_map, op_names)
                 else:
                     heatmap_rgb = None
-                overlay = _make_overlay(rgb, binary_mask)
+                overlay = _make_overlay(rgb, binary_mask) if has_mask else None
 
                 if step_idx == 0:
                     _save_rgb(out_dir / f"{cam_name}_rgb.png", rgb)
-                    _save_mask(out_dir / f"{cam_name}_mask.png", binary_mask)
-                    _save_rgb(out_dir / f"{cam_name}_overlay.png", overlay)
+                    if has_mask:
+                        _save_mask(out_dir / f"{cam_name}_mask.png", binary_mask)
+                        _save_rgb(out_dir / f"{cam_name}_overlay.png", overlay)
+                    else:
+                        print(
+                            f"[info] No mask observation for camera '{cam_name}', "
+                            "skipping mask/overlay export."
+                        )
                     if heatmap_rgb is not None:
                         _save_heatmap_with_legend(
                             out_dir / f"{cam_name}_heatmap.png",
@@ -340,9 +349,11 @@ def main(cfg: DictConfig) -> None:
                                     channel,
                                 )
 
-                    print(f"Saved mask images for camera '{cam_name}' to {out_dir}")
+                    print(
+                        f"Saved rendering outputs for camera '{cam_name}' to {out_dir}"
+                    )
 
-                    if show:
+                    if show and has_mask:
                         fig, axes = plt.subplots(1, 3, figsize=(12, 4), squeeze=False)
                         axes[0, 0].imshow(rgb)
                         axes[0, 0].set_title(f"{cam_name} RGB")
@@ -353,6 +364,14 @@ def main(cfg: DictConfig) -> None:
                         axes[0, 2].imshow(overlay)
                         axes[0, 2].set_title(f"{cam_name} Overlay")
                         axes[0, 2].axis("off")
+                        plt.tight_layout()
+                        plt.show()
+                        plt.close(fig)
+                    elif show:
+                        fig, ax = plt.subplots(1, 1, figsize=(4, 4), squeeze=False)
+                        ax[0, 0].imshow(rgb)
+                        ax[0, 0].set_title(f"{cam_name} RGB")
+                        ax[0, 0].axis("off")
                         plt.tight_layout()
                         plt.show()
                         plt.close(fig)
