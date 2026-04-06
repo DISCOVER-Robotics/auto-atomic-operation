@@ -9,7 +9,7 @@ task_name: open_door_p7_ik
 env:
   sim_freq: 1000
   update_freq: 100
-  mask_objects: ["handle_lever_body", "handle_body_phys"]
+  mask_objects: ["handle_lever_body"]
   operations: ["push"]
   pre_step_callbacks:
     - _target_: auto_atom.callbacks.door_latch.DoorLatchCallback

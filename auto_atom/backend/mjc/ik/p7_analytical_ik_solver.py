@@ -4,21 +4,10 @@ from __future__ import annotations
 
 import contextlib
 import io
-import sys
-from pathlib import Path
 from typing import Any, Dict, List, Optional
-
 import mujoco
 import numpy as np
-
-try:
-    from third_party.p7_arm_analytical_ik import KDL_7DOF
-except ModuleNotFoundError:
-    repo_root = Path(__file__).resolve().parents[4]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-    from third_party.p7_arm_analytical_ik import KDL_7DOF
-
+from auto_atom.backend.mjc.ik.third_party_ik.p7_arm_analytical_ik import KDL_7DOF
 from auto_atom.utils.pose import PoseState, quaternion_to_rotation_matrix
 
 
