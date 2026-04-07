@@ -674,6 +674,14 @@ class UnifiedMujocoEnv(MujocoBasis):
                 s.planned_joint_target_qpos = joint_targets.copy()
                 s.planned_joint_progress = 1
                 s.planned_joint_steps_total = 1
+            else:
+                raise RuntimeError(
+                    f"IK failed for operator '{op_name}' home EEF pose "
+                    f"(base-frame target: pos={np.array2string(np.asarray(eef_in_base.position[0]), precision=4)}, "
+                    f"quat={np.array2string(np.asarray(eef_in_base.orientation[0]), precision=4)}). "
+                    f"The target may be outside the arm's reachable workspace. "
+                    f"Check the EEF randomization range in your config."
+                )
         else:
             base_body_pos, base_body_quat_xyzw = self._eef_in_base_to_base_body_world(
                 s, *self._world_to_base(pos_w, quat_w, s.base_pos, s.base_quat)
