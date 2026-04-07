@@ -157,6 +157,8 @@ class EnvConfig(BaseModel, frozen=True):
     """Physics simulation frequency in Hz. If None, uses the timestep defined in the XML model."""
     update_freq: float | None = None
     """Control update frequency in Hz. Must be <= sim_freq. If None, defaults to sim_freq (n_substeps=1)."""
+    ctrl_interpolation: bool = False
+    """Linearly interpolate ctrl across substeps when n_substeps > 1 to prevent PD overshoot."""
     initial_joint_positions: Dict[str, float] = Field(default_factory=dict)
     """Joint name → qpos value overrides applied after every reset (after the keyframe)."""
     viewer: ViewerConfig | None = None
@@ -264,6 +266,8 @@ class MujocoBasis:
             if config.sim_freq is not None and config.update_freq is not None
             else 1
         )
+        self._ctrl_interp = config.ctrl_interpolation and self._n_substeps > 1
+        self._prev_ctrl: np.ndarray | None = None
 
         if self.model.nkey > 0:
             mujoco.mj_resetDataKeyframe(self.model, self.data, 0)
@@ -774,12 +778,26 @@ class MujocoBasis:
                 self.data.qpos[int(self.model.jnt_qposadr[jid])] = qpos_val
         mujoco.mj_forward(self.model, self.data)
         self._sync_mocap_to_freejoint()
+        self._prev_ctrl = None
 
     def update(self):
-        for _ in range(self._n_substeps):
-            for cb in self._pre_step_callbacks:
-                cb(self.model, self.data)
-            mujoco.mj_step(self.model, self.data)
+        if self._ctrl_interp:
+            new_ctrl = self.data.ctrl.copy()
+            if self._prev_ctrl is None:
+                self._prev_ctrl = new_ctrl.copy()
+            old_ctrl = self._prev_ctrl
+            for i in range(self._n_substeps):
+                alpha = (i + 1) / self._n_substeps
+                self.data.ctrl[:] = old_ctrl + alpha * (new_ctrl - old_ctrl)
+                for cb in self._pre_step_callbacks:
+                    cb(self.model, self.data)
+                mujoco.mj_step(self.model, self.data)
+            self._prev_ctrl = new_ctrl
+        else:
+            for _ in range(self._n_substeps):
+                for cb in self._pre_step_callbacks:
+                    cb(self.model, self.data)
+                mujoco.mj_step(self.model, self.data)
         if self._viewer_running():
             self._sync_viewer()
             if self.config.viewer.step_delay > 0.0:
