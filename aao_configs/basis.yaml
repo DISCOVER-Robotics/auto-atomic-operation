@@ -1,6 +1,9 @@
 defaults:
   - common_vars
 
+model_name: demo
+task_name: ${scene_name}
+
 env:
   _target_: auto_atom.basis.mjc.mujoco_env.BatchedUnifiedMujocoEnv
   name: ${task_name}

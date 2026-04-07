@@ -2,8 +2,7 @@
 
 assets_dir: assets
 gs_dir: ${assets_dir}/gs/scenes/${scene_name}
-model_name: demo
-task_name: ${scene_name}
+
 
 cam_width: 1280
 cam_height: 720
