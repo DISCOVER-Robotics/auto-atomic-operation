@@ -151,6 +151,41 @@ class WaypointToleranceConfig(BaseModel, extra="forbid"):
     """Orientation tolerance in radians (quaternion angular distance)."""
 
 
+class PoseRandomRange(BaseModel):
+    """Per-entity pose randomization bounds relative to its default pose.
+
+    Each translation axis specifies a ``[min_offset, max_offset]`` range in
+    world-frame metres.  Each rotation axis specifies a ``[min_offset,
+    max_offset]`` range in radians applied as an additive RPY increment.
+
+    Example YAML entry::
+
+        randomization:
+          source_block:
+            x: [-0.03, 0.03]
+            y: [-0.03, 0.03]
+            yaw: [-0.524, 0.524]
+            collision_radius: 0.04
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    x: Tuple[float, float] = (0.0, 0.0)
+    """[min, max] displacement along the world X axis (metres)."""
+    y: Tuple[float, float] = (0.0, 0.0)
+    """[min, max] displacement along the world Y axis (metres)."""
+    z: Tuple[float, float] = (0.0, 0.0)
+    """[min, max] displacement along the world Z axis (metres)."""
+    roll: Tuple[float, float] = (0.0, 0.0)
+    """[min, max] roll offset added to the default roll (radians)."""
+    pitch: Tuple[float, float] = (0.0, 0.0)
+    """[min, max] pitch offset added to the default pitch (radians)."""
+    yaw: Tuple[float, float] = (0.0, 0.0)
+    """[min, max] yaw offset added to the default yaw (radians)."""
+    collision_radius: float = 0.05
+    """Approximate bounding radius used for pairwise collision rejection (metres)."""
+
+
 class PoseControlConfig(BaseModel):
     """Configuration for the pose control"""
 
@@ -182,6 +217,10 @@ class PoseControlConfig(BaseModel):
     tolerance: Optional[WaypointToleranceConfig] = None
     """Optional per-waypoint tolerance override. When set, these values take
     precedence over the operator-level tolerance for this waypoint only."""
+    randomization: Optional[PoseRandomRange] = None
+    """Optional per-waypoint pose randomization. When set, a random offset is
+    sampled from these ranges and added to the waypoint position/orientation
+    at the start of each episode."""
 
 
 class EefControlConfig(BaseModel, extra="forbid"):
@@ -223,41 +262,6 @@ class StageConfig(BaseModel):
     """The name of the operator that performs the operation in this stage. The operator should be defined in the environment and should have a unique name. If there is only one operator in the environment, this field can be left empty, and the operator will automatically select that operator to perform the operation."""
     blocking: bool = True
     """Whether the operator should wait for the completion of the operation before proceeding to the next stage. If set to False, the operator will proceed to the next stage immediately after initiating the operation. However, if the operator in the next stage is the same as the current stage, the operator will still wait for the completion of the operation to avoid conflicts."""
-
-
-class PoseRandomRange(BaseModel):
-    """Per-entity pose randomization bounds relative to its default pose.
-
-    Each translation axis specifies a ``[min_offset, max_offset]`` range in
-    world-frame metres.  Each rotation axis specifies a ``[min_offset,
-    max_offset]`` range in radians applied as an additive RPY increment.
-
-    Example YAML entry::
-
-        randomization:
-          source_block:
-            x: [-0.03, 0.03]
-            y: [-0.03, 0.03]
-            yaw: [-0.524, 0.524]
-            collision_radius: 0.04
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    x: Tuple[float, float] = (0.0, 0.0)
-    """[min, max] displacement along the world X axis (metres)."""
-    y: Tuple[float, float] = (0.0, 0.0)
-    """[min, max] displacement along the world Y axis (metres)."""
-    z: Tuple[float, float] = (0.0, 0.0)
-    """[min, max] displacement along the world Z axis (metres)."""
-    roll: Tuple[float, float] = (0.0, 0.0)
-    """[min, max] roll offset added to the default roll (radians)."""
-    pitch: Tuple[float, float] = (0.0, 0.0)
-    """[min, max] pitch offset added to the default pitch (radians)."""
-    yaw: Tuple[float, float] = (0.0, 0.0)
-    """[min, max] yaw offset added to the default yaw (radians)."""
-    collision_radius: float = 0.05
-    """Approximate bounding radius used for pairwise collision rejection (metres)."""
 
 
 class OperatorRandomizationConfig(BaseModel):

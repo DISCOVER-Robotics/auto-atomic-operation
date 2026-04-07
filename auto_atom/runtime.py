@@ -860,15 +860,56 @@ class TaskRunner:
         initial_object_pose: Optional[PoseState] = None
         if target is not None:
             initial_object_pose = target.get_pose().select(env_index)
+        actions = deepcopy(
+            self.builder.build_actions(plan.stage, plan.last_orientation_before)[0]
+        )
+        self._apply_waypoint_randomization(actions, context)
         return ActiveStageState(
             plan=plan,
             operator=operator,
             target=target,
-            actions=deepcopy(
-                self.builder.build_actions(plan.stage, plan.last_orientation_before)[0]
-            ),
+            actions=actions,
             initial_object_pose=initial_object_pose,
         )
+
+    @staticmethod
+    def _apply_waypoint_randomization(
+        actions: List[PrimitiveAction],
+        context: ExecutionContext,
+    ) -> None:
+        """Apply per-waypoint randomization to pose actions in-place."""
+        rng = getattr(context.backend, "_rng", None)
+        if rng is None:
+            rng = np.random.default_rng()
+        for action in actions:
+            if action.kind != "pose" or action.pose is None:
+                continue
+            rand = action.pose.randomization
+            if rand is None:
+                continue
+            pos = list(action.pose.position)
+            pos[0] += float(rng.uniform(*rand.x))
+            pos[1] += float(rng.uniform(*rand.y))
+            pos[2] += float(rng.uniform(*rand.z))
+            action.pose = action.pose.model_copy(
+                update={"position": tuple(pos), "randomization": None}
+            )
+            if any(r != (0.0, 0.0) for r in (rand.roll, rand.pitch, rand.yaw)):
+                ori = action.pose.orientation
+                if ori and len(ori) == 4:
+                    from .utils.pose import (
+                        euler_to_quaternion,
+                        quaternion_to_rpy,
+                    )
+
+                    r, p, y = quaternion_to_rpy(np.asarray(ori))
+                    r += float(rng.uniform(*rand.roll))
+                    p += float(rng.uniform(*rand.pitch))
+                    y += float(rng.uniform(*rand.yaw))
+                    new_ori = euler_to_quaternion((r, p, y))
+                    action.pose = action.pose.model_copy(
+                        update={"orientation": tuple(float(v) for v in new_ori)}
+                    )
 
     @staticmethod
     def _check_stage_condition(
@@ -1061,6 +1102,7 @@ class TaskRunner:
             use_slerp=pose.use_slerp,
             max_linear_step=pose.max_linear_step,
             max_angular_step=pose.max_angular_step,
+            tolerance=pose.tolerance,
         )
 
     @staticmethod

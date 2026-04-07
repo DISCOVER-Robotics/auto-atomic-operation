@@ -19,6 +19,13 @@ Output files are written to:
 - `assets/demos/<config_name>.json`
 - `assets/demos/<config_name>.npz`
 
+When `env.batch_size > 1`, the recorder writes one video per env replica:
+
+- `assets/videos/<config_name>_env0.gif`
+- `assets/videos/<config_name>_env0.mp4`
+- `assets/videos/<config_name>_env1.gif`
+- ...
+
 ### Recorder options
 
 All options are injected via Hydra with the `+recorder.` prefix:
@@ -28,6 +35,7 @@ All options are injected via Hydra with the `+recorder.` prefix:
 | `camera` | `front_cam` | Camera name to capture from |
 | `fps` | `25` | Frame rate for the recording |
 | `gif_width` | `320` | Width (pixels) of the output GIF |
+| `max_updates` | `null` | Maximum number of `runner.update()` calls before auto-stopping |
 | `save_gif` | `false` | Whether to save a GIF |
 | `save_mp4` | `false` | Whether to save an MP4 |
 | `save_demo` | `true` | Whether to save replayable demo metadata and action arrays |
@@ -44,6 +52,10 @@ python examples/record_demo.py --config-name cup_on_coaster \
 # Wider GIF output
 python examples/record_demo.py --config-name stack_color_blocks \
     +recorder.gif_width=480
+
+# Stop recording automatically after 200 updates
+python examples/record_demo.py --config-name press_three_buttons \
+    +recorder.max_updates=200
 ```
 
 ## Replay Recorded Demo
