@@ -118,9 +118,9 @@ aao_demo --list
 
 | | |
 |:---:|:---:|
-| ![pick_and_place](assets/videos/pick_and_place.gif) | ![cup_on_coaster](assets/videos/cup_on_coaster.gif) |
+| ![pick_and_place](https://cdn.jsdelivr.net/gh/OpenGHz/auto-atomic-operation@main/assets/videos/pick_and_place.gif) | ![cup_on_coaster](https://cdn.jsdelivr.net/gh/OpenGHz/auto-atomic-operation@main/assets/videos/cup_on_coaster.gif) |
 | `pick_and_place` | `cup_on_coaster` |
-| ![stack_color_blocks](assets/videos/stack_color_blocks.gif) | ![press_three_buttons](assets/videos/press_three_buttons.gif) |
+| ![stack_color_blocks](https://cdn.jsdelivr.net/gh/OpenGHz/auto-atomic-operation@main/assets/videos/stack_color_blocks.gif) | ![press_three_buttons](https://cdn.jsdelivr.net/gh/OpenGHz/auto-atomic-operation@main/assets/videos/press_three_buttons.gif) |
 | `stack_color_blocks` | `press_three_buttons` |
 
 ## Architecture
