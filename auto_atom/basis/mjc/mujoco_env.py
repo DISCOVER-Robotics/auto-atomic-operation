@@ -91,6 +91,7 @@ class _OperatorState:
     joint_mode: bool
     ik_solver: Optional["IKSolver"]
     eef_site_name: str
+    root_body_name: str
 
     # Base frame (world, fixed for the episode).
     base_pos: np.ndarray  # float32, shape (3,)
@@ -234,6 +235,7 @@ class UnifiedMujocoEnv(MujocoBasis):
             joint_mode=joint_mode,
             ik_solver=ik_solver,
             eef_site_name=eef_site,
+            root_body_name=root_body,
             base_pos=base_pos,
             base_quat=base_quat,
             tool_offset_pos=tool_pos,
@@ -350,7 +352,9 @@ class UnifiedMujocoEnv(MujocoBasis):
         """Override the stored operator base frame and refresh cached offsets.
 
         This is intended for setup-time configuration such as
-        ``initial_state.base_pose``.  The MuJoCo model state is not mutated.
+        ``initial_state.base_pose``.  For joint-mode operators the physical
+        MuJoCo body is also relocated so the IK solver and the virtual base
+        frame stay in sync.
         """
         s = self._get_op(op_name)
         s.base_pos = np.asarray(pos_w)
@@ -367,6 +371,29 @@ class UnifiedMujocoEnv(MujocoBasis):
             if s.planned_target_quat_in_base is not None:
                 s.planned_target_quat_in_base = target_quat.copy()
             return
+        # Joint-mode: physically move the root body in MuJoCo so that the
+        # IK solver (which works in the physical body frame) stays aligned
+        # with the virtual base frame.
+        body_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_BODY, s.root_body_name
+        )
+        parent_id = int(self.model.body_parentid[body_id])
+        parent_xpos = self.data.xpos[parent_id].astype(np.float64)
+        parent_xmat = self.data.xmat[parent_id].reshape(3, 3).astype(np.float64)
+        # World pos → local pos (relative to parent body)
+        local_pos = parent_xmat.T @ (np.asarray(pos_w, dtype=np.float64) - parent_xpos)
+        self.model.body_pos[body_id] = local_pos
+        # World quat (xyzw) → local quat (wxyz, relative to parent)
+        quat_w_wxyz = np.array(
+            [quat_w[3], quat_w[0], quat_w[1], quat_w[2]], dtype=np.float64
+        )
+        parent_quat_wxyz = self.data.xquat[parent_id].astype(np.float64)
+        inv_parent_quat = np.empty(4, dtype=np.float64)
+        mujoco.mju_negQuat(inv_parent_quat, parent_quat_wxyz)
+        local_quat = np.empty(4, dtype=np.float64)
+        mujoco.mju_mulQuat(local_quat, inv_parent_quat, quat_w_wxyz)
+        self.model.body_quat[body_id] = local_quat
+        mujoco.mj_forward(self.model, self.data)
         eef_pos_w, eef_quat_w = self.get_site_pose(s.eef_site_name)
         tool_pos, tool_quat = self._world_to_base(
             eef_pos_w, eef_quat_w, s.base_pos, s.base_quat
@@ -384,10 +411,10 @@ class UnifiedMujocoEnv(MujocoBasis):
     ) -> None:
         """Set the operator base pose with consistent semantics across backends.
 
-        Joint-mode operators only update the virtual base frame because the
-        physical robot base is fixed in the model. Pure mocap operators also
-        move the physical body rigidly so the existing base->EEF tool offset is
-        preserved under the new base frame.
+        Joint-mode operators update both the virtual base frame and the
+        physical MuJoCo body so that the IK solver stays in sync.
+        Pure mocap operators also move the physical body rigidly so the
+        existing base->EEF tool offset is preserved under the new base frame.
         """
         s = self._get_op(op_name)
         if s.joint_mode:

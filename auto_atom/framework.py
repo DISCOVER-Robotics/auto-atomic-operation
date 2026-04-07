@@ -137,6 +137,20 @@ class ArcControlConfig(BaseModel, extra="forbid"):
     arcs at the cost of more waypoints."""
 
 
+class WaypointToleranceConfig(BaseModel, extra="forbid"):
+    """Per-waypoint tolerance override. When set on a waypoint, these values
+    take precedence over the operator-level tolerance for that waypoint only.
+
+    Position tolerance can be a single float (L2 norm) or a list of three
+    floats ``[x, y, z]`` for per-axis tolerance checking."""
+
+    position: Optional[Union[float, List[float]]] = None
+    """Position tolerance. A scalar applies as an L2-norm threshold;
+    a 3-element list ``[x, y, z]`` checks each axis independently."""
+    orientation: Optional[float] = None
+    """Orientation tolerance in radians (quaternion angular distance)."""
+
+
 class PoseControlConfig(BaseModel):
     """Configuration for the pose control"""
 
@@ -165,6 +179,9 @@ class PoseControlConfig(BaseModel):
     arc: Optional[ArcControlConfig] = None
     """Optional arc movement configuration. When set, the end-effector traces an arc
     around the specified pivot instead of moving in a straight line to the target position."""
+    tolerance: Optional[WaypointToleranceConfig] = None
+    """Optional per-waypoint tolerance override. When set, these values take
+    precedence over the operator-level tolerance for this waypoint only."""
 
 
 class EefControlConfig(BaseModel, extra="forbid"):

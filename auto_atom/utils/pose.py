@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Tuple
+from typing import Iterable, List, Tuple, Union
 
 import numpy as np
 
@@ -299,3 +299,21 @@ def mujoco_euler_to_quaternion(ax: float, ay: float, az: float) -> Orientation:
     """Convert MuJoCo intrinsic XYZ euler angles (radians) to xyzw quaternion."""
     quat = quaternion_from_euler(ax, ay, az, axes="rxyz")
     return normalize_quaternion(tuple(float(v) for v in quat))
+
+
+def position_within_tolerance(
+    pos_diff: np.ndarray, tolerance: Union[float, List[float]]
+) -> bool:
+    """Check whether a position difference is within tolerance.
+
+    Args:
+        pos_diff: 3-element array of position differences (x, y, z).
+        tolerance: A scalar (L2-norm threshold) or a 3-element list
+            ``[x, y, z]`` for per-axis checking.
+
+    Returns:
+        True if the position is within tolerance.
+    """
+    if isinstance(tolerance, (list, np.ndarray)) and len(tolerance) == 3:
+        return bool(np.all(np.abs(pos_diff) <= np.asarray(tolerance, dtype=np.float64)))
+    return float(np.linalg.norm(pos_diff)) <= float(tolerance)

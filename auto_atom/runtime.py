@@ -36,6 +36,7 @@ from .utils.pose import (
     euler_to_quaternion,
     inverse_pose,
     pose_config_to_pose_state,
+    position_within_tolerance,
     quaternion_angular_distance,
     rotate_pose_around_axis,
 )
@@ -1317,35 +1318,37 @@ def _check_stage_condition(
         )
     elif constraint == OperationConstraint.REACHED:
         operator = backend.get_operator_handler(operator_name)
-        tolerance = getattr(
-            getattr(getattr(operator, "control", None), "tolerance", None),
-            "position",
-            0.01,
+        # Resolve effective tolerance: per-waypoint override > operator default
+        wp_tol = (
+            getattr(completion_pose, "tolerance", None) if completion_pose else None
         )
-        orientation_tolerance = getattr(
-            getattr(getattr(operator, "control", None), "tolerance", None),
-            "orientation",
-            0.08,
+        op_tol = getattr(getattr(operator, "control", None), "tolerance", None)
+        eff_pos_tol = (
+            wp_tol.position
+            if wp_tol is not None and wp_tol.position is not None
+            else getattr(op_tol, "position", 0.01)
+        )
+        eff_ori_tol = (
+            wp_tol.orientation
+            if wp_tol is not None and wp_tol.orientation is not None
+            else getattr(op_tol, "orientation", 0.08)
         )
         if completion_pose is None:
             satisfied = False
         else:
             current_pose = operator.get_end_effector_pose().select(env_index)
-            position_error = float(
-                np.linalg.norm(
-                    np.asarray(current_pose.position[0], dtype=np.float64)
-                    - np.asarray(completion_pose.position, dtype=np.float64)
-                )
-            )
+            pos_diff = np.asarray(
+                current_pose.position[0], dtype=np.float64
+            ) - np.asarray(completion_pose.position, dtype=np.float64)
             orientation_error = float(
                 quaternion_angular_distance(
                     current_pose.orientation[0],
                     np.asarray(completion_pose.orientation, dtype=np.float64),
                 )
             )
-            satisfied = position_error <= float(
-                tolerance
-            ) and orientation_error <= float(orientation_tolerance)
+            satisfied = position_within_tolerance(
+                pos_diff, eff_pos_tol
+            ) and orientation_error <= float(eff_ori_tol)
     else:
         satisfied = True
 
