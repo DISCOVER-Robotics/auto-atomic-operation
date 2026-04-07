@@ -54,7 +54,7 @@ class MujocoGraspConfig(BaseModel):
 
 
 class MujocoControlConfig(BaseModel):
-    timeout_steps: int = 600
+    timeout_steps: int = 100
     tolerance: MujocoToleranceConfig = MujocoToleranceConfig()
     grasp: MujocoGraspConfig = MujocoGraspConfig()
     cartesian_max_linear_step: float = 0.0

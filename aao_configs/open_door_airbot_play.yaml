@@ -100,7 +100,6 @@ task:
 task_operators:
   - name: arm
     control:
-      timeout_steps: 3000
       adaptive_step_scaling: false
       cartesian_max_linear_step: 0.025
       cartesian_max_angular_step: 0.3

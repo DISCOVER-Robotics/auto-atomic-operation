@@ -214,7 +214,7 @@ operators:
         lateral_threshold: 0.0      # meters (0 = disabled, >0 to enable check)
         grasp_axis: 2               # 0=X, 1=Y, 2=Z (grasp direction)
         settle_steps: 5             # simulation steps
-      timeout_steps: 600            # max steps per action
+      timeout_steps: 100            # max steps per action
 ```
 
 | Parameter Path | Default | Unit | Description |
@@ -225,7 +225,7 @@ operators:
 | `control.grasp.lateral_threshold` | 0.0 | m | Max lateral distance for valid grasp (0=disabled) |
 | `control.grasp.grasp_axis` | 2 | - | Grasp direction axis (0=X, 1=Y, 2=Z) |
 | `control.grasp.settle_steps` | 5 | steps | Min steps before checking grasp |
-| `control.timeout_steps` | 600 | steps | Max steps per action before timeout |
+| `control.timeout_steps` | 100 | steps | Max steps per action before timeout |
 
 **Note**: Object-level parameters (`displacement_threshold`, `position_tolerance`) are not yet exposed in YAML.
 

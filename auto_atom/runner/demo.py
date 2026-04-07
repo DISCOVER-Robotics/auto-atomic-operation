@@ -35,6 +35,7 @@ def main(cfg: DictConfig) -> None:
 
     rounds = int(cfg.get("rounds", 1))
     use_input = bool(cfg.get("use_input", False))
+    max_updates = int(cfg.get("max_updates", 250))
 
     try:
         round_summaries = run_example_rounds(
@@ -54,6 +55,7 @@ def main(cfg: DictConfig) -> None:
                 records_fn=lambda: runner.records,
                 reset_label="Reset task",
                 start_label="Scene reset complete; viewer refreshed. Starting task updates...",
+                max_updates=max_updates,
             ),
         )
         print_final_summary(round_summaries)
