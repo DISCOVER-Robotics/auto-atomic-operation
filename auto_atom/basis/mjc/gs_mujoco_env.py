@@ -47,7 +47,15 @@ from auto_atom.basis.mjc.mujoco_env import (
     BatchedUnifiedMujocoEnv,
     EnvConfig,
     UnifiedMujocoEnv,
+    create_image_data,
 )
+
+
+def create_image_data_batch(image_batch, timestamps):
+    return [
+        create_image_data(image, time_sec)
+        for image, time_sec in zip(image_batch, timestamps / 1e9)
+    ]
 
 
 class GaussianRenderConfig(BaseModel):
@@ -703,31 +711,29 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
                 # fg_rgb: (Nenv, Ncam, H, W, 3)
 
             # ---- Distribute per-camera outputs ----
+            prefix = self._key_creator.get_prefix()
             for cam_idx, cam_name in enumerate(cam_names):
                 spec = self._camera_specs[cam_name]
-                obs_cam_name = (
-                    "camera/" + cam_name.split("_")[0] if structured else cam_name
-                )
-
+                obs_cam_name = self._key_creator.create_camera_prefix(cam_name)
                 # color
+                has_color = True
                 if cam_name in gs_color_set and full_rgb is not None:
                     rgb = full_rgb[:, cam_idx]  # (Nenv, H, W, 3)
                     rgb = torch.clamp(rgb, 0.0, 1.0).mul(255).to(torch.uint8)
                     if self.config.to_numpy:
                         rgb = rgb.cpu().numpy()
-                    obs[f"{obs_cam_name}/color/image_raw"] = {
-                        "data": rgb,
-                        "t": timestamps,
-                    }
                 elif cam_name in gs_color_set and fg_rgb is not None:
                     rgb = fg_rgb[:, cam_idx]
                     rgb = torch.clamp(rgb, 0.0, 1.0).mul(255).to(torch.uint8)
                     if self.config.to_numpy:
                         rgb = rgb.cpu().numpy()
-                    obs[f"{obs_cam_name}/color/image_raw"] = {
-                        "data": rgb,
-                        "t": timestamps,
-                    }
+                else:
+                    has_color = False
+                if has_color:
+                    color_key = (
+                        f"{prefix}{obs_cam_name}/{self._key_creator.color_suffix}"
+                    )
+                    obs[color_key] = {"data": rgb, "t": timestamps}
 
                 # depth
                 if cam_name in gs_depth_set and full_depth is not None:
@@ -741,8 +747,16 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
                             torch.zeros_like(depth),
                             depth,
                         )
-                    obs[f"{obs_cam_name}/aligned_depth_to_color/image_raw"] = {
-                        "data": depth,
+                    depth_key = (
+                        f"{prefix}{obs_cam_name}/{self._key_creator.depth_suffix}"
+                    )
+                    data = (
+                        create_image_data_batch(depth, timestamps)
+                        if structured
+                        else depth
+                    )
+                    obs[depth_key] = {
+                        "data": data,
                         "t": timestamps,
                     }
 
@@ -767,17 +781,28 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
                 for cam_idx, cam_name in enumerate(cam_names):
                     if cam_name not in gs_mask_set:
                         continue
-                    obs_cam_name = (
-                        "camera/" + cam_name.split("_")[0] if structured else cam_name
-                    )
+                    obs_cam_name = self._key_creator.create_camera_prefix(cam_name)
+
                     if cam_name in self.config.gs_mask_cameras:
-                        obs[f"{obs_cam_name}/mask/image_raw"] = {
-                            "data": all_masks[:, cam_idx],
+                        data = (
+                            create_image_data_batch(all_masks[:, cam_idx], timestamps)
+                            if structured
+                            else all_masks[:, cam_idx]
+                        )
+                        obs[f"{prefix}{obs_cam_name}/mask/image_raw"] = {
+                            "data": data,
                             "t": timestamps,
                         }
                     if cam_name in self.config.gs_heat_map_cameras:
-                        obs[f"{obs_cam_name}/mask/heat_map"] = {
-                            "data": all_heat_maps[:, cam_idx],
+                        data = (
+                            create_image_data_batch(
+                                all_heat_maps[:, cam_idx], timestamps
+                            )
+                            if structured
+                            else all_heat_maps[:, cam_idx]
+                        )
+                        obs[f"{prefix}{obs_cam_name}/mask/heat_map"] = {
+                            "data": data,
                             "t": timestamps,
                         }
 

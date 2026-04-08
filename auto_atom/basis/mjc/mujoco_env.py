@@ -52,7 +52,7 @@ def _create_header(time_sec: float) -> dict[str, Any]:
     return {"stamp": {"sec": int(time_sec), "nanosec": int((time_sec % 1) * 1e9)}}
 
 
-def _create_image_data(data: np.ndarray, time_sec: float):
+def create_image_data(data: np.ndarray, time_sec: float):
     h, w = data.shape[:2]
     c = data.shape[2] if data.ndim == 3 else 1
 
@@ -129,12 +129,35 @@ class _OperatorState:
     planned_target_quat_in_base: Optional[np.ndarray] = None
 
 
+class KeyCreator:
+    def __init__(self, structured: bool):
+        if structured:
+            color_suffix = "video_encoded"
+            depth_suffix = "depth/image_raw"
+        else:
+            color_suffix = "color/image_raw"
+            depth_suffix = "aligned_depth_to_color/image_raw"
+        self.structured = structured
+        self.color_suffix = color_suffix
+        self.depth_suffix = depth_suffix
+
+    def get_prefix(self) -> str:
+        return "/robot/" if self.structured else ""
+
+    def create_camera_prefix(self, cam_name: str) -> str:
+        if self.structured:
+            return "camera/" + cam_name.split("_")[-2]
+        else:
+            return cam_name
+
+
 class UnifiedMujocoEnv(MujocoBasis):
     """MuJoCo environment with operator pose control and observation capture."""
 
     def __init__(self, config: Optional[EnvConfig] = None, **kwargs):
         super().__init__(config, **kwargs)
         self._operator_states: dict[str, _OperatorState] = {}
+        self._key_creator = KeyCreator(self.config.structured)
 
     # ==================================================================
     # Operator registration
@@ -1035,11 +1058,7 @@ class UnifiedMujocoEnv(MujocoBasis):
         if DataType.CAMERA in self.config.enabled_sensors:
             if structured:
                 info = self.get_info()["cameras"]
-                color_suffix = "video_encoded"
-                depth_suffix = "depth/image_raw"
-            else:
-                color_suffix = "color/image_raw"
-                depth_suffix = "aligned_depth_to_color/image_raw"
+                color_keys = set()
             for cam_name, renderer in self._renderers.items():
                 obs_keys = set(obs.keys())
                 cam_id = self._camera_ids[cam_name]
@@ -1051,22 +1070,20 @@ class UnifiedMujocoEnv(MujocoBasis):
                 )
                 renderer.disable_depth_rendering()
                 renderer.disable_segmentation_rendering()
-                if structured:
-                    # prefix_pos_cam or pos_cam
-                    obs_cam_name = "camera/" + cam_name.split("_")[-2]
-                else:
-                    obs_cam_name = cam_name
+                obs_cam_name = self._key_creator.create_camera_prefix(cam_name)
                 if spec.enable_color:
-                    obs[f"{obs_cam_name}/{color_suffix}"] = {
+                    color_key = f"{obs_cam_name}/{self._key_creator.color_suffix}"
+                    obs[color_key] = {
                         "data": np.asarray(renderer.render(), dtype=np.uint8),
                         "t": t,
                     }
+                    color_keys.add(color_key)
                 if spec.enable_depth:
                     renderer.enable_depth_rendering()
                     depth = np.asarray(renderer.render())
                     renderer.disable_depth_rendering()
                     depth[depth > spec.depth_max] = 0.0
-                    obs[f"{obs_cam_name}/{depth_suffix}"] = {
+                    obs[f"{obs_cam_name}/{self._key_creator.depth_suffix}"] = {
                         "data": depth,
                         "t": t,
                     }
@@ -1085,11 +1102,9 @@ class UnifiedMujocoEnv(MujocoBasis):
                             "t": t,
                         }
                 if structured:
-                    cam_keys = obs.keys() - obs_keys
+                    cam_keys = obs.keys() - obs_keys - color_keys
                     for key in cam_keys:
-                        obs[key]["data"] = _create_image_data(
-                            obs[key]["data"], sim_time
-                        )
+                        obs[key]["data"] = create_image_data(obs[key]["data"], sim_time)
                     cam_info = info[cam_name]
                     obs[f"{obs_cam_name}/camera_info"] = {
                         "data": cam_info["camera_info"]["color"],
@@ -1111,8 +1126,8 @@ class UnifiedMujocoEnv(MujocoBasis):
                         "t": t,
                     }
 
-        if structured:
-            return {f"/robot/{key}": value for key, value in obs.items()}
+        if prefix := self._key_creator.get_prefix():
+            return {f"{prefix}{key}": value for key, value in obs.items()}
         return obs
 
     # ------------------------------------------------------------------
@@ -1235,6 +1250,7 @@ class BatchedUnifiedMujocoEnv:
             from auto_atom.runtime import ComponentRegistry
 
             ComponentRegistry.register_env(config.name, self)
+        self._key_creator = KeyCreator(self.config.structured)
 
     def register_operator(self, *args, **kwargs) -> None:
         for env in self.envs:

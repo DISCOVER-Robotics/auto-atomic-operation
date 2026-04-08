@@ -6,7 +6,7 @@ env:
     arm:
       arm_actuators: []
       eef_actuators: [fingers_actuator]
-      eef_output_name: eef
+      eef_output_name: gripper
       pose_site: eef_pose
       imu_acc: imu_acc
       imu_gyro: imu_gyro
