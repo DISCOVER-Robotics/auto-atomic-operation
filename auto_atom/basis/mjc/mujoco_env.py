@@ -1125,7 +1125,7 @@ class UnifiedMujocoEnv(MujocoBasis):
         if DataType.CAMERA in self.config.enabled_sensors:
             if structured:
                 info = self.get_info()["cameras"]
-                color_keys = set()
+            color_keys = set()
             for cam_name, renderer in self._renderers.items():
                 obs_keys = set(obs.keys())
                 cam_id = self._camera_ids[cam_name]
