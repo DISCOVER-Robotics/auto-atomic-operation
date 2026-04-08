@@ -13,6 +13,7 @@
   - [Mesh Density & Gravity](mesh_density_gravity_issue.md)
   - [Gripper Joint Semantics](gripper_joint_semantics.md)
   - [Joint State Observation](joint_state_observation.md)
+  - [Pose Observation](pose_observation.md)
   - [Tactile Prefix Binding](tactile_prefix_binding.md)
 
 - **IK & Motion Control**
