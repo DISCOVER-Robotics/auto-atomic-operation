@@ -6,7 +6,7 @@ model_name: demo_airbot_play
 
 env:
   operators:
-    - name: arm
+    arm:
       arm_actuators:
         - joint1
         - joint2

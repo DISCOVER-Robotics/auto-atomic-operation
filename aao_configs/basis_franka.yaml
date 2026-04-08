@@ -7,7 +7,7 @@ defaults:
 
 env:
   operators:
-    - name: arm
+    arm:
       arm_actuators:
         - actuator1
         - actuator2

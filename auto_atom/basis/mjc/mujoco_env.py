@@ -819,7 +819,7 @@ class UnifiedMujocoEnv(MujocoBasis):
         t = int(sim_time * 1e9) if self.config.stamp_ns else float(sim_time)
         obs: dict[str, dict[str, Any]] = {}
 
-        for op in self._operators:
+        for op in self._operators.values():
             arm_qidx = self._op_arm_qidx[op.name]
             eef_qidx = self._op_eef_qidx[op.name]
             arm_vidx = self._op_arm_vidx[op.name]
@@ -1128,7 +1128,7 @@ class UnifiedMujocoEnv(MujocoBasis):
     def _find_operator_for_tactile_panel(
         self, panel_prefix: str
     ) -> OperatorBinding | None:
-        for op in self._operators:
+        for op in self._operators.values():
             if not op.tactile_prefixes:
                 if len(self._operators) == 1:
                     return op

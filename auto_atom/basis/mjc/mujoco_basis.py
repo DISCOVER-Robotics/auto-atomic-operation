@@ -87,8 +87,9 @@ class OperatorBinding(BaseModel, frozen=True):
 
     model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
-    name: str
-    """Logical operator name, used as the key prefix in observation dicts."""
+    name: str = ""
+    """Logical operator name, auto-populated from the ``EnvConfig.operators``
+    dict key.  Can be left empty in YAML; the model validator fills it in."""
 
     arm_actuators: List[str] = Field(default_factory=list)
     """Actuator names (as defined in the XML) that drive the main arm/body joints."""
@@ -139,8 +140,8 @@ class EnvConfig(BaseModel, frozen=True):
     """Optional registry name. When set, the constructed batched env self-registers under this name."""
     model_path: Path
     """The path to the Mujoco XML model file used to create the environment."""
-    operators: List[OperatorBinding] = Field(default_factory=list)
-    """Operator definitions mapping logical names to XML actuators and sensors."""
+    operators: Dict[str, OperatorBinding] = Field(default_factory=dict)
+    """Operator definitions keyed by logical name, mapping to XML actuators and sensors."""
     enabled_sensors: Set[DataType] = Field(default_factory=set)
     """The sensor categories that should be exposed in captured observations."""
     cameras: List[CameraSpec] = Field(default_factory=list)
@@ -183,6 +184,17 @@ class EnvConfig(BaseModel, frozen=True):
     """
     interests: Tuple[List[str], List[str]] = ([], [])
     """A tuple of two lists: the first list contains the names of interest objects, and the second list contains the names of interest operations."""
+
+    @model_validator(mode="after")
+    def populate_operator_names(self):
+        for key, binding in self.operators.items():
+            if not binding.name:
+                self.operators[key] = binding.model_copy(update={"name": key})
+            elif binding.name != key:
+                raise ValueError(
+                    f"Operator key '{key}' does not match binding name '{binding.name}'"
+                )
+        return self
 
     @model_validator(mode="after")
     def validate_frequencies(self):
@@ -293,7 +305,7 @@ class MujocoBasis:
         self._op_arm_vidx: dict[str, np.ndarray] = {}
         self._op_eef_vidx: dict[str, np.ndarray] = {}
         self._op_output_names: dict[str, tuple[str, str]] = {}
-        for op in self._operators:
+        for op in self._operators.values():
             arm_aidx = self._resolve_actuator_indices(op.arm_actuators)
             eef_aidx = self._resolve_actuator_indices(op.eef_actuators)
             arm_qidx, arm_vidx = self._actuator_joint_indices(arm_aidx.tolist())
@@ -364,7 +376,7 @@ class MujocoBasis:
         self._pose_site_ids: dict[str, int] = {}
         self._pose_validated_components: set[str] = set()
         self._wrench_ids: dict[str, dict[str, int]] = {}
-        for op in self._operators:
+        for op in self._operators.values():
             self._imu_ids[op.name] = {
                 "acc": self._sensor_id(op.imu_acc) if op.imu_acc else -1,
                 "gyro": self._sensor_id(op.imu_gyro) if op.imu_gyro else -1,

@@ -2,9 +2,8 @@ defaults:
   - basis
 
 env:
-  # TODO: change to a dict for more flexible operator definitions
   operators:
-    - name: arm
+    arm:
       arm_actuators: []
       eef_actuators: [fingers_actuator]
       eef_output_name: eef
