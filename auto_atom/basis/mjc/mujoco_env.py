@@ -980,13 +980,16 @@ class UnifiedMujocoEnv(MujocoBasis):
                         quat_w = self._quat_wxyz_to_xyzw(self._sensor_data(quat_id))
                         self._validate_pose_sensor_matches_site(op.name, pos_w, quat_w)
 
-                    # Current EEF pose in base frame (or world if not registered).
+                    # Current EEF pose in base frame.
                     state = self._operator_states.get(op.name)
-                    if state is not None:
-                        pos, quat = self.get_operator_eef_pose_in_base(op.name)
-                    else:
-                        pos_w2, quat_w2 = self._site_pose(op.name)
-                        pos, quat = (pos_w2, quat_w2)
+                    if state is None:
+                        raise RuntimeError(
+                            f"Operator '{op.name}' has POSE enabled but was never "
+                            f"registered via register_operator(). Call "
+                            f"register_operator('{op.name}', ...) before capturing "
+                            f"observations."
+                        )
+                    pos, quat = self.get_operator_eef_pose_in_base(op.name)
 
                     rot9d = quaternion_matrix(quat)[:3, :3].ravel()
                     if structured:
@@ -1019,12 +1022,8 @@ class UnifiedMujocoEnv(MujocoBasis):
                     }
 
                     # Target pose in base frame.
-                    if state is not None:
-                        tgt_pos = state.target_pos_in_base
-                        tgt_ori = state.target_quat_in_base
-                    else:
-                        tgt_pos = pos
-                        tgt_ori = quat
+                    tgt_pos = state.target_pos_in_base
+                    tgt_ori = state.target_quat_in_base
                     if structured:
                         obs[kc.apply_prefix(f"action/{op.name}/pose")] = {
                             "data": {
@@ -1123,6 +1122,7 @@ class UnifiedMujocoEnv(MujocoBasis):
                     obs[kc.apply_prefix(key)] = {"data": data, "t": t}
 
         if DataType.CAMERA in self.config.enabled_sensors:
+            color_keys = set()
             if structured:
                 info = self.get_info()["cameras"]
             color_keys = set()
