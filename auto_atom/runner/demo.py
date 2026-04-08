@@ -35,7 +35,7 @@ def main(cfg: DictConfig) -> None:
 
     rounds = int(cfg.get("rounds", 1))
     use_input = bool(cfg.get("use_input", False))
-    max_updates = int(cfg.get("max_updates", 250))
+    max_updates = int(cfg.get("max_updates", 300))
 
     try:
         round_summaries = run_example_rounds(
