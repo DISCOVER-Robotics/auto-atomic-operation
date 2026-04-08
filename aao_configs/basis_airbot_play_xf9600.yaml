@@ -1,0 +1,21 @@
+defaults:
+  - basis_xf9600
+  - _self_
+
+model_name: demo_airbot_play
+
+env:
+  operators:
+    arm:
+      arm_actuators:
+        - joint1
+        - joint2
+        - joint3
+        - joint4
+        - joint5
+        - joint6
+      eef_actuators: [xfg_claw_joint]
+      eef_output_name: gripper
+      pose_site: eef_pose
+
+backend: auto_atom.backend.mjc.ik.airbot_kdl_ik_solver.build_airbot_play_xf9600_backend

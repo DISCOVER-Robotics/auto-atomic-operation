@@ -6,7 +6,7 @@ import logging
 import mujoco
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel
 from ...basis.mjc.mujoco_env import BatchedUnifiedMujocoEnv, EnvConfig
 from ...framework import (
@@ -31,6 +31,7 @@ from ...runtime import (
 from ...utils.pose import (
     PoseState,
     euler_to_quaternion,
+    position_within_tolerance,
     quaternion_angular_distance,
     quaternion_to_rpy,
     quaternion_to_rotation_matrix,
@@ -39,7 +40,9 @@ from ...utils.transformations import quaternion_slerp
 
 
 class MujocoToleranceConfig(BaseModel):
-    position: float = 0.01
+    position: Union[float, List[float]] = 0.01
+    """Position tolerance. A scalar applies as an L2-norm threshold;
+    a 3-element list ``[x, y, z]`` checks each axis independently."""
     orientation: float = 0.08
     eef: float = 0.03
 
@@ -51,7 +54,7 @@ class MujocoGraspConfig(BaseModel):
 
 
 class MujocoControlConfig(BaseModel):
-    timeout_steps: int = 600
+    timeout_steps: int = 100
     tolerance: MujocoToleranceConfig = MujocoToleranceConfig()
     grasp: MujocoGraspConfig = MujocoGraspConfig()
     cartesian_max_linear_step: float = 0.0
@@ -113,6 +116,7 @@ class MujocoOperatorHandler(OperatorHandler):
     ik_solver: Optional[IKSolver] = None
     joint_control_mode: str = "per_step_ik"
     joint_interp_speed: float = 0.05
+    max_joint_delta: float = 0.35
 
     _last_move_key: List[str | None] = field(init=False, repr=False)
     _last_eef_key: List[str | None] = field(init=False, repr=False)
@@ -161,6 +165,7 @@ class MujocoOperatorHandler(OperatorHandler):
             freejoint=self.freejoint_name,
             joint_control_mode=self.joint_control_mode,
             joint_interp_speed=self.joint_interp_speed,
+            max_joint_delta=self.max_joint_delta,
         )
 
     def move_to_pose(
@@ -275,18 +280,26 @@ class MujocoOperatorHandler(OperatorHandler):
             )
             self._move_steps[env_index] += 1
             eef_world_after = self.get_end_effector_pose()
-            pos_err_after = float(
-                np.linalg.norm(eef_world_after.position[env_index] - pos_goal)
-            )
+            pos_diff_after = eef_world_after.position[env_index] - pos_goal
+            pos_err_after = float(np.linalg.norm(pos_diff_after))
             ori_err_after = quaternion_angular_distance(
                 eef_world_after.orientation[env_index], ori_goal
             )
-            event = (
-                "moving"
-                if pos_err_after > self.control.tolerance.position
-                or ori_err_after > self.control.tolerance.orientation
-                else "pose_reached"
+            # Resolve effective tolerance: per-waypoint override > operator default
+            wp_tol = pose.tolerance
+            eff_pos_tol = (
+                wp_tol.position
+                if wp_tol is not None and wp_tol.position is not None
+                else self.control.tolerance.position
             )
+            eff_ori_tol = (
+                wp_tol.orientation
+                if wp_tol is not None and wp_tol.orientation is not None
+                else self.control.tolerance.orientation
+            )
+            pos_ok = position_within_tolerance(pos_diff_after, eff_pos_tol)
+            ori_ok = ori_err_after <= eff_ori_tol
+            event = "pose_reached" if pos_ok and ori_ok else "moving"
             details[env_index] = {
                 "event": event,
                 "operator": self.name,
@@ -302,10 +315,7 @@ class MujocoOperatorHandler(OperatorHandler):
                 "orientation_error": ori_err_after,
                 "steps": int(self._move_steps[env_index]),
             }
-            if (
-                pos_err_after <= self.control.tolerance.position
-                and ori_err_after <= self.control.tolerance.orientation
-            ):
+            if pos_ok and ori_ok:
                 signals[env_index] = ControlSignal.REACHED
                 self._move_steps[env_index] = 0
             elif self._move_steps[env_index] >= self.control.timeout_steps:
@@ -953,10 +963,24 @@ def build_mujoco_backend(
                     extra.get("joint_interp_speed", 0.1),
                 )
             ),
+            max_joint_delta=float(
+                op_extra.get(
+                    "max_joint_delta",
+                    ik_extra.get(
+                        "max_joint_delta",
+                        extra.get("max_joint_delta", 0.35),
+                    ),
+                )
+            ),
             **{
                 k: v
                 for k, v in extra.items()
-                if k not in {"joint_control_mode", "joint_interp_speed"}
+                if k
+                not in {
+                    "joint_control_mode",
+                    "joint_interp_speed",
+                    "max_joint_delta",
+                }
             },
         )
 

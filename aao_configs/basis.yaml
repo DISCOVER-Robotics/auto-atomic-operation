@@ -1,14 +1,8 @@
-assets_dir: assets
-gs_dir: ${assets_dir}/gs/scenes/${scene_name}
+defaults:
+  - common_vars
+
 model_name: demo
 task_name: ${scene_name}
-
-cam_width: 640
-cam_height: 480
-enable_color: true
-enable_depth: true
-enable_mask: true
-enable_heat_map: true
 
 env:
   _target_: auto_atom.basis.mjc.mujoco_env.BatchedUnifiedMujocoEnv
@@ -25,7 +19,7 @@ env:
   sim_freq: 600
   update_freq: 30
   cameras:
-    - name: hand_cam
+    - name: wrist_cam
       width: ${cam_width}
       height: ${cam_height}
       enable_color: ${enable_color}
@@ -33,21 +27,25 @@ env:
       enable_mask: ${enable_mask}
       enable_heat_map: ${enable_heat_map}
       parent_frame: eef_pose
-    - name: front_cam
+      is_static: false
+    - name: env1_cam
       width: ${cam_width}
       height: ${cam_height}
       enable_color: ${enable_color}
       enable_depth: ${enable_depth}
       enable_mask: ${enable_mask}
       enable_heat_map: ${enable_heat_map}
-    - name: side_cam
+      is_static: true
+    - name: env2_cam
       width: ${cam_width}
       height: ${cam_height}
       enable_color: ${enable_color}
       enable_depth: ${enable_depth}
       enable_mask: ${enable_mask}
       enable_heat_map: ${enable_heat_map}
+      is_static: true
   # structured: true
+  heatmap_operations: ["pick", "place", "push", "pull", "press"]
 
 backend: auto_atom.backend.mjc.mujoco_backend.build_mujoco_backend
 

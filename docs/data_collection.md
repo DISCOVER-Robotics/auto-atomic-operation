@@ -19,15 +19,23 @@ Output files are written to:
 - `assets/demos/<config_name>.json`
 - `assets/demos/<config_name>.npz`
 
+When `env.batch_size > 1`, the recorder writes one video per env replica:
+
+- `assets/videos/<config_name>_env0.gif`
+- `assets/videos/<config_name>_env0.mp4`
+- `assets/videos/<config_name>_env1_cam.gif`
+- ...
+
 ### Recorder options
 
 All options are injected via Hydra with the `+recorder.` prefix:
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
-| `camera` | `front_cam` | Camera name to capture from |
+| `camera` | `env1_cam` | Camera name to capture from |
 | `fps` | `25` | Frame rate for the recording |
 | `gif_width` | `320` | Width (pixels) of the output GIF |
+| `max_updates` | `null` | Maximum number of `runner.update()` calls before auto-stopping |
 | `save_gif` | `false` | Whether to save a GIF |
 | `save_mp4` | `false` | Whether to save an MP4 |
 | `save_demo` | `true` | Whether to save replayable demo metadata and action arrays |
@@ -39,11 +47,15 @@ python examples/record_demo.py --config-name pick_and_place \
 
 # Use a different camera and higher FPS
 python examples/record_demo.py --config-name cup_on_coaster \
-    +recorder.camera=side_cam +recorder.fps=30
+    +recorder.camera=env2_cam +recorder.fps=30
 
 # Wider GIF output
 python examples/record_demo.py --config-name stack_color_blocks \
     +recorder.gif_width=480
+
+# Stop recording automatically after 200 updates
+python examples/record_demo.py --config-name press_three_buttons \
+    +recorder.max_updates=200
 ```
 
 ## Replay Recorded Demo
@@ -80,7 +92,7 @@ All options are injected via Hydra with the `+replay.` prefix:
 | ------ | ------- | ----------- |
 | `demo_name` | `<config_name>` | Demo basename under `assets/demos/` |
 | `mode` | `ctrl` | Replay mode, either `ctrl` or `pose` |
-| `camera` | `front_cam` | Camera name used for replay recording |
+| `camera` | `env1_cam` | Camera name used for replay recording |
 | `fps` | `25` | Frame rate for replay video export |
 | `gif_width` | `320` | Width (pixels) of the replay GIF |
 | `save_gif` | `true` | Whether to save a replay GIF |
@@ -97,7 +109,7 @@ python examples/replay_demo.py --config-name open_hinge_door \
 
 # Replay from another camera
 python examples/replay_demo.py --config-name cup_on_coaster \
-    +replay.camera=side_cam
+    +replay.camera=env2_cam
 ```
 
 ## Compare GS Render
@@ -212,7 +224,7 @@ git clone --depth 1 https://github.com/OpenGHz/AIRBOT-Data-Collection.git airdc 
 ```
 
 ```bash
-pip install -e ./airdc"[mujoco,assis]"
+pip install -e ./airdc"[assis]"
 ```
 
 将`auto-atomic-operation`软链接到`third_party`目录下：

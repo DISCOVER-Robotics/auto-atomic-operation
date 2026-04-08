@@ -728,7 +728,7 @@
 
             <body name="right_tactile" pos="-0.019701 -0.014499 0" quat="0.4999981633974483 0.49999999999662686 -0.49999999999662686 0.5000018366025516" gravcomp="1">
               <inertial pos="7.44670002401661E-05 0.00784747372261869 0.00195692056024735" quat="1 0 0 0" mass="0.000814180541801484" diaginertia="1.77999294668352e-08 8.5777623786915e-09 2.12505762180111e-08"/>
-              <attach model="tactile_sensor" prefix="right_"/>
+              <attach model="tactile_sensor" prefix="finger2_"/>
               <geom name="right_tactile_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="right_tactile.STL" material="default_material" class="visual"/>
             </body>
           </body>
@@ -775,11 +775,16 @@
 
             <body name="left_tactile" pos="-0.019701 0.014499 0" quat="0.4999981633974483 -0.49999999999662686 0.49999999999662686 0.5000018366025516" gravcomp="1">
               <inertial pos="7.44670002401705E-05 0.00784747372261869 0.00195692056024735" quat="1 0 0 0" mass="0.000814180541801481" diaginertia="1.77999294668351e-08 8.57776237869146e-09 2.1250576218011e-08"/>
-              <attach model="tactile_sensor" prefix="left_"/>
+              <attach model="tactile_sensor" prefix="finger1_"/>
               <geom name="left_tactile_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="left_tactile.STL" material="default_material" class="visual"/>
             </body>
           </body>
         </body>
+      </body>
+
+      <body name="wrist_cam" pos="-0.0675 0 0.0325" euler="1.5708 1.5708 0" gravcomp="1">
+        <camera name="wrist_cam" mode="fixed" fovy="42" resolution="640 352" pos="0 0 0" euler="-0.052359876 0 0"/>
+        <site name="wrist_cam_site" size="0.005" rgba="1 0 0 1" pos="0 0 0" euler="-0.052359876 0 0"/>
       </body>
 
       <body name="left_cam" pos="0 0 0" quat="1 0 0 0" gravcomp="1">
@@ -787,8 +792,8 @@
         <geom name="left_cam_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="left_cam.STL" material="default_material" class="visual"/>
 
         <body name="cam_left" pos="-0.0675 -0.025 0.0325" euler="1.5708 1.5708 0" gravcomp="1">
-          <camera name="cam_left" mode="fixed" fovy="42" resolution="640 352" pos="0 0 0" euler="-0.052359876 0 0"/>
-          <site name="cam_left_site" size="0.005" rgba="1 0 0 1" pos="0 0 0" euler="-0.052359876 0 0"/>
+          <camera name="left_cam" mode="fixed" fovy="42" resolution="640 352" pos="0 0 0" euler="-0.052359876 0 0"/>
+          <site name="left_cam_site" size="0.005" rgba="1 0 0 1" pos="0 0 0" euler="-0.052359876 0 0"/>
         </body>
       </body>
 
@@ -797,8 +802,8 @@
         <geom name="right_cam_visual" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="right_cam.STL" material="default_material" class="visual"/>
 
         <body name="cam_right" pos="-0.0675 0.025 0.0325" euler="1.5708 1.5708 0" gravcomp="1">
-          <camera name="cam_right" mode="fixed" fovy="42" resolution="640 352" pos="0 0 0" euler="-0.052359876 0 0"/>
-          <site name="cam_right_site" size="0.005" rgba="1 0 0 1" pos="0 0 0" euler="-0.052359876 0 0"/>
+          <camera name="right_cam" mode="fixed" fovy="42" resolution="640 352" pos="0 0 0" euler="-0.052359876 0 0"/>
+          <site name="right_cam_site" size="0.005" rgba="1 0 0 1" pos="0 0 0" euler="-0.052359876 0 0"/>
         </body>
       </body>
     </body>

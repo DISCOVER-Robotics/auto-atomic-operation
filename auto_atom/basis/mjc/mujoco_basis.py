@@ -11,7 +11,7 @@ from enum import Enum
 from math import tan, pi
 from pathlib import Path
 import copy
-from typing import Any, Callable, Dict, List, Set, Optional
+from typing import Any, Callable, Dict, List, Set, Optional, Tuple
 from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
 from auto_atom.basis.mjc.tactile.tactile_sensor import TactileSensorManager
 import time
@@ -57,6 +57,10 @@ class CameraSpec(BaseModel, frozen=True):
     reference frame is auto-detected from the camera's attached body (again
     preferring a same-named site over the body itself).  Cameras attached
     directly to the world body keep the world frame."""
+    is_static: bool = False
+    """Whether this camera's GS background is rendered once and cached (static)
+    or re-rendered every frame (dynamic).  Set to ``False`` for moving cameras
+    such as hand-mounted cameras whose viewpoint changes each timestep."""
 
 
 class ViewerConfig(BaseModel, frozen=True):
@@ -83,8 +87,9 @@ class OperatorBinding(BaseModel, frozen=True):
 
     model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
-    name: str
-    """Logical operator name, used as the key prefix in observation dicts."""
+    name: str = ""
+    """Logical operator name, auto-populated from the ``EnvConfig.operators``
+    dict key.  Can be left empty in YAML; the model validator fills it in."""
 
     arm_actuators: List[str] = Field(default_factory=list)
     """Actuator names (as defined in the XML) that drive the main arm/body joints."""
@@ -135,8 +140,8 @@ class EnvConfig(BaseModel, frozen=True):
     """Optional registry name. When set, the constructed batched env self-registers under this name."""
     model_path: Path
     """The path to the Mujoco XML model file used to create the environment."""
-    operators: List[OperatorBinding] = Field(default_factory=list)
-    """Operator definitions mapping logical names to XML actuators and sensors."""
+    operators: Dict[str, OperatorBinding] = Field(default_factory=dict)
+    """Operator definitions keyed by logical name, mapping to XML actuators and sensors."""
     enabled_sensors: Set[DataType] = Field(default_factory=set)
     """The sensor categories that should be exposed in captured observations."""
     cameras: List[CameraSpec] = Field(default_factory=list)
@@ -144,6 +149,8 @@ class EnvConfig(BaseModel, frozen=True):
     mask_objects: List[str] = Field(default_factory=list)
     """The object names that are eligible for binary mask and heat-map generation."""
     operations: List[str] = Field(default_factory=list)
+    """The operation names corresponding to the mask objects."""
+    heatmap_operations: List[str] = Field(default_factory=list)
     """The operation names used to assign channels in generated heat maps."""
     stamp_ns: bool = True
     """Whether observation timestamps should be emitted in nanoseconds instead of seconds."""
@@ -151,6 +158,8 @@ class EnvConfig(BaseModel, frozen=True):
     """Physics simulation frequency in Hz. If None, uses the timestep defined in the XML model."""
     update_freq: float | None = None
     """Control update frequency in Hz. Must be <= sim_freq. If None, defaults to sim_freq (n_substeps=1)."""
+    ctrl_interpolation: bool = False
+    """Linearly interpolate ctrl across substeps when n_substeps > 1 to prevent PD overshoot."""
     initial_joint_positions: Dict[str, float] = Field(default_factory=dict)
     """Joint name → qpos value overrides applied after every reset (after the keyframe)."""
     viewer: ViewerConfig | None = None
@@ -173,6 +182,19 @@ class EnvConfig(BaseModel, frozen=True):
     ``model``/``data``).  The framework calls ``bind()`` after loading the
     model.
     """
+    interests: Tuple[List[str], List[str]] = ([], [])
+    """A tuple of two lists: the first list contains the names of interest objects, and the second list contains the names of interest operations."""
+
+    @model_validator(mode="after")
+    def populate_operator_names(self):
+        for key, binding in self.operators.items():
+            if not binding.name:
+                self.operators[key] = binding.model_copy(update={"name": key})
+            elif binding.name != key:
+                raise ValueError(
+                    f"Operator key '{key}' does not match binding name '{binding.name}'"
+                )
+        return self
 
     @model_validator(mode="after")
     def validate_frequencies(self):
@@ -191,13 +213,31 @@ class EnvConfig(BaseModel, frozen=True):
 
     @model_validator(mode="after")
     def validate_operations(self):
+        enable_heat_map = False
+        enable_mask = False
         for cam_cfg in self.cameras:
             if cam_cfg.enable_heat_map:
-                for field in ("operations", "mask_objects"):
-                    if not getattr(self, field):
-                        raise ValueError(f"{field} must be set when enable_heat_map")
-            if cam_cfg.enable_mask and not self.mask_objects:
-                raise ValueError("mask_objects must be set when enable_mask")
+                enable_heat_map = True
+            if cam_cfg.enable_mask:
+                enable_mask = True
+            if enable_mask and enable_heat_map:
+                break
+        if enable_heat_map:
+            if not self.heatmap_operations:
+                self.heatmap_operations.extend(self.operations)
+            for field in ("operations", "mask_objects"):
+                if field not in self.model_fields_set:
+                    raise ValueError(f"{field} must be set when enable_heat_map")
+        if enable_mask and not self.mask_objects:
+            raise ValueError("mask_objects must be set when enable_mask")
+        return self
+
+    @model_validator(mode="after")
+    def validate_interests(self):
+        if not self.interests[0]:
+            self.interests[0].extend(self.mask_objects)
+        if not self.interests[1]:
+            self.interests[1].extend(self.operations)
         return self
 
     @field_validator("viewer")
@@ -228,7 +268,6 @@ class MujocoBasis:
         self.config = config
         self._info = None
         self.model, self.data = self._load_model(config.model_path)
-
         if config.sim_freq is not None:
             self.model.opt.timestep = 1.0 / config.sim_freq
         self.get_logger().info(
@@ -239,6 +278,8 @@ class MujocoBasis:
             if config.sim_freq is not None and config.update_freq is not None
             else 1
         )
+        self._ctrl_interp = config.ctrl_interpolation and self._n_substeps > 1
+        self._prev_ctrl: np.ndarray | None = None
 
         if self.model.nkey > 0:
             mujoco.mj_resetDataKeyframe(self.model, self.data, 0)
@@ -264,7 +305,7 @@ class MujocoBasis:
         self._op_arm_vidx: dict[str, np.ndarray] = {}
         self._op_eef_vidx: dict[str, np.ndarray] = {}
         self._op_output_names: dict[str, tuple[str, str]] = {}
-        for op in self._operators:
+        for op in self._operators.values():
             arm_aidx = self._resolve_actuator_indices(op.arm_actuators)
             eef_aidx = self._resolve_actuator_indices(op.eef_actuators)
             arm_qidx, arm_vidx = self._actuator_joint_indices(arm_aidx.tolist())
@@ -287,6 +328,7 @@ class MujocoBasis:
         self._renderer_scene_option.sitegroup[:] = 0
         self._interest_object_operations: dict[str, str] = {}
         self._mask_object_pairs = self._build_mask_object_pairs(config.mask_objects)
+        self.set_interest_objects_and_operations(*config.interests)
 
         logger = self.get_logger()
 
@@ -334,7 +376,7 @@ class MujocoBasis:
         self._pose_site_ids: dict[str, int] = {}
         self._pose_validated_components: set[str] = set()
         self._wrench_ids: dict[str, dict[str, int]] = {}
-        for op in self._operators:
+        for op in self._operators.values():
             self._imu_ids[op.name] = {
                 "acc": self._sensor_id(op.imu_acc) if op.imu_acc else -1,
                 "gyro": self._sensor_id(op.imu_gyro) if op.imu_gyro else -1,
@@ -493,9 +535,9 @@ class MujocoBasis:
                 raise ValueError(
                     f"Object '{object_name}' is not configured in mask_objects: {self.config.mask_objects}"
                 )
-            if operation_name not in self.config.operations:
+            if operation_name not in self.config.heatmap_operations:
                 raise ValueError(
-                    f"Operation '{operation_name}' is not configured in operations: {self.config.operations}"
+                    f"Operation '{operation_name}' is not configured in operations: {self.config.heatmap_operations}"
                 )
             interest_object_operations[object_name] = operation_name
 
@@ -503,13 +545,14 @@ class MujocoBasis:
 
     def _build_operation_mask(self, segmentation: np.ndarray) -> np.ndarray:
         operation_mask = np.zeros(
-            (*segmentation.shape[:2], len(self.config.operations)), dtype=np.uint8
+            (*segmentation.shape[:2], len(self.config.heatmap_operations)),
+            dtype=np.uint8,
         )
         if segmentation.ndim != 3 or segmentation.shape[-1] != 2:
             return operation_mask
 
         for object_name, operation_name in self._interest_object_operations.items():
-            channel_idx = self.config.operations.index(operation_name)
+            channel_idx = self.config.heatmap_operations.index(operation_name)
             pair_mask = np.zeros(segmentation.shape[:2], dtype=bool)
             for objtype, objid in self._mask_object_pairs.get(object_name, set()):
                 pair_mask |= (segmentation[..., 0] == objid) & (
@@ -747,12 +790,29 @@ class MujocoBasis:
                 self.data.qpos[int(self.model.jnt_qposadr[jid])] = qpos_val
         mujoco.mj_forward(self.model, self.data)
         self._sync_mocap_to_freejoint()
+        self._prev_ctrl = None
+
+    def _snapshot_ctrl(self) -> None:
+        """Capture current ctrl as the interpolation baseline for the next update."""
+        if self._ctrl_interp and self._prev_ctrl is None:
+            self._prev_ctrl = self.data.ctrl.copy()
 
     def update(self):
-        for _ in range(self._n_substeps):
-            for cb in self._pre_step_callbacks:
-                cb(self.model, self.data)
-            mujoco.mj_step(self.model, self.data)
+        if self._ctrl_interp:
+            new_ctrl = self.data.ctrl.copy()
+            old_ctrl = self._prev_ctrl if self._prev_ctrl is not None else new_ctrl
+            for i in range(self._n_substeps):
+                alpha = (i + 1) / self._n_substeps
+                self.data.ctrl[:] = old_ctrl + alpha * (new_ctrl - old_ctrl)
+                for cb in self._pre_step_callbacks:
+                    cb(self.model, self.data)
+                mujoco.mj_step(self.model, self.data)
+            self._prev_ctrl = new_ctrl
+        else:
+            for _ in range(self._n_substeps):
+                for cb in self._pre_step_callbacks:
+                    cb(self.model, self.data)
+                mujoco.mj_step(self.model, self.data)
         if self._viewer_running():
             self._sync_viewer()
             if self.config.viewer.step_delay > 0.0:
@@ -862,7 +922,9 @@ class MujocoBasis:
                 self._info = self.get_info(cached=False)
             return self._info
         mujoco.mj_forward(self.model, self.data)
-        info: dict[str, Any] = self.config.model_dump(mode="json", exclude={"cameras"})
+        info: dict[str, Any] = self.config.model_dump(
+            mode="json", exclude={"cameras", "pre_step_callbacks"}
+        )
         info["cameras"] = {}
         camera_info = self._get_camera_info()
         camera_extrinsics = self._get_camera_extrinsics()

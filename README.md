@@ -5,6 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/auto-atomic-operation)](https://pypi.org/project/auto-atomic-operation/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/Docs-GitHub%20Pages-blue?logo=readthedocs)](https://openghz.github.io/auto-atomic-operation/#/)
 
 A YAML-driven atomic operation framework for robotic manipulation.
 
@@ -178,6 +179,7 @@ aao_demo "task.randomization.source_block.x=[-0.05,0.05]"
 Install 3D GS dependencies:
 ```bash
 pip install -e ."[gs]"
+# pip install "gaussian_renderer @ git+https://github.com/OpenGHz/GaussianRenderer.git"
 ```
 
 Run the following command to download the assets for the 3D GS assets for the demos:

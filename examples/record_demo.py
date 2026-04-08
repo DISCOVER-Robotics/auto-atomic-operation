@@ -9,14 +9,17 @@ and override any value via Hydra:
     python examples/record_demo.py --config-name press_three_buttons
 
 Video files are written to ``assets/videos/<config_name>.mp4`` and
-``assets/videos/<config_name>.gif``. Replay data is written to
+``assets/videos/<config_name>.gif`` for single-env recording, or
+``assets/videos/<config_name>_env<idx>.mp4`` / ``.gif`` when recording
+multiple envs in parallel. Replay data is written to
 ``assets/demos/<config_name>.npz`` and ``assets/demos/<config_name>.json``.
 
 Extra Hydra overrides:
 
-    python examples/record_demo.py +recorder.camera=side_cam
+    python examples/record_demo.py +recorder.camera=env2_cam
     python examples/record_demo.py +recorder.fps=15
     python examples/record_demo.py +recorder.gif_width=480
+    python examples/record_demo.py +recorder.max_updates=200
 """
 
 import json
@@ -35,9 +38,10 @@ from auto_atom.runtime import TaskRunner
 
 
 class RecorderConfig(BaseModel):
-    camera: str = Field(default="front_cam")
+    camera: str = Field(default="env1_cam")
     fps: int = Field(default=25)
     gif_width: int = Field(default=320)
+    max_updates: int | None = Field(default=None, ge=0)
     save_gif: bool = Field(default=False)
     save_mp4: bool = Field(default=False)
     save_demo: bool = Field(default=True)
@@ -160,6 +164,17 @@ def _resolve_camera(
     return None, None
 
 
+def _split_frame_batch(data: object) -> list[np.ndarray]:
+    frame = np.asarray(data, dtype=np.uint8)
+    if frame.ndim == 3:
+        return [frame]
+    if frame.ndim == 4:
+        return [np.asarray(single, dtype=np.uint8) for single in frame]
+    raise TypeError(
+        f"Expected camera frame with shape (H, W, C) or (B, H, W, C), got {frame.shape}"
+    )
+
+
 @hydra.main(
     config_path=str(get_config_dir()),
     config_name="pick_and_place",
@@ -175,12 +190,15 @@ def main(cfg: DictConfig) -> None:
     task_file = prepare_task_file(cfg)
     runner = TaskRunner().from_config(task_file)
 
-    frames: list[np.ndarray] = []
+    frames_by_env: list[list[np.ndarray]] = []
     low_dim_observations: list[dict[str, dict]] = []
     action_trace: list[np.ndarray] = []
     update_trace: list[dict] = []
     resolved_camera: str | None = None
     resolved_camera_key: str | None = None
+    batch_size = 0
+    updates_used = 0
+    stopped_due_to_max_updates = False
 
     def capture() -> None:
         backend = runner._context and runner._context.backend
@@ -202,8 +220,18 @@ def main(cfg: DictConfig) -> None:
                 )
         data = obs.get(resolved_camera_key, {}).get("data")
         if data is not None:
-            frame = np.asarray(data, dtype=np.uint8)
-            frames.append(frame[0] if frame.ndim >= 4 else frame)
+            batch_frames = _split_frame_batch(data)
+            nonlocal batch_size
+            if batch_size == 0:
+                batch_size = len(batch_frames)
+                frames_by_env.extend([] for _ in range(batch_size))
+            elif len(batch_frames) != batch_size:
+                raise RuntimeError(
+                    "Observed camera batch size changed during recording: "
+                    f"expected {batch_size}, got {len(batch_frames)}"
+                )
+            for env_index, env_frame in enumerate(batch_frames):
+                frames_by_env[env_index].append(env_frame)
 
     try:
         print("Reset task")
@@ -212,7 +240,13 @@ def main(cfg: DictConfig) -> None:
         capture()
 
         while True:
+            if rec_cfg.max_updates is not None and updates_used >= rec_cfg.max_updates:
+                stopped_due_to_max_updates = True
+                print(f"Reached recorder.max_updates={rec_cfg.max_updates}, stopping.")
+                break
+
             update = runner.update()
+            updates_used += 1
             backend = runner._context and runner._context.backend
             if isinstance(backend, MujocoTaskBackend):
                 action_trace.append(
@@ -239,37 +273,49 @@ def main(cfg: DictConfig) -> None:
     finally:
         runner.close()
 
-    if not frames:
+    if not frames_by_env:
         print("No frames captured — is the backend a MujocoTaskBackend?")
         return
 
     config_name = HydraConfig.get().job.config_name
     project_root = hydra.utils.get_original_cwd()
-    video_dir = os.path.join(project_root, "assets", "videos")
-    demo_dir = os.path.join(project_root, "assets", "demos")
+    video_dir = os.path.join(project_root, "outputs/records", "videos")
+    demo_dir = os.path.join(project_root, "outputs/records", "demos")
     os.makedirs(video_dir, exist_ok=True)
     os.makedirs(demo_dir, exist_ok=True)
-    mp4_path = os.path.join(video_dir, f"{config_name}.mp4")
-    gif_path = os.path.join(video_dir, f"{config_name}.gif")
     demo_npz_path = os.path.join(demo_dir, f"{config_name}.npz")
     demo_json_path = os.path.join(demo_dir, f"{config_name}.json")
 
-    # Write MP4
-    if rec_cfg.save_mp4:
-        iio.imwrite(mp4_path, frames, fps=rec_cfg.fps, codec="libx264", quality=8)
-        print(f"\nSaved MP4 ({len(frames)} frames @ {rec_cfg.fps} fps): {mp4_path}")
+    def build_video_path(ext: str, env_index: int) -> str:
+        suffix = "" if batch_size == 1 else f"_env{env_index}"
+        return os.path.join(video_dir, f"{config_name}{suffix}.{ext}")
 
-    # Resize frames for GIF
+    if rec_cfg.save_mp4:
+        for env_index, env_frames in enumerate(frames_by_env):
+            mp4_path = build_video_path("mp4", env_index)
+            iio.imwrite(
+                mp4_path, env_frames, fps=rec_cfg.fps, codec="libx264", quality=8
+            )
+            print(
+                f"\nSaved MP4 for env {env_index} "
+                f"({len(env_frames)} frames @ {rec_cfg.fps} fps): {mp4_path}"
+            )
+
     if rec_cfg.save_gif:
-        h, w = frames[0].shape[:2]
-        gif_height = int(rec_cfg.gif_width * h / w)
-        gif_frames = [
-            np.array(Image.fromarray(f).resize((rec_cfg.gif_width, gif_height)))
-            for f in frames
-        ]
         gif_fps = min(rec_cfg.fps, 15)
-        iio.imwrite(gif_path, gif_frames, fps=gif_fps, loop=0)
-        print(f"Saved GIF  ({len(gif_frames)} frames @ {gif_fps} fps): {gif_path}")
+        for env_index, env_frames in enumerate(frames_by_env):
+            h, w = env_frames[0].shape[:2]
+            gif_height = int(rec_cfg.gif_width * h / w)
+            gif_frames = [
+                np.array(Image.fromarray(f).resize((rec_cfg.gif_width, gif_height)))
+                for f in env_frames
+            ]
+            gif_path = build_video_path("gif", env_index)
+            iio.imwrite(gif_path, gif_frames, fps=gif_fps, loop=0)
+            print(
+                f"Saved GIF for env {env_index} "
+                f"({len(gif_frames)} frames @ {gif_fps} fps): {gif_path}"
+            )
 
     if rec_cfg.save_demo:
         action_array = (
@@ -286,11 +332,15 @@ def main(cfg: DictConfig) -> None:
                     "config_name": config_name,
                     "camera": resolved_camera,
                     "fps": rec_cfg.fps,
-                    "num_frames": len(frames),
+                    "max_updates": rec_cfg.max_updates,
+                    "updates_used": updates_used,
+                    "stopped_due_to_max_updates": stopped_due_to_max_updates,
+                    "num_frames": len(frames_by_env[0]) if frames_by_env else 0,
+                    "num_frames_per_env": [
+                        len(env_frames) for env_frames in frames_by_env
+                    ],
                     "num_actions": int(action_array.shape[0]),
-                    "batch_size": int(action_array.shape[1])
-                    if action_array.ndim >= 2
-                    else 0,
+                    "batch_size": batch_size,
                     "action_dim": int(action_array.shape[2])
                     if action_array.ndim == 3
                     else 0,

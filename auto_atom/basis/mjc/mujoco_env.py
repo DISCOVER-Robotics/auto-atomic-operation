@@ -52,7 +52,7 @@ def _create_header(time_sec: float) -> dict[str, Any]:
     return {"stamp": {"sec": int(time_sec), "nanosec": int((time_sec % 1) * 1e9)}}
 
 
-def _create_image_data(data: np.ndarray, time_sec: float):
+def create_image_data(data: np.ndarray, time_sec: float):
     h, w = data.shape[:2]
     c = data.shape[2] if data.ndim == 3 else 1
 
@@ -60,10 +60,27 @@ def _create_image_data(data: np.ndarray, time_sec: float):
         "header": _create_header(time_sec),
         "height": h,
         "width": w,
-        "data": data.tolist(),
+        "data": np.ascontiguousarray(data).tobytes(),
         "encoding": {1: "", 3: "rgb8", 4: "rgba8", 5: "heatmap"}[c],
         "step": w * c,
         "is_bigendian": 0,
+    }
+
+
+def _to_position_dict(position: list):
+    return {
+        "x": float(position[0]),
+        "y": float(position[1]),
+        "z": float(position[2]),
+    }
+
+
+def _to_quaternion_dict(quat_xyzw: list):
+    return {
+        "x": float(quat_xyzw[0]),
+        "y": float(quat_xyzw[1]),
+        "z": float(quat_xyzw[2]),
+        "w": float(quat_xyzw[3]),
     }
 
 
@@ -74,6 +91,7 @@ class _OperatorState:
     joint_mode: bool
     ik_solver: Optional["IKSolver"]
     eef_site_name: str
+    root_body_name: str
 
     # Base frame (world, fixed for the episode).
     base_pos: np.ndarray  # float32, shape (3,)
@@ -94,16 +112,15 @@ class _OperatorState:
     fj_dof_adr: int = 0
 
     # Observable target pose in base frame (updated on every control step).
-    target_pos_in_base: np.ndarray = field(
-        default_factory=lambda: np.zeros(3, dtype=np.float32)
-    )
+    target_pos_in_base: np.ndarray = field(default_factory=lambda: np.zeros(3))
     target_quat_in_base: np.ndarray = field(
-        default_factory=lambda: np.array([0, 0, 0, 1], dtype=np.float32)
+        default_factory=lambda: np.array([0, 0, 0, 1])
     )
 
     # Joint-mode execution strategy.
     joint_control_mode: str = "per_step_ik"
     joint_interp_speed: float = 0.05
+    max_joint_delta: float = 0.35
     planned_joint_start_qpos: Optional[np.ndarray] = None
     planned_joint_target_qpos: Optional[np.ndarray] = None
     planned_joint_progress: int = 0
@@ -112,12 +129,65 @@ class _OperatorState:
     planned_target_quat_in_base: Optional[np.ndarray] = None
 
 
+class KeyCreator:
+    """Build fully-qualified observation keys in a single call.
+
+    Callers should use the ``create_*_key`` methods for camera topics and
+    ``apply_prefix`` for non-camera topics. All returned keys already include
+    the top-level prefix (e.g. ``/robot/``) so no further concatenation is
+    needed.
+    """
+
+    def __init__(self, structured: bool):
+        self.structured = structured
+        if structured:
+            self._prefix = "/robot/"
+            self._color_suffix = "video_encoded"
+            self._depth_suffix = "depth/image_raw"
+        else:
+            self._prefix = ""
+            self._color_suffix = "color/image_raw"
+            self._depth_suffix = "aligned_depth_to_color/image_raw"
+
+    def apply_prefix(self, relative_key: str) -> str:
+        """Prepend the top-level prefix (e.g. ``/robot/``) to a relative key."""
+        return f"{self._prefix}{relative_key}"
+
+    def _camera_prefix(self, cam_name: str) -> str:
+        if self.structured:
+            return "camera/" + cam_name.split("_")[-2]
+        return cam_name
+
+    def create_color_key(self, cam_name: str) -> str:
+        return self.apply_prefix(
+            f"{self._camera_prefix(cam_name)}/{self._color_suffix}"
+        )
+
+    def create_depth_key(self, cam_name: str) -> str:
+        return self.apply_prefix(
+            f"{self._camera_prefix(cam_name)}/{self._depth_suffix}"
+        )
+
+    def create_mask_key(self, cam_name: str) -> str:
+        return self.apply_prefix(f"{self._camera_prefix(cam_name)}/mask/image_raw")
+
+    def create_heat_map_key(self, cam_name: str) -> str:
+        return self.apply_prefix(f"{self._camera_prefix(cam_name)}/mask/heat_map")
+
+    def create_camera_info_key(self, cam_name: str) -> str:
+        return self.apply_prefix(f"{self._camera_prefix(cam_name)}/camera_info")
+
+    def create_hand_eye_key(self, cam_name: str) -> str:
+        return self.apply_prefix(f"{self._camera_prefix(cam_name)}/hand_eye/transform")
+
+
 class UnifiedMujocoEnv(MujocoBasis):
     """MuJoCo environment with operator pose control and observation capture."""
 
     def __init__(self, config: Optional[EnvConfig] = None, **kwargs):
         super().__init__(config, **kwargs)
         self._operator_states: dict[str, _OperatorState] = {}
+        self._key_creator = KeyCreator(self.config.structured)
 
     # ==================================================================
     # Operator registration
@@ -134,6 +204,7 @@ class UnifiedMujocoEnv(MujocoBasis):
         freejoint: str = "",
         joint_control_mode: str = "per_step_ik",
         joint_interp_speed: float = 0.05,
+        max_joint_delta: float = 0.35,
     ) -> None:
         """Register an operator and snapshot its home state.
 
@@ -160,8 +231,8 @@ class UnifiedMujocoEnv(MujocoBasis):
             base_pos = physical_base_pos
             base_quat = physical_base_quat
         else:
-            base_pos = np.zeros(3, dtype=np.float32)
-            base_quat = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32)
+            base_pos = np.zeros(3)
+            base_quat = np.array([0.0, 0.0, 0.0, 1.0])
 
         # --- EEF pose → tool offset (base_T_eef) ---
         eef_pos_w, eef_quat_w = self.get_site_pose(eef_site)
@@ -219,6 +290,7 @@ class UnifiedMujocoEnv(MujocoBasis):
             joint_mode=joint_mode,
             ik_solver=ik_solver,
             eef_site_name=eef_site,
+            root_body_name=root_body,
             base_pos=base_pos,
             base_quat=base_quat,
             tool_offset_pos=tool_pos,
@@ -234,6 +306,7 @@ class UnifiedMujocoEnv(MujocoBasis):
             target_quat_in_base=tool_quat.copy(),
             joint_control_mode=control_mode,
             joint_interp_speed=interp_speed,
+            max_joint_delta=max_joint_delta,
             planned_joint_start_qpos=home_arm_qpos.copy()
             if home_arm_qpos is not None
             else None,
@@ -282,12 +355,8 @@ class UnifiedMujocoEnv(MujocoBasis):
         """World → base (all quaternions xyzw)."""
         inv_quat = quaternion_inverse(base_quat).astype(np.float32)
         inv_rot = quaternion_matrix(inv_quat)[:3, :3]
-        pos = (inv_rot @ (np.asarray(pos_w, dtype=np.float32) - base_pos)).astype(
-            np.float32
-        )
-        quat = quaternion_multiply(
-            inv_quat, np.asarray(quat_w, dtype=np.float32)
-        ).astype(np.float32)
+        pos = (inv_rot @ (np.asarray(pos_w) - base_pos)).astype(np.float32)
+        quat = quaternion_multiply(inv_quat, np.asarray(quat_w)).astype(np.float32)
         return pos, quat
 
     @staticmethod
@@ -299,10 +368,10 @@ class UnifiedMujocoEnv(MujocoBasis):
     ) -> tuple[np.ndarray, np.ndarray]:
         """Base → world (all quaternions xyzw)."""
         rot = quaternion_matrix(base_quat)[:3, :3]
-        pos = (rot @ np.asarray(pos_b, dtype=np.float32) + base_pos).astype(np.float32)
+        pos = (rot @ np.asarray(pos_b) + base_pos).astype(np.float32)
         quat = quaternion_multiply(
-            np.asarray(base_quat, dtype=np.float32),
-            np.asarray(quat_b, dtype=np.float32),
+            np.asarray(base_quat),
+            np.asarray(quat_b),
         ).astype(np.float32)
         return pos, quat
 
@@ -339,11 +408,13 @@ class UnifiedMujocoEnv(MujocoBasis):
         """Override the stored operator base frame and refresh cached offsets.
 
         This is intended for setup-time configuration such as
-        ``initial_state.base_pose``.  The MuJoCo model state is not mutated.
+        ``initial_state.base_pose``.  For joint-mode operators the physical
+        MuJoCo body is also relocated so the IK solver and the virtual base
+        frame stay in sync.
         """
         s = self._get_op(op_name)
-        s.base_pos = np.asarray(pos_w, dtype=np.float32)
-        s.base_quat = np.asarray(quat_w, dtype=np.float32)
+        s.base_pos = np.asarray(pos_w)
+        s.base_quat = np.asarray(quat_w)
         if not s.joint_mode:
             eef_pos_w, eef_quat_w = self.get_site_pose(s.eef_site_name)
             target_pos, target_quat = self._world_to_base(
@@ -356,6 +427,29 @@ class UnifiedMujocoEnv(MujocoBasis):
             if s.planned_target_quat_in_base is not None:
                 s.planned_target_quat_in_base = target_quat.copy()
             return
+        # Joint-mode: physically move the root body in MuJoCo so that the
+        # IK solver (which works in the physical body frame) stays aligned
+        # with the virtual base frame.
+        body_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_BODY, s.root_body_name
+        )
+        parent_id = int(self.model.body_parentid[body_id])
+        parent_xpos = self.data.xpos[parent_id].astype(np.float64)
+        parent_xmat = self.data.xmat[parent_id].reshape(3, 3).astype(np.float64)
+        # World pos → local pos (relative to parent body)
+        local_pos = parent_xmat.T @ (np.asarray(pos_w, dtype=np.float64) - parent_xpos)
+        self.model.body_pos[body_id] = local_pos
+        # World quat (xyzw) → local quat (wxyz, relative to parent)
+        quat_w_wxyz = np.array(
+            [quat_w[3], quat_w[0], quat_w[1], quat_w[2]], dtype=np.float64
+        )
+        parent_quat_wxyz = self.data.xquat[parent_id].astype(np.float64)
+        inv_parent_quat = np.empty(4, dtype=np.float64)
+        mujoco.mju_negQuat(inv_parent_quat, parent_quat_wxyz)
+        local_quat = np.empty(4, dtype=np.float64)
+        mujoco.mju_mulQuat(local_quat, inv_parent_quat, quat_w_wxyz)
+        self.model.body_quat[body_id] = local_quat
+        mujoco.mj_forward(self.model, self.data)
         eef_pos_w, eef_quat_w = self.get_site_pose(s.eef_site_name)
         tool_pos, tool_quat = self._world_to_base(
             eef_pos_w, eef_quat_w, s.base_pos, s.base_quat
@@ -373,18 +467,18 @@ class UnifiedMujocoEnv(MujocoBasis):
     ) -> None:
         """Set the operator base pose with consistent semantics across backends.
 
-        Joint-mode operators only update the virtual base frame because the
-        physical robot base is fixed in the model. Pure mocap operators also
-        move the physical body rigidly so the existing base->EEF tool offset is
-        preserved under the new base frame.
+        Joint-mode operators update both the virtual base frame and the
+        physical MuJoCo body so that the IK solver stays in sync.
+        Pure mocap operators also move the physical body rigidly so the
+        existing base->EEF tool offset is preserved under the new base frame.
         """
         s = self._get_op(op_name)
         if s.joint_mode:
             self.override_operator_base_pose(op_name, pos_w, quat_w)
             return
 
-        s.base_pos = np.asarray(pos_w, dtype=np.float32)
-        s.base_quat = np.asarray(quat_w, dtype=np.float32)
+        s.base_pos = np.asarray(pos_w)
+        s.base_quat = np.asarray(quat_w)
         base_body_pos, base_body_quat_xyzw = self._eef_in_base_to_base_body_world(
             s,
             s.tool_offset_pos,
@@ -393,7 +487,7 @@ class UnifiedMujocoEnv(MujocoBasis):
         self._write_mocap_pose(
             s,
             base_body_pos,
-            np.asarray(base_body_quat_xyzw, dtype=np.float32),
+            np.asarray(base_body_quat_xyzw),
             sync_freejoint=True,
         )
         mujoco.mj_forward(self.model, self.data)
@@ -403,6 +497,17 @@ class UnifiedMujocoEnv(MujocoBasis):
     # ==================================================================
     # Pose control (actual physics interaction)
     # ==================================================================
+
+    @staticmethod
+    def _clamp_joint_delta(
+        solved: np.ndarray, seed: np.ndarray, max_delta: float
+    ) -> np.ndarray:
+        """Clamp per-step joint displacement to avoid branch jumps."""
+        delta = solved - seed
+        max_abs = float(np.max(np.abs(delta)))
+        if max_abs > max_delta:
+            return seed + delta * (max_delta / max_abs)
+        return solved
 
     def step_operator_toward_target(
         self, op_name: str, target_pos_b: np.ndarray, target_quat_b: np.ndarray
@@ -415,8 +520,8 @@ class UnifiedMujocoEnv(MujocoBasis):
         Mocap mode: convert to world base-body pose → write mocap → update.
         """
         s = self._get_op(op_name)
-        new_pos = np.asarray(target_pos_b, dtype=np.float32)
-        new_quat = np.asarray(target_quat_b, dtype=np.float32)
+        new_pos = np.asarray(target_pos_b)
+        new_quat = np.asarray(target_quat_b)
         s.target_pos_in_base = new_pos
         s.target_quat_in_base = new_quat
 
@@ -460,6 +565,9 @@ class UnifiedMujocoEnv(MujocoBasis):
                     if joint_targets is None:
                         self.update()
                         return
+                    joint_targets = self._clamp_joint_delta(
+                        joint_targets, current_arm_qpos, s.max_joint_delta
+                    )
                     s.planned_joint_start_qpos = current_arm_qpos.copy()
                     s.planned_joint_target_qpos = np.asarray(
                         joint_targets, dtype=np.float64
@@ -492,6 +600,9 @@ class UnifiedMujocoEnv(MujocoBasis):
                 if joint_targets is None:
                     self.update()
                     return
+                joint_targets = self._clamp_joint_delta(
+                    joint_targets, current_arm_qpos, s.max_joint_delta
+                )
 
             arm_aidx = self._op_arm_aidx[op_name]
             ctrl = np.asarray(self.data.ctrl, dtype=np.float64).copy()
@@ -515,7 +626,7 @@ class UnifiedMujocoEnv(MujocoBasis):
         """
         s = self._get_op(op_name)
         pos_w = np.asarray(pos_w, dtype=np.float64)
-        quat_w_f32 = np.asarray(quat_w, dtype=np.float32)
+        quat_w_f32 = np.asarray(quat_w)
 
         if s.joint_mode:
             eef_pos_b, eef_quat_b = self._world_to_base(
@@ -616,8 +727,8 @@ class UnifiedMujocoEnv(MujocoBasis):
     ) -> None:
         """Update the operator's home EEF pose (world frame input)."""
         s = self._get_op(op_name)
-        pos_w = np.asarray(pos_w, dtype=np.float32)
-        quat_w = np.asarray(quat_w, dtype=np.float32)
+        pos_w = np.asarray(pos_w)
+        quat_w = np.asarray(quat_w)
 
         if s.joint_mode:
             eef_pos_b, eef_quat_b = self._world_to_base(
@@ -636,6 +747,14 @@ class UnifiedMujocoEnv(MujocoBasis):
                 s.planned_joint_target_qpos = joint_targets.copy()
                 s.planned_joint_progress = 1
                 s.planned_joint_steps_total = 1
+            else:
+                raise RuntimeError(
+                    f"IK failed for operator '{op_name}' home EEF pose "
+                    f"(base-frame target: pos={np.array2string(np.asarray(eef_in_base.position[0]), precision=4)}, "
+                    f"quat={np.array2string(np.asarray(eef_in_base.orientation[0]), precision=4)}). "
+                    f"The target may be outside the arm's reachable workspace. "
+                    f"Check the EEF randomization range in your config."
+                )
         else:
             base_body_pos, base_body_quat_xyzw = self._eef_in_base_to_base_body_world(
                 s, *self._world_to_base(pos_w, quat_w, s.base_pos, s.base_quat)
@@ -681,6 +800,7 @@ class UnifiedMujocoEnv(MujocoBasis):
     # ==================================================================
 
     def step(self, action: np.ndarray) -> None:
+        self._snapshot_ctrl()
         action = np.asarray(action, dtype=np.float64).reshape(-1)
         n = min(len(action), self.model.nu)
         if n > 0:
@@ -733,8 +853,8 @@ class UnifiedMujocoEnv(MujocoBasis):
             Gripper actuator target(s).  Written to ``eef_actuators`` ctrl
             before stepping.  ``None`` keeps the current gripper ctrl.
         """
-        pos = np.asarray(position, dtype=np.float32).reshape(3)
-        ori = np.asarray(orientation, dtype=np.float32).reshape(4)
+        pos = np.asarray(position).reshape(3)
+        ori = np.asarray(orientation).reshape(4)
         if gripper is not None:
             eef_aidx = self._op_eef_aidx[operator]
             g = np.asarray(gripper, dtype=np.float64).reshape(-1)
@@ -751,8 +871,9 @@ class UnifiedMujocoEnv(MujocoBasis):
         sim_time = self.data.time
         t = int(sim_time * 1e9) if self.config.stamp_ns else float(sim_time)
         obs: dict[str, dict[str, Any]] = {}
+        kc = self._key_creator
 
-        for op in self._operators:
+        for op in self._operators.values():
             arm_qidx = self._op_arm_qidx[op.name]
             eef_qidx = self._op_eef_qidx[op.name]
             arm_vidx = self._op_arm_vidx[op.name]
@@ -770,35 +891,37 @@ class UnifiedMujocoEnv(MujocoBasis):
                     for limb, qidx, vidx, aidx in joint_components:
                         if qidx.size == 0 and vidx.size == 0 and aidx.size == 0:
                             continue
-                        for prefix in ("enc", "action"):
-                            obs[f"{prefix}/{limb}/joint_state"] = {
-                                "data": {
-                                    "position": np.asarray(
-                                        self.data.qpos[qidx], dtype=np.float32
-                                    ),
-                                    "velocity": np.asarray(
-                                        self.data.qvel[vidx], dtype=np.float32
-                                    ),
-                                    "effort": np.asarray(
-                                        self.data.ctrl[aidx], dtype=np.float32
-                                    ),
-                                },
-                                "t": t,
-                            }
+                        # Measurement side: real per-joint sensor values.
+                        obs[kc.apply_prefix(f"{limb}/joint_state")] = {
+                            "data": {
+                                "position": self.data.qpos[qidx].tolist(),
+                                "velocity": self.data.qvel[vidx].tolist(),
+                                "effort": self.data.actuator_force[aidx].tolist(),
+                            },
+                            "t": t,
+                        }
+                        # Action side: only the commanded quantity is filled;
+                        # fields that are not being commanded stay empty.
+                        obs[kc.apply_prefix(f"action/{limb}/joint_state")] = {
+                            "data": {
+                                "position": self.data.ctrl[aidx].tolist(),
+                                "velocity": [],
+                                "effort": [],
+                            },
+                            "t": t,
+                        }
                 else:
                     for limb, qidx, _, aidx in joint_components:
                         if qidx.size > 0:
-                            obs[f"{limb}/joint_state/position"] = {
-                                "data": np.asarray(
-                                    self.data.qpos[qidx], dtype=np.float32
-                                ),
+                            obs[kc.apply_prefix(f"{limb}/joint_state/position")] = {
+                                "data": np.asarray(self.data.qpos[qidx]),
                                 "t": t,
                             }
                         if aidx.size > 0:
-                            obs[f"action/{limb}/joint_state/position"] = {
-                                "data": np.asarray(
-                                    self.data.ctrl[aidx], dtype=np.float32
-                                ),
+                            obs[
+                                kc.apply_prefix(f"action/{limb}/joint_state/position")
+                            ] = {
+                                "data": np.asarray(self.data.ctrl[aidx]),
                                 "t": t,
                             }
 
@@ -807,16 +930,16 @@ class UnifiedMujocoEnv(MujocoBasis):
                     for limb, _, vidx, _ in joint_components:
                         if vidx.size == 0:
                             continue
-                        obs[f"{limb}/joint_state/velocity"] = {
-                            "data": np.asarray(self.data.qvel[vidx], dtype=np.float32),
+                        obs[kc.apply_prefix(f"{limb}/joint_state/velocity")] = {
+                            "data": np.asarray(self.data.qvel[vidx]),
                             "t": t,
                         }
                 if DataType.JOINT_EFFORT in self.config.enabled_sensors:
                     for limb, _, _, aidx in joint_components:
                         if aidx.size == 0:
                             continue
-                        obs[f"{limb}/joint_state/effort"] = {
-                            "data": np.asarray(self.data.ctrl[aidx], dtype=np.float32),
+                        obs[kc.apply_prefix(f"{limb}/joint_state/effort")] = {
+                            "data": np.asarray(self.data.actuator_force[aidx]),
                             "t": t,
                         }
 
@@ -841,38 +964,35 @@ class UnifiedMujocoEnv(MujocoBasis):
                         pos, quat = self.get_operator_eef_pose_in_base(op.name)
                     else:
                         pos_w2, quat_w2 = self._site_pose(op.name)
-                        pos, quat = (
-                            pos_w2.astype(np.float32),
-                            quat_w2.astype(np.float32),
-                        )
+                        pos, quat = (pos_w2, quat_w2)
 
                     rot9d = quaternion_matrix(quat)[:3, :3].ravel()
                     if structured:
-                        obs[f"{op.name}/pose"] = {
+                        obs[kc.apply_prefix(f"{op.name}/pose")] = {
                             "data": {
                                 "header": _create_header(sim_time),
                                 "pose": {
-                                    "position": pos.tolist(),
-                                    "orientation": quat.tolist(),
+                                    "position": _to_position_dict(pos),
+                                    "orientation": _to_quaternion_dict(quat),
                                 },
                             },
                             "t": t,
                         }
                     else:
-                        obs[f"{op.name}/pose/position"] = {
-                            "data": pos.astype(np.float32),
+                        obs[kc.apply_prefix(f"{op.name}/pose/position")] = {
+                            "data": pos,
                             "t": t,
                         }
-                        obs[f"{op.name}/pose/orientation"] = {
-                            "data": quat.astype(np.float32),
+                        obs[kc.apply_prefix(f"{op.name}/pose/orientation")] = {
+                            "data": quat,
                             "t": t,
                         }
-                    obs[f"{op.name}/pose/rotation"] = {
+                    obs[kc.apply_prefix(f"{op.name}/pose/rotation")] = {
                         "data": euler_from_matrix(rot9d.reshape(3, 3)),
                         "t": t,
                     }
-                    obs[f"{op.name}/pose/rotation_6d"] = {
-                        "data": rot9d[:6].astype(np.float32),
+                    obs[kc.apply_prefix(f"{op.name}/pose/rotation_6d")] = {
+                        "data": rot9d[:6],
                         "t": t,
                     }
 
@@ -881,25 +1001,25 @@ class UnifiedMujocoEnv(MujocoBasis):
                         tgt_pos = state.target_pos_in_base
                         tgt_ori = state.target_quat_in_base
                     else:
-                        tgt_pos = pos.astype(np.float32)
-                        tgt_ori = quat.astype(np.float32)
+                        tgt_pos = pos
+                        tgt_ori = quat
                     if structured:
-                        obs[f"action/{op.name}/pose"] = {
+                        obs[kc.apply_prefix(f"action/{op.name}/pose")] = {
                             "data": {
                                 "header": _create_header(sim_time),
                                 "pose": {
-                                    "position": tgt_pos.tolist(),
-                                    "orientation": tgt_ori.tolist(),
+                                    "position": _to_position_dict(tgt_pos),
+                                    "orientation": _to_quaternion_dict(tgt_ori),
                                 },
                             },
                             "t": t,
                         }
                     else:
-                        obs[f"action/{op.name}/pose/position"] = {
+                        obs[kc.apply_prefix(f"action/{op.name}/pose/position")] = {
                             "data": tgt_pos,
                             "t": t,
                         }
-                        obs[f"action/{op.name}/pose/orientation"] = {
+                        obs[kc.apply_prefix(f"action/{op.name}/pose/orientation")] = {
                             "data": tgt_ori,
                             "t": t,
                         }
@@ -919,7 +1039,7 @@ class UnifiedMujocoEnv(MujocoBasis):
                     gyro = self._sensor_data(gyro_id)
                     imu_quat = self._sensor_data(quat_id)
                     if structured:
-                        obs[f"{op.name}/imu"] = {
+                        obs[kc.apply_prefix(f"{op.name}/imu")] = {
                             "data": {
                                 # "header": _create_header(sim_time),
                                 "linear_acceleration": acc,
@@ -929,28 +1049,40 @@ class UnifiedMujocoEnv(MujocoBasis):
                             "t": t,
                         }
                     else:
-                        obs[f"{op.name}/imu/linear_acceleration"] = {
+                        obs[kc.apply_prefix(f"{op.name}/imu/linear_acceleration")] = {
                             "data": acc,
                             "t": t,
                         }
-                        obs[f"{op.name}/imu/angular_velocity"] = {"data": gyro, "t": t}
-                        obs[f"{op.name}/imu/orientation"] = {"data": imu_quat, "t": t}
+                        obs[kc.apply_prefix(f"{op.name}/imu/angular_velocity")] = {
+                            "data": gyro,
+                            "t": t,
+                        }
+                        obs[kc.apply_prefix(f"{op.name}/imu/orientation")] = {
+                            "data": imu_quat,
+                            "t": t,
+                        }
 
             if DataType.WRENCH in self.config.enabled_sensors:
                 force = self._sensor_data(self._wrench_ids[op.name]["force"])
                 torque = self._sensor_data(self._wrench_ids[op.name]["torque"])
                 if force.size == 0 or torque.size == 0:
                     force, torque = self._wrench_from_tactile(op)
-                force = np.asarray(force, dtype=np.float32)
-                torque = np.asarray(torque, dtype=np.float32)
+                # force = np.asarray(force)
+                # torque = np.asarray(torque)
                 if structured:
-                    obs[f"{op.name}/wrench"] = {
+                    obs[kc.apply_prefix(f"{op.name}/wrench")] = {
                         "data": {"force": force, "torque": torque},
                         "t": t,
                     }
                 else:
-                    obs[f"{op.name}/wrench/force"] = {"data": force, "t": t}
-                    obs[f"{op.name}/wrench/torque"] = {"data": torque, "t": t}
+                    obs[kc.apply_prefix(f"{op.name}/wrench/force")] = {
+                        "data": force,
+                        "t": t,
+                    }
+                    obs[kc.apply_prefix(f"{op.name}/wrench/torque")] = {
+                        "data": torque,
+                        "t": t,
+                    }
 
         if (
             DataType.TACTILE in self.config.enabled_sensors
@@ -961,17 +1093,17 @@ class UnifiedMujocoEnv(MujocoBasis):
                 for component, data in self._group_tactile_by_component(
                     tactile_data
                 ).items():
-                    key_component = (
-                        component.replace("_", "/", 1) if structured else component
-                    )
-                    obs[f"{key_component}/tactile/point_cloud2"] = {
-                        "data": data,
-                        "t": t,
-                    }
+                    if structured:
+                        key_component = component.replace("_", "/", 1)
+                        key = f"tactile/{key_component}/points"
+                    else:
+                        key = f"{component}/tactile/point_cloud2"
+                    obs[kc.apply_prefix(key)] = {"data": data, "t": t}
 
         if DataType.CAMERA in self.config.enabled_sensors:
             if structured:
                 info = self.get_info()["cameras"]
+                color_keys = set()
             for cam_name, renderer in self._renderers.items():
                 obs_keys = set(obs.keys())
                 cam_id = self._camera_ids[cam_name]
@@ -983,20 +1115,19 @@ class UnifiedMujocoEnv(MujocoBasis):
                 )
                 renderer.disable_depth_rendering()
                 renderer.disable_segmentation_rendering()
-                obs_cam_name = (
-                    "camera/" + cam_name.split("_")[0] if structured else cam_name
-                )
                 if spec.enable_color:
-                    obs[f"{obs_cam_name}/color/image_raw"] = {
+                    color_key = kc.create_color_key(cam_name)
+                    obs[color_key] = {
                         "data": np.asarray(renderer.render(), dtype=np.uint8),
                         "t": t,
                     }
+                    color_keys.add(color_key)
                 if spec.enable_depth:
                     renderer.enable_depth_rendering()
-                    depth = np.asarray(renderer.render(), dtype=np.float32)
+                    depth = np.asarray(renderer.render())
                     renderer.disable_depth_rendering()
                     depth[depth > spec.depth_max] = 0.0
-                    obs[f"{obs_cam_name}/aligned_depth_to_color/image_raw"] = {
+                    obs[kc.create_depth_key(cam_name)] = {
                         "data": depth,
                         "t": t,
                     }
@@ -1005,48 +1136,40 @@ class UnifiedMujocoEnv(MujocoBasis):
                     segmentation = np.asarray(renderer.render(), dtype=np.int32)
                     renderer.disable_segmentation_rendering()
                     if spec.enable_mask:
-                        obs[f"{obs_cam_name}/mask/image_raw"] = {
+                        obs[kc.create_mask_key(cam_name)] = {
                             "data": self._build_binary_mask(segmentation),
                             "t": t,
                         }
                     if spec.enable_heat_map:
-                        obs[f"{obs_cam_name}/mask/heat_map"] = {
+                        obs[kc.create_heat_map_key(cam_name)] = {
                             "data": self._build_operation_mask(segmentation),
                             "t": t,
                         }
                 if structured:
-                    cam_keys = obs.keys() - obs_keys
+                    cam_keys = obs.keys() - obs_keys - color_keys
                     for key in cam_keys:
-                        obs[key]["data"] = _create_image_data(
-                            obs[key]["data"], sim_time
-                        )
+                        obs[key]["data"] = create_image_data(obs[key]["data"], sim_time)
                     cam_info = info[cam_name]
-                    obs[f"{obs_cam_name}/camera_info"] = {
+                    obs[kc.create_camera_info_key(cam_name)] = {
                         "data": cam_info["camera_info"]["color"],
                         "t": t,
                     }
                     extrinsics = cam_info["camera_extrinsics"]
-                    x, y, z = extrinsics["translation"]
-                    obs[f"{obs_cam_name}/hand_eye/transform"] = {
+                    quat = quaternion_from_matrix_3x3(extrinsics["rotation_matrix"])
+                    obs[kc.create_hand_eye_key(cam_name)] = {
                         "data": {
                             "header": _create_header(sim_time),
                             "child_frame_id": extrinsics["frame"],
                             "transform": {
-                                "translation": {
-                                    "x": float(x),
-                                    "y": float(y),
-                                    "z": float(z),
-                                },
-                                "rotation": quaternion_from_matrix_3x3(
-                                    extrinsics["rotation_matrix"]
+                                "translation": _to_position_dict(
+                                    extrinsics["translation"]
                                 ),
+                                "rotation": _to_quaternion_dict(quat),
                             },
                         },
                         "t": t,
                     }
 
-        if structured:
-            return {f"/robot/{key}": value for key, value in obs.items()}
         return obs
 
     # ------------------------------------------------------------------
@@ -1057,7 +1180,7 @@ class UnifiedMujocoEnv(MujocoBasis):
         self, op: OperatorBinding
     ) -> tuple[np.ndarray, np.ndarray]:
         if self._tactile_manager is None:
-            return np.zeros(3, dtype=np.float32), np.zeros(3, dtype=np.float32)
+            return np.zeros(3), np.zeros(3)
 
         wrenches = self._tactile_manager.get_finger_wrenches()
         force = np.zeros(3, dtype=np.float64)
@@ -1078,7 +1201,7 @@ class UnifiedMujocoEnv(MujocoBasis):
     def _find_operator_for_tactile_panel(
         self, panel_prefix: str
     ) -> OperatorBinding | None:
-        for op in self._operators:
+        for op in self._operators.values():
             if not op.tactile_prefixes:
                 if len(self._operators) == 1:
                     return op
@@ -1089,7 +1212,7 @@ class UnifiedMujocoEnv(MujocoBasis):
     def _group_tactile_by_component(
         self, tactile_tensor: np.ndarray
     ) -> Dict[str, Dict[str, Any]]:
-        tactile_tensor = np.asarray(tactile_tensor, dtype=np.float32)
+        tactile_tensor = np.asarray(tactile_tensor)
         grouped = {}
         rows = 8
         cols = 5
@@ -1100,7 +1223,7 @@ class UnifiedMujocoEnv(MujocoBasis):
                 continue
             _, eef_name = self._op_output_names[op.name]
             panel_data = tactile_tensor[i]
-            packed_points = np.zeros((max_points, 6), dtype=np.float32)
+            packed_points = np.zeros((max_points, 6))
 
             for j in range(min(len(panel_data), max_points)):
                 row = j // cols
@@ -1118,13 +1241,18 @@ class UnifiedMujocoEnv(MujocoBasis):
                 {
                     "name": name,
                     "offset": field_size * idx,
-                    "datatype": "FLOAT32",
+                    "datatype": 7,  # sensor_msgs/PointField.FLOAT32
                     "count": 1,
                 }
                 for idx, name in enumerate(feats)
             ]
 
-            panel_label = panel_prefix.rstrip("_")
+            # Extract panel label
+            panel_label_spl = panel_prefix.rstrip("_").split("_", 1)
+            if len(panel_label_spl) == 2:
+                panel_label = panel_label_spl[1]
+            else:
+                panel_label = panel_prefix
             key = f"{eef_name}_{panel_label}" if panel_label else eef_name
 
             sim_time = self.data.time
@@ -1164,6 +1292,7 @@ class BatchedUnifiedMujocoEnv:
             from auto_atom.runtime import ComponentRegistry
 
             ComponentRegistry.register_env(config.name, self)
+        self._key_creator = KeyCreator(self.config.structured)
 
     def register_operator(self, *args, **kwargs) -> None:
         for env in self.envs:
@@ -1172,8 +1301,8 @@ class BatchedUnifiedMujocoEnv:
     def world_to_base(
         self, op_name: str, pos_w: np.ndarray, quat_w: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray]:
-        pos_w = np.asarray(pos_w, dtype=np.float32)
-        quat_w = np.asarray(quat_w, dtype=np.float32)
+        pos_w = np.asarray(pos_w)
+        quat_w = np.asarray(quat_w)
         if pos_w.ndim == 1:
             pos_w = np.repeat(pos_w.reshape(1, 3), self.batch_size, axis=0)
         if quat_w.ndim == 1:
@@ -1189,8 +1318,8 @@ class BatchedUnifiedMujocoEnv:
     def base_to_world(
         self, op_name: str, pos_b: np.ndarray, quat_b: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray]:
-        pos_b = np.asarray(pos_b, dtype=np.float32)
-        quat_b = np.asarray(quat_b, dtype=np.float32)
+        pos_b = np.asarray(pos_b)
+        quat_b = np.asarray(quat_b)
         if pos_b.ndim == 1:
             pos_b = np.repeat(pos_b.reshape(1, 3), self.batch_size, axis=0)
         if quat_b.ndim == 1:
@@ -1226,8 +1355,8 @@ class BatchedUnifiedMujocoEnv:
         quat_w: np.ndarray,
         env_mask: np.ndarray | None = None,
     ) -> None:
-        pos_w = np.asarray(pos_w, dtype=np.float32)
-        quat_w = np.asarray(quat_w, dtype=np.float32)
+        pos_w = np.asarray(pos_w)
+        quat_w = np.asarray(quat_w)
         if pos_w.ndim == 1:
             pos_w = np.repeat(pos_w.reshape(1, 3), self.batch_size, axis=0)
         if quat_w.ndim == 1:
@@ -1252,8 +1381,8 @@ class BatchedUnifiedMujocoEnv:
         quat_w: np.ndarray,
         env_mask: np.ndarray | None = None,
     ) -> None:
-        pos_w = np.asarray(pos_w, dtype=np.float32)
-        quat_w = np.asarray(quat_w, dtype=np.float32)
+        pos_w = np.asarray(pos_w)
+        quat_w = np.asarray(quat_w)
         if pos_w.ndim == 1:
             pos_w = np.repeat(pos_w.reshape(1, 3), self.batch_size, axis=0)
         if quat_w.ndim == 1:
@@ -1287,8 +1416,8 @@ class BatchedUnifiedMujocoEnv:
             if mask[env_index]:
                 env.step_operator_toward_target(
                     op_name,
-                    np.asarray(target_pos_b[env_index], dtype=np.float32),
-                    np.asarray(target_quat_b[env_index], dtype=np.float32),
+                    np.asarray(target_pos_b[env_index]),
+                    np.asarray(target_quat_b[env_index]),
                 )
 
     def teleport_operator(
@@ -1303,8 +1432,8 @@ class BatchedUnifiedMujocoEnv:
             if env_mask is None
             else np.asarray(env_mask, dtype=bool).reshape(-1)
         )
-        pos_w = np.asarray(pos_w, dtype=np.float32)
-        quat_w = np.asarray(quat_w, dtype=np.float32)
+        pos_w = np.asarray(pos_w)
+        quat_w = np.asarray(quat_w)
         for env_index, env in enumerate(self.envs):
             if mask[env_index]:
                 env.teleport_operator(op_name, pos_w[env_index], quat_w[env_index])
@@ -1326,8 +1455,8 @@ class BatchedUnifiedMujocoEnv:
         quat_w: np.ndarray,
         env_mask: np.ndarray | None = None,
     ) -> None:
-        pos_w = np.asarray(pos_w, dtype=np.float32)
-        quat_w = np.asarray(quat_w, dtype=np.float32)
+        pos_w = np.asarray(pos_w)
+        quat_w = np.asarray(quat_w)
         if pos_w.ndim == 1:
             pos_w = np.repeat(pos_w.reshape(1, 3), self.batch_size, axis=0)
         if quat_w.ndim == 1:
@@ -1420,8 +1549,8 @@ class BatchedUnifiedMujocoEnv:
         gripper : array-like, shape ``(n_eef,)`` or ``(B, n_eef)``, optional
         env_mask : array-like, optional
         """
-        pos = np.asarray(position, dtype=np.float32)
-        ori = np.asarray(orientation, dtype=np.float32)
+        pos = np.asarray(position)
+        ori = np.asarray(orientation)
         if pos.ndim == 1:
             pos = np.repeat(pos.reshape(1, 3), self.batch_size, axis=0)
         if ori.ndim == 1:

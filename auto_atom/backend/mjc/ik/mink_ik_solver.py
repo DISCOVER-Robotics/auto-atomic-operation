@@ -8,7 +8,7 @@ pass it to :func:`~auto_atom.backend.mjc.mujoco_backend.build_mujoco_backend`::
     from auto_atom.backend.mjc.ik.mink_ik_solver import MinkIKSolver, build_franka_backend
 
     # Directly:
-    ik_solver = MinkIKSolver(env.model, ["joint1", ..., "joint7"], "gripper")
+    ik_solver = MinkIKSolver(env.model, ["joint1", ..., "joint7"], "eef_pose")
     backend   = build_mujoco_backend(task, operators, ik_solver=ik_solver)
 
     # Or via the provided factory (used as YAML ``backend`` target):
@@ -46,7 +46,7 @@ class MinkIKSolver:
         targets follow this order.
     frame_name:
         Name of the MuJoCo *site* that represents the desired end-effector
-        frame (e.g. ``"gripper"``).
+        frame (e.g. ``"eef_pose"``).
     root_body_name:
         Name of the robot's root (base) body in the model. Used to compute the
         world-frame pose of the base so that the base-frame target can be
@@ -75,12 +75,10 @@ class MinkIKSolver:
         position_cost: float = 1.0,
         orientation_cost: float = 1.0,
         posture_cost: float = 1e-3,
-        max_joint_delta: float = 1.0,
     ) -> None:
         self._arm_joint_names = arm_joint_names
         self._frame_name = frame_name
         self._n_iterations = n_iterations
-        self._max_joint_delta = max_joint_delta
         self._dt = dt
 
         # mink configuration owns a private MjData copy — never touches sim data.
@@ -193,17 +191,7 @@ class MinkIKSolver:
             )
             self._configuration.integrate_inplace(vel, self._dt)
 
-        solved = self._configuration.q[self._arm_qidx].copy()
-
-        # Clamp per-joint displacement to avoid branch jumps near
-        # singularities.  If any joint moves more than the limit,
-        # scale the entire delta so the largest joint just hits the cap.
-        delta = solved - current_qpos[:n]
-        max_delta = float(np.max(np.abs(delta)))
-        if max_delta > self._max_joint_delta:
-            scale = self._max_joint_delta / max_delta
-            solved = current_qpos[:n] + delta * scale
-        return solved
+        return self._configuration.q[self._arm_qidx].copy()
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +207,7 @@ _FRANKA_ARM_JOINTS = [
     "joint6",
     "joint7",
 ]
-_FRANKA_EEF_SITE = "gripper"
+_FRANKA_EEF_SITE = "eef_pose"
 _FRANKA_ROOT_BODY = "link0"
 
 
@@ -295,7 +283,6 @@ def build_franka_backend(
         position_cost=ik_params.get("position_cost", 1.0),
         orientation_cost=ik_params.get("orientation_cost", 1.0),
         posture_cost=ik_params.get("posture_cost", 1e-4),
-        max_joint_delta=ik_params.get("max_joint_delta", 0.8),
     )
 
     eef_aidx = first_env._op_eef_aidx.get("arm", np.array([]))
@@ -309,5 +296,6 @@ def build_franka_backend(
             "root_body_name": _FRANKA_ROOT_BODY,
             "eef_site_name": _FRANKA_EEF_SITE,
             "eef_ctrl_index": eef_ctrl_index,
+            "max_joint_delta": float(ik_params.get("max_joint_delta", 0.8)),
         },
     )

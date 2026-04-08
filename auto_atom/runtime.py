@@ -36,6 +36,7 @@ from .utils.pose import (
     euler_to_quaternion,
     inverse_pose,
     pose_config_to_pose_state,
+    position_within_tolerance,
     quaternion_angular_distance,
     rotate_pose_around_axis,
 )
@@ -323,6 +324,9 @@ class ExecutionSummary:
     final_done: np.ndarray
     final_success: np.ndarray
     elapsed_time_sec: float = 0.0
+    env_completion_steps: Optional[np.ndarray] = None
+    env_completion_time_sec: Optional[np.ndarray] = None
+    completed_stage_info: Dict[str, List[Optional[str]]] = field(default_factory=dict)
     records: List[ExecutionRecord] = field(default_factory=list)
 
 
@@ -859,15 +863,56 @@ class TaskRunner:
         initial_object_pose: Optional[PoseState] = None
         if target is not None:
             initial_object_pose = target.get_pose().select(env_index)
+        actions = deepcopy(
+            self.builder.build_actions(plan.stage, plan.last_orientation_before)[0]
+        )
+        self._apply_waypoint_randomization(actions, context)
         return ActiveStageState(
             plan=plan,
             operator=operator,
             target=target,
-            actions=deepcopy(
-                self.builder.build_actions(plan.stage, plan.last_orientation_before)[0]
-            ),
+            actions=actions,
             initial_object_pose=initial_object_pose,
         )
+
+    @staticmethod
+    def _apply_waypoint_randomization(
+        actions: List[PrimitiveAction],
+        context: ExecutionContext,
+    ) -> None:
+        """Apply per-waypoint randomization to pose actions in-place."""
+        rng = getattr(context.backend, "_rng", None)
+        if rng is None:
+            rng = np.random.default_rng()
+        for action in actions:
+            if action.kind != "pose" or action.pose is None:
+                continue
+            rand = action.pose.randomization
+            if rand is None:
+                continue
+            pos = list(action.pose.position)
+            pos[0] += float(rng.uniform(*rand.x))
+            pos[1] += float(rng.uniform(*rand.y))
+            pos[2] += float(rng.uniform(*rand.z))
+            action.pose = action.pose.model_copy(
+                update={"position": tuple(pos), "randomization": None}
+            )
+            if any(r != (0.0, 0.0) for r in (rand.roll, rand.pitch, rand.yaw)):
+                ori = action.pose.orientation
+                if ori and len(ori) == 4:
+                    from .utils.pose import (
+                        euler_to_quaternion,
+                        quaternion_to_rpy,
+                    )
+
+                    r, p, y = quaternion_to_rpy(np.asarray(ori))
+                    r += float(rng.uniform(*rand.roll))
+                    p += float(rng.uniform(*rand.pitch))
+                    y += float(rng.uniform(*rand.yaw))
+                    new_ori = euler_to_quaternion((r, p, y))
+                    action.pose = action.pose.model_copy(
+                        update={"orientation": tuple(float(v) for v in new_ori)}
+                    )
 
     @staticmethod
     def _check_stage_condition(
@@ -1060,6 +1105,7 @@ class TaskRunner:
             use_slerp=pose.use_slerp,
             max_linear_step=pose.max_linear_step,
             max_angular_step=pose.max_angular_step,
+            tolerance=pose.tolerance,
         )
 
     @staticmethod
@@ -1317,35 +1363,37 @@ def _check_stage_condition(
         )
     elif constraint == OperationConstraint.REACHED:
         operator = backend.get_operator_handler(operator_name)
-        tolerance = getattr(
-            getattr(getattr(operator, "control", None), "tolerance", None),
-            "position",
-            0.01,
+        # Resolve effective tolerance: per-waypoint override > operator default
+        wp_tol = (
+            getattr(completion_pose, "tolerance", None) if completion_pose else None
         )
-        orientation_tolerance = getattr(
-            getattr(getattr(operator, "control", None), "tolerance", None),
-            "orientation",
-            0.08,
+        op_tol = getattr(getattr(operator, "control", None), "tolerance", None)
+        eff_pos_tol = (
+            wp_tol.position
+            if wp_tol is not None and wp_tol.position is not None
+            else getattr(op_tol, "position", 0.01)
+        )
+        eff_ori_tol = (
+            wp_tol.orientation
+            if wp_tol is not None and wp_tol.orientation is not None
+            else getattr(op_tol, "orientation", 0.08)
         )
         if completion_pose is None:
             satisfied = False
         else:
             current_pose = operator.get_end_effector_pose().select(env_index)
-            position_error = float(
-                np.linalg.norm(
-                    np.asarray(current_pose.position[0], dtype=np.float64)
-                    - np.asarray(completion_pose.position, dtype=np.float64)
-                )
-            )
+            pos_diff = np.asarray(
+                current_pose.position[0], dtype=np.float64
+            ) - np.asarray(completion_pose.position, dtype=np.float64)
             orientation_error = float(
                 quaternion_angular_distance(
                     current_pose.orientation[0],
                     np.asarray(completion_pose.orientation, dtype=np.float64),
                 )
             )
-            satisfied = position_error <= float(
-                tolerance
-            ) and orientation_error <= float(orientation_tolerance)
+            satisfied = position_within_tolerance(
+                pos_diff, eff_pos_tol
+            ) and orientation_error <= float(eff_ori_tol)
     else:
         satisfied = True
 
