@@ -11,6 +11,7 @@ Usage::
 
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
@@ -83,6 +84,7 @@ def create_service(
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             super().__init__(*args, **kwargs)
             self._evaluator: Optional[PolicyEvaluator] = None
+            self._last_timings: Dict[str, Any] = {}
 
         def _require_evaluator(self) -> PolicyEvaluator:
             if self._evaluator is None:
@@ -129,14 +131,38 @@ def create_service(
             return serialize_task_update(update)
 
         def exposed_get_observation(self) -> Any:
+            t0 = perf_counter()
             obs = self._require_evaluator().get_observation()
-            return serialize_value(obs)
+            t_capture = perf_counter()
+            result = serialize_value(obs)
+            t_serialize = perf_counter()
+            self._last_timings["get_obs"] = {
+                "capture_sec": t_capture - t0,
+                "serialize_sec": t_serialize - t_capture,
+                "total_sec": t_serialize - t0,
+            }
+            return result
 
         def exposed_update(self, action: Any, env_mask: Any = None) -> Dict[str, Any]:
+            t0 = perf_counter()
             deserialized_action = deserialize_value(action)
+            t_deser = perf_counter()
             mask = _wire_to_mask(env_mask)
             update = self._require_evaluator().update(deserialized_action, mask)
-            return serialize_task_update(update)
+            t_sim = perf_counter()
+            result = serialize_task_update(update)
+            t_ser = perf_counter()
+            self._last_timings["update"] = {
+                "action_deserialize_sec": t_deser - t0,
+                "sim_step_sec": t_sim - t_deser,
+                "result_serialize_sec": t_ser - t_sim,
+                "total_sec": t_ser - t0,
+            }
+            return result
+
+        def exposed_get_step_timings(self) -> Dict[str, Any]:
+            """Return server-side timing breakdown for the last update/get_observation calls."""
+            return dict(self._last_timings)
 
         def exposed_summarize(
             self,
