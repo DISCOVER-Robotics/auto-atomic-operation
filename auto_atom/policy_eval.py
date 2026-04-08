@@ -294,7 +294,7 @@ class PolicyEvaluator:
                 )
                 self._policy_states[env_index] = None
         self._has_reset[mask] = True
-        self._set_interest_focus()
+        # self._set_interest_focus()
         return self._build_task_update()
 
     def get_observation(self) -> Any:
@@ -324,7 +324,7 @@ class PolicyEvaluator:
                 context,
                 action_feedback=feedback,
             )
-        self._set_interest_focus()
+        # self._set_interest_focus()
         return self._build_task_update()
 
     def close(self) -> None:

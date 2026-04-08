@@ -28,8 +28,8 @@ from auto_atom import (
     load_task_file_hydra,
 )
 
-CONFIG_NAME = "press_three_buttons"
-DEMO_PATH = Path("assets/demos") / f"{CONFIG_NAME}.npz"
+CONFIG_NAME = "press_three_buttons_gs"
+DEMO_PATH = Path("outputs/records/demos") / f"{CONFIG_NAME}.npz"
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@ def load_demo(path: Path) -> dict:
     return {
         "position": arrays["action/arm/pose/position"],  # (T, 3)
         "orientation": arrays["action/arm/pose/orientation"],  # (T, 4)
-        "gripper": arrays["action/eef/joint_state/position"],  # (T, 1)
+        "gripper": arrays["action/gripper/joint_state/position"],  # (T, 1)
     }
 
 
@@ -137,6 +137,7 @@ def main() -> None:
         step = -1
         for step in range(max_updates):
             obs = evaluator.get_observation()
+            obs["env1_cam/mask/heat_map"]
             action = policy.act(obs, update=update, evaluator=evaluator)
             update = evaluator.update(action)
             if update.done.all():
