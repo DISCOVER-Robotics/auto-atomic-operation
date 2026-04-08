@@ -837,15 +837,25 @@ class UnifiedMujocoEnv(MujocoBasis):
                     for limb, qidx, vidx, aidx in joint_components:
                         if qidx.size == 0 and vidx.size == 0 and aidx.size == 0:
                             continue
-                        for prefix in ("", "action/"):
-                            obs[f"{prefix}{limb}/joint_state"] = {
-                                "data": {
-                                    "position": self.data.qpos[qidx].tolist(),
-                                    "velocity": self.data.qvel[vidx].tolist(),
-                                    "effort": self.data.ctrl[aidx].tolist(),
-                                },
-                                "t": t,
-                            }
+                        # Measurement side: real per-joint sensor values.
+                        obs[f"{limb}/joint_state"] = {
+                            "data": {
+                                "position": self.data.qpos[qidx].tolist(),
+                                "velocity": self.data.qvel[vidx].tolist(),
+                                "effort": self.data.actuator_force[aidx].tolist(),
+                            },
+                            "t": t,
+                        }
+                        # Action side: only the commanded quantity is filled;
+                        # fields that are not being commanded stay empty.
+                        obs[f"action/{limb}/joint_state"] = {
+                            "data": {
+                                "position": self.data.ctrl[aidx].tolist(),
+                                "velocity": [],
+                                "effort": [],
+                            },
+                            "t": t,
+                        }
                 else:
                     for limb, qidx, _, aidx in joint_components:
                         if qidx.size > 0:
@@ -873,7 +883,7 @@ class UnifiedMujocoEnv(MujocoBasis):
                         if aidx.size == 0:
                             continue
                         obs[f"{limb}/joint_state/effort"] = {
-                            "data": np.asarray(self.data.ctrl[aidx]),
+                            "data": np.asarray(self.data.actuator_force[aidx]),
                             "t": t,
                         }
 
