@@ -9,6 +9,7 @@ Saved files per camera:
 - ``<camera>_rgb.png``
 - ``<camera>_mask.png`` (when mask is available)
 - ``<camera>_overlay.png`` (when mask is available)
+- ``<camera>_depth.png`` (when depth is available)
 - ``<camera>_heat_<operation>.png`` (when heat-map channels exist)
 
 Usage::
@@ -120,6 +121,17 @@ def _find_obs_image(
 
 def _save_rgb(path: Path, rgb: np.ndarray) -> None:
     plt.imsave(path, np.asarray(rgb, dtype=np.uint8))
+
+
+def _save_depth(path: Path, depth: np.ndarray) -> None:
+    """Save depth as a colorized PNG using the turbo colormap."""
+    valid = depth[depth > 0]
+    if valid.size == 0:
+        plt.imsave(path, np.zeros_like(depth), cmap="turbo")
+        return
+    vmin, vmax = float(valid.min()), float(valid.max())
+    normed = np.where(depth > 0, (depth - vmin) / max(vmax - vmin, 1e-6), 0.0)
+    plt.imsave(path, normed, cmap="turbo", vmin=0.0, vmax=1.0)
 
 
 def _save_mask(path: Path, mask: np.ndarray) -> None:
@@ -287,6 +299,16 @@ def main(cfg: DictConfig) -> None:
                 binary_mask = _find_obs_image(
                     obs, cam_name, "mask/image_raw", expected_ndim=2
                 )
+                depth = _find_obs_image(
+                    obs, cam_name, "depth/image_raw", expected_ndim=2
+                )
+                if depth is None:
+                    depth = _find_obs_image(
+                        obs,
+                        cam_name,
+                        "aligned_depth_to_color/image_raw",
+                        expected_ndim=2,
+                    )
                 heat_map = _find_obs_image(
                     obs, cam_name, "mask/heat_map", expected_ndim=3
                 )
@@ -308,8 +330,19 @@ def main(cfg: DictConfig) -> None:
                     heatmap_rgb = None
                 overlay = _make_overlay(rgb, binary_mask) if has_mask else None
 
+                has_depth = depth is not None
+                if has_depth:
+                    depth = np.asarray(depth, dtype=np.float32)
+
                 if step_idx == 0:
                     _save_rgb(out_dir / f"{cam_name}_rgb.png", rgb)
+                    if has_depth:
+                        _save_depth(out_dir / f"{cam_name}_depth.png", depth)
+                    else:
+                        print(
+                            f"[info] No depth observation for camera '{cam_name}', "
+                            "skipping depth export."
+                        )
                     if has_mask:
                         _save_mask(out_dir / f"{cam_name}_mask.png", binary_mask)
                         _save_rgb(out_dir / f"{cam_name}_overlay.png", overlay)
