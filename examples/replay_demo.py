@@ -13,6 +13,7 @@ Examples:
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any, Optional
 
@@ -64,7 +65,11 @@ def _load_pose_demo(demo_data: np.lib.npyio.NpzFile) -> dict[str, np.ndarray]:
         "position": low_dim["action/arm/pose/position"],
         "orientation": low_dim["action/arm/pose/orientation"],
     }
-    gripper_key = "action/eef/joint_state/position"
+    gripper_key = (
+        "action/gripper/joint_state/position"
+        if "action/gripper/joint_state/position" in low_dim
+        else "action/eef/joint_state/position"
+    )
     if gripper_key in low_dim:
         result["gripper"] = low_dim[gripper_key]
     return result
@@ -80,6 +85,87 @@ def _load_ctrl_demo(demo_data: np.lib.npyio.NpzFile) -> dict[str, np.ndarray]:
     else:
         ctrl = arm
     return {"ctrl": ctrl}
+
+
+def _reshape_series(
+    values: np.ndarray, item_width: int, batch_size: int, name: str
+) -> np.ndarray:
+    if values.ndim != 2:
+        raise ValueError(
+            f"Expected {name} demo array with shape (T, N), got {values.shape}."
+        )
+    total_width = values.shape[1]
+    if total_width % item_width != 0:
+        raise ValueError(
+            f"{name} width {total_width} is not divisible by item width {item_width}."
+        )
+
+    recorded_batch_size = total_width // item_width
+    if batch_size > recorded_batch_size:
+        raise ValueError(
+            f"Demo recorded with batch_size={recorded_batch_size}, "
+            f"but replay requires batch_size={batch_size}."
+        )
+
+    reshaped = values.reshape(values.shape[0], recorded_batch_size, item_width)
+    return reshaped[:, :batch_size, :]
+
+
+def normalize_demo_for_batch(
+    demo: dict[str, np.ndarray],
+    batch_size: int,
+    mode: str,
+    recorded_batch_size: int | None = None,
+) -> dict[str, np.ndarray]:
+    if mode == "pose":
+        position = _reshape_series(demo["position"], 3, batch_size, "position")
+        orientation = _reshape_series(demo["orientation"], 4, batch_size, "orientation")
+        result: dict[str, np.ndarray] = {
+            "position": position[:, 0, :] if batch_size == 1 else position,
+            "orientation": orientation[:, 0, :] if batch_size == 1 else orientation,
+        }
+        if "gripper" in demo:
+            gripper = np.asarray(demo["gripper"], dtype=np.float32)
+            if gripper.ndim != 2:
+                raise ValueError(
+                    "Expected gripper demo array with shape (T, N), "
+                    f"got {gripper.shape}."
+                )
+            recorded_batch_size = demo["position"].shape[1] // 3
+            if gripper.shape[1] % recorded_batch_size != 0:
+                raise ValueError(
+                    f"gripper width {gripper.shape[1]} is incompatible with "
+                    f"recorded batch_size={recorded_batch_size}."
+                )
+            gripper_dof = gripper.shape[1] // recorded_batch_size
+            gripper = gripper.reshape(
+                gripper.shape[0], recorded_batch_size, gripper_dof
+            )
+            gripper = gripper[:, :batch_size, :]
+            result["gripper"] = gripper[:, 0, :] if batch_size == 1 else gripper
+        return result
+
+    ctrl = np.asarray(demo["ctrl"], dtype=np.float32)
+    if ctrl.ndim != 2:
+        raise ValueError(
+            f"Expected ctrl demo array with shape (T, N), got {ctrl.shape}."
+        )
+    if recorded_batch_size is None:
+        recorded_batch_size = batch_size
+    if ctrl.shape[1] % recorded_batch_size != 0:
+        raise ValueError(
+            f"ctrl width {ctrl.shape[1]} is incompatible with recorded batch_size="
+            f"{recorded_batch_size}."
+        )
+    if batch_size > recorded_batch_size:
+        raise ValueError(
+            f"Demo recorded with batch_size={recorded_batch_size}, "
+            f"but replay requires batch_size={batch_size}."
+        )
+    ctrl_width = ctrl.shape[1] // recorded_batch_size
+    ctrl = ctrl.reshape(ctrl.shape[0], recorded_batch_size, ctrl_width)
+    ctrl = ctrl[:, :batch_size, :]
+    return {"ctrl": ctrl[:, 0, :] if batch_size == 1 else ctrl}
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +324,9 @@ def main(cfg: DictConfig) -> None:
     demo_npz_path = os.path.join(
         project_root, "outputs", "records", "demos", f"{demo_name}.npz"
     )
+    demo_json_path = os.path.join(
+        project_root, "outputs", "records", "demos", f"{demo_name}.json"
+    )
     video_dir = os.path.join(project_root, "outputs", "records", "videos")
     os.makedirs(video_dir, exist_ok=True)
     mp4_path = os.path.join(video_dir, f"{demo_name}_replay.mp4")
@@ -263,6 +352,18 @@ def main(cfg: DictConfig) -> None:
         action_applier=action_applier,
         observation_getter=observation_getter,
     ).from_config(task_file)
+    recorded_batch_size = None
+    if os.path.exists(demo_json_path):
+        with open(demo_json_path, "r", encoding="utf-8") as f:
+            recorded_batch_size = json.load(f).get("batch_size")
+        if recorded_batch_size is not None:
+            recorded_batch_size = int(recorded_batch_size)
+    demo = normalize_demo_for_batch(
+        demo,
+        batch_size=evaluator.batch_size,
+        mode=replay_cfg.mode,
+        recorded_batch_size=recorded_batch_size,
+    )
 
     policy = ReplayPolicy(demo, replay_cfg.mode)
 
