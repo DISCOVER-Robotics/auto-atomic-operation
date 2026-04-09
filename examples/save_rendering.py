@@ -23,22 +23,20 @@ Usage::
 
 from __future__ import annotations
 
-from datetime import datetime
-from pathlib import Path
-
 import hydra
 import imageio.v3 as iio
 import matplotlib.pyplot as plt
 import numpy as np
+from datetime import datetime
+from pathlib import Path
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, Field
-
 from auto_atom.runner.common import get_config_dir, prepare_task_file
 from auto_atom.runtime import ComponentRegistry, TaskRunner
 
 
-class MaskRecorderConfig(BaseModel):
+class RenderingRecorderConfig(BaseModel):
     enabled: bool = Field(default=False)
     fps: int = Field(default=25)
     max_steps: int = Field(default=300)
@@ -266,7 +264,7 @@ def main(cfg: DictConfig) -> None:
     raw = OmegaConf.to_container(cfg, resolve=True)
     if not isinstance(raw, dict):
         raise TypeError("Config root must be a mapping.")
-    rec_cfg = MaskRecorderConfig.model_validate(raw.pop("recorder", {}))
+    rec_cfg = RenderingRecorderConfig.model_validate(raw.pop("recorder", {}))
 
     task_file = prepare_task_file(cfg)
     env = ComponentRegistry.get_env(task_file.task.env_name)

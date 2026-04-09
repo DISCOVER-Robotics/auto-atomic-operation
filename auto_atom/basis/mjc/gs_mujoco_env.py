@@ -482,10 +482,16 @@ class GSUnifiedMujocoEnv(UnifiedMujocoEnv):
             op: i for i, op in enumerate(self.config.heatmap_operations)
         }
 
+        # Convert shared inputs to GPU tensors once.
+        body_pos_t = torch.as_tensor(body_pos, device=dev, dtype=torch.float32)
+        body_quat_t = torch.as_tensor(body_quat, device=dev, dtype=torch.float32)
+        cam_pos_t = torch.as_tensor(cam_pos, device=dev, dtype=torch.float32)
+        cam_xmat_t = torch.as_tensor(cam_xmat, device=dev, dtype=torch.float32)
+
         for object_name, renderer in self._gs_mask_renderers.items():
-            gsb = renderer.batch_update_gaussians(body_pos, body_quat)
+            gsb = renderer.batch_update_gaussians(body_pos_t, body_quat_t)
             alpha_t, obj_depth_t = renderer.batch_env_render(
-                gsb, cam_pos, cam_xmat, height, width, fovy
+                gsb, cam_pos_t, cam_xmat_t, height, width, fovy
             )
 
             # Stay on GPU: max over channels, clean NaN
@@ -1003,10 +1009,18 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         heatmap_ops_list = self.config.heatmap_operations
         heatmap_ops_index = {op: i for i, op in enumerate(heatmap_ops_list)}
 
+        # Convert shared inputs to GPU tensors ONCE so that per-object
+        # batch_update_gaussians / batch_env_render skip their internal
+        # torch.tensor() calls (isinstance check short-circuits).
+        body_pos_t = torch.as_tensor(body_pos, device=dev, dtype=torch.float32)
+        body_quat_t = torch.as_tensor(body_quat, device=dev, dtype=torch.float32)
+        cam_pos_t = torch.as_tensor(cam_pos, device=dev, dtype=torch.float32)
+        cam_xmat_t = torch.as_tensor(cam_xmat, device=dev, dtype=torch.float32)
+
         for object_name, renderer in self._gs_mask_renderers.items():
-            gsb = renderer.batch_update_gaussians(body_pos, body_quat)
+            gsb = renderer.batch_update_gaussians(body_pos_t, body_quat_t)
             alpha_t, obj_depth_t = renderer.batch_env_render(
-                gsb, cam_pos, cam_xmat, height, width, fovy
+                gsb, cam_pos_t, cam_xmat_t, height, width, fovy
             )
             # alpha_t: (B, Ncam, H, W, 3), obj_depth_t: (B, Ncam, H, W, 1)
             # max over channels, stay on GPU
