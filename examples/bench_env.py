@@ -59,6 +59,14 @@ def _parse_args(argv: list[str]) -> tuple[str, int, bool, list[str]]:
 
 CONFIG_NAME, N, do_profile, overrides = _parse_args(sys.argv[1:])
 
+# Benchmark defaults: disable viewer, keep data on GPU.
+# User overrides can still override these (last wins in Hydra).
+bench_defaults = [
+    "~env.viewer",
+    "+env.to_numpy=false",
+]
+overrides = bench_defaults + overrides
+
 # Setup
 _log_progress(
     f"loading config={CONFIG_NAME} overrides={overrides or '[]'} iterations={N}"
