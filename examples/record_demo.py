@@ -130,7 +130,7 @@ def _build_low_dim_npz_payload(
             if leaf_key not in leaf_items:
                 raise ValueError(f"Missing low-dimensional key '{leaf_key}' in trace.")
             value, t = leaf_items[leaf_key]
-            values.append(np.asarray(value, dtype=np.float32).reshape(-1))
+            values.append(np.asarray(value, dtype=np.float32))
             t_scalar = t[0] if isinstance(t, (list, np.ndarray)) else t
             times.append(float(t_scalar))
         payload[f"low_dim_data__{idx}"] = np.stack(values).astype(np.float32)

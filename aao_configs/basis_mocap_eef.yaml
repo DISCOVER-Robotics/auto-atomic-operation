@@ -8,6 +8,9 @@ env:
       eef_actuators: [fingers_actuator]
       eef_output_name: gripper
       pose_site: eef_pose
+      root_body: robotiq_interface
+      mocap_body: robotiq_mocap
+      freejoint: robotiq_freejoint
       imu_acc: imu_acc
       imu_gyro: imu_gyro
       imu_quat: imu_quat

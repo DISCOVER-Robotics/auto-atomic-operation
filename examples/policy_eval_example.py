@@ -2,9 +2,9 @@
 
 Demonstrates the full record -> evaluate pipeline:
 
-1. Record a demo::
+1. Record a demo (any batch_size)::
 
-    python examples/record_demo.py --config-name press_three_buttons env.batch_size=1
+    python examples/record_demo.py --config-name press_three_buttons_gs
 
 2. Evaluate by replaying the recorded actions::
 
@@ -38,7 +38,12 @@ DEMO_PATH = Path("outputs/records/demos") / f"{CONFIG_NAME}.npz"
 
 
 def load_demo(path: Path) -> dict:
-    """Load pose trace + gripper from a recorded NPZ."""
+    """Load pose trace + gripper from a recorded NPZ.
+
+    Arrays are stored as ``(T, B, dim)`` where *B* is the recording
+    batch size.  Indexing by step yields ``(B, dim)`` — ready for
+    ``apply_pose_action``.
+    """
     data = np.load(path)
     keys = [str(k) for k in data["low_dim_keys"]]
 
@@ -46,10 +51,16 @@ def load_demo(path: Path) -> dict:
     for idx, key in enumerate(keys):
         arrays[key] = np.asarray(data[f"low_dim_data__{idx}"], dtype=np.float32)
 
+    pos = arrays["action/arm/pose/position"]  # (T, B, 3)
+    ori = arrays["action/arm/pose/orientation"]  # (T, B, 4)
+    grip = arrays["action/gripper/joint_state/position"]  # (T, B, 1)
+
+    batch_size = pos.shape[1] if pos.ndim == 3 else 1
     return {
-        "position": arrays["action/arm/pose/position"],  # (T, 3)
-        "orientation": arrays["action/arm/pose/orientation"],  # (T, 4)
-        "gripper": arrays["action/gripper/joint_state/position"],  # (T, 1)
+        "position": pos,  # (T, B, 3)
+        "orientation": ori,  # (T, B, 4)
+        "gripper": grip,  # (T, B, 1)
+        "batch_size": batch_size,
     }
 
 
@@ -81,12 +92,15 @@ def observation_getter(context: ExecutionContext) -> dict:
 
 
 class RecordedDemoPolicy:
-    """Replays recorded EEF poses + gripper step by step."""
+    """Replays recorded EEF poses + gripper step by step.
+
+    Each array is ``(T, B, dim)`` so indexing by step yields ``(B, dim)``.
+    """
 
     def __init__(self, demo: dict) -> None:
-        self.positions = demo["position"]
-        self.orientations = demo["orientation"]
-        self.grippers = demo["gripper"]
+        self.positions = demo["position"]  # (T, B, 3)
+        self.orientations = demo["orientation"]  # (T, B, 4)
+        self.grippers = demo["gripper"]  # (T, B, 1)
         self._max = len(self.positions) - 1
         self._step = 0
 
@@ -99,9 +113,9 @@ class RecordedDemoPolicy:
         i = min(self._step, self._max)
         self._step += 1
         return {
-            "position": self.positions[i],
-            "orientation": self.orientations[i],
-            "gripper": self.grippers[i],
+            "position": self.positions[i],  # (B, 3)
+            "orientation": self.orientations[i],  # (B, 4)
+            "gripper": self.grippers[i],  # (B, 1)
         }
 
 
@@ -115,12 +129,18 @@ def main() -> None:
         raise FileNotFoundError(
             f"Demo not found: {DEMO_PATH}\n"
             f"Record first: python examples/record_demo.py "
-            f"--config-name {CONFIG_NAME} env.batch_size=1"
+            f"--config-name {CONFIG_NAME}"
         )
 
-    task_file = load_task_file_hydra(CONFIG_NAME, overrides=["env.batch_size=1"])
     demo = load_demo(DEMO_PATH)
-    print(f"Loaded {len(demo['position'])} steps from {DEMO_PATH}")
+    batch_size = demo["batch_size"]
+    task_file = load_task_file_hydra(
+        CONFIG_NAME, overrides=[f"env.batch_size={batch_size}"]
+    )
+    print(
+        f"Loaded {len(demo['position'])} steps from {DEMO_PATH} "
+        f"(batch_size={batch_size})"
+    )
 
     policy = RecordedDemoPolicy(demo)
     evaluator = PolicyEvaluator(
@@ -137,7 +157,6 @@ def main() -> None:
         step = -1
         for step in range(max_updates):
             obs = evaluator.get_observation()
-            obs["env1_cam/mask/heat_map"]
             action = policy.act(obs, update=update, evaluator=evaluator)
             update = evaluator.update(action)
             if update.done.all():

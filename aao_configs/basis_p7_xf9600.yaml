@@ -18,5 +18,10 @@ env:
       eef_actuators: [xfg_claw_joint]
       eef_output_name: gripper
       pose_site: eef_pose
+      root_body: link0
+      ik_factory: auto_atom.backend.mjc.ik.p7_analytical_ik_solver.P7AnalyticalIKSolver
+      ik_params:
+        flange_site_name: tool_site
+        tcp_site_name: eef_pose
 
 backend: auto_atom.backend.mjc.ik.p7_analytical_ik_solver.build_p7_xf9600_backend
