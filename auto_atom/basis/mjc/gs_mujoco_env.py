@@ -51,9 +51,11 @@ from auto_atom.basis.mjc.mujoco_env import (
 )
 
 
-def create_image_data_batch(image_batch, timestamps, frame_id: str = ""):
+def create_image_data_batch(
+    image_batch, timestamps, frame_id: str = "", tobytes: bool = True
+):
     return [
-        create_image_data(image, time_sec, frame_id)
+        create_image_data(image, time_sec, frame_id, tobytes)
         for image, time_sec in zip(image_batch, timestamps / 1e9)
     ]
 
@@ -750,7 +752,11 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
                         rgb = color_src[:, cam_idx]
                         rgb = torch.clamp(rgb, 0.0, 1.0).mul(255).to(torch.uint8)
                     obs[kc.create_color_key(cam_name)] = {
-                        "data": rgb,
+                        "data": rgb
+                        if not structured
+                        else create_image_data_batch(
+                            rgb, timestamps, cam_name, tobytes=False
+                        ),
                         "t": timestamps,
                     }
 
