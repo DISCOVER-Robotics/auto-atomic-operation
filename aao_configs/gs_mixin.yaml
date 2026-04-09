@@ -1,4 +1,9 @@
+# defaults:
+#   - _self_
+#   - bg3dgs: example
+
 model_name: demo_gs
+bg3dgs_name: discover-lab2
 
 env:
   _target_: auto_atom.basis.mjc.gs_mujoco_env.BatchedGSUnifiedMujocoEnv
@@ -9,4 +14,20 @@ env:
     elevation: -28
     # disable: true
   gaussian_render:
-    background_ply: ${assets_dir}/gs/backgrounds/example.ply
+    background_ply: ${assets_dir}/gs/backgrounds/${bg3dgs_name}.ply
+    # Initial recommended offsets were estimated by:
+    # 1) extracting the densest near-horizontal plane around the background's
+    #    likely tabletop height from the PLY,
+    # 2) estimating that plane's center,
+    # 3) aligning it to the repo's common GS tabletop reference
+    #    (table center ~= [0.45, 0.06], table top z ~= 0.0742).
+    # These are intended as good starting points and may still need small
+    # per-scene visual refinement with replay/compare tools.
+    background_offsets:
+      background_0: [1.3098, -0.0081, -0.0023] # the heatmap is not good, maybe decrease the z offset a bit will help
+      background_1: [0.0, 0.0, 0.0]
+      discover-lab2: [0.2839, 0.0888, 0.0745]
+      example: [1.3098, -0.0081, -0.0023]
+      hospital_table_25_5: [0.5158, -0.6083, 0.0755] # the bg itself looks not so good
+      simple_room: [-0.0248, 0.1106, 0.0736]
+      table: [-0.1354, -0.3838, 0.0709] # the heatmap is not good, maybe decrease the z offset a bit will help

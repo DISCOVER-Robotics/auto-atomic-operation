@@ -38,11 +38,14 @@ When ``gaussian_render`` is set:
 
 from __future__ import annotations
 
+import hashlib
 import numpy as np
 import torch
+from pathlib import Path
 from typing import Any, Dict, Optional, Set
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from gaussian_renderer import BatchSplatConfig, MjxBatchSplatRenderer, GSRendererMuJoCo
+from gaussian_renderer.core.util_gau import load_ply, save_ply
 from auto_atom.basis.mjc.mujoco_env import (
     BatchedUnifiedMujocoEnv,
     EnvConfig,
@@ -60,6 +63,60 @@ def create_image_data_batch(
     ]
 
 
+def _normalize_xyz_offset(offset: Any) -> tuple[float, float, float]:
+    arr = np.asarray(offset, dtype=np.float64)
+    if arr.shape != (3,):
+        raise ValueError(
+            f"background offset must be length-3 xyz, got shape {arr.shape}"
+        )
+    return tuple(float(v) for v in arr.tolist())
+
+
+def _resolve_background_offset(
+    background_ply: str | None,
+    background_offset: tuple[float, float, float] | None,
+    background_offsets: Dict[str, tuple[float, float, float]],
+) -> tuple[float, float, float]:
+    if background_offset is not None:
+        return _normalize_xyz_offset(background_offset)
+    if not background_ply:
+        return (0.0, 0.0, 0.0)
+
+    bg_path = Path(background_ply)
+    for key in (background_ply, str(bg_path), bg_path.name, bg_path.stem):
+        if key in background_offsets:
+            return _normalize_xyz_offset(background_offsets[key])
+    return (0.0, 0.0, 0.0)
+
+
+def _materialize_shifted_background_ply(
+    background_ply: str | None,
+    offset_xyz: tuple[float, float, float],
+) -> str | None:
+    if background_ply is None:
+        return None
+
+    offset_xyz = _normalize_xyz_offset(offset_xyz)
+    if np.allclose(offset_xyz, 0.0):
+        return background_ply
+
+    src_path = Path(background_ply).expanduser().resolve()
+    cache_key = hashlib.sha1(
+        f"{src_path}|{offset_xyz[0]:.6f},{offset_xyz[1]:.6f},{offset_xyz[2]:.6f}".encode(
+            "utf-8"
+        )
+    ).hexdigest()[:12]
+    cache_dir = Path(".cache/gs_background_offsets")
+    cache_path = cache_dir / f"{src_path.stem}__bg_offset_{cache_key}.ply"
+    if cache_path.exists():
+        return str(cache_path)
+
+    gaussians = load_ply(str(src_path))
+    gaussians.xyz = gaussians.xyz + np.asarray(offset_xyz, dtype=np.float32)
+    save_ply(gaussians, cache_path)
+    return str(cache_path)
+
+
 class GaussianRenderConfig(BaseModel):
     model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
@@ -67,6 +124,25 @@ class GaussianRenderConfig(BaseModel):
     """Mapping from MuJoCo body name to PLY file path."""
     background_ply: str | None = None
     """Optional background PLY (loaded under the reserved key ``'background'``)."""
+    background_offset: tuple[float, float, float] | None = None
+    """Optional xyz translation applied to the configured background PLY."""
+    background_offsets: Dict[str, tuple[float, float, float]] = Field(
+        default_factory=dict
+    )
+    """Per-background xyz offsets keyed by full path, file name, or file stem."""
+
+    def resolved_background_offset(self) -> tuple[float, float, float]:
+        return _resolve_background_offset(
+            self.background_ply,
+            self.background_offset,
+            self.background_offsets,
+        )
+
+    def resolved_background_ply(self) -> str | None:
+        return _materialize_shifted_background_ply(
+            self.background_ply,
+            self.resolved_background_offset(),
+        )
 
 
 class GSEnvConfig(EnvConfig):
@@ -156,9 +232,10 @@ class GSUnifiedMujocoEnv(UnifiedMujocoEnv):
         super().__init__(config)
         self.config: GSEnvConfig
         gs_cfg = config.gaussian_render
+        background_ply = gs_cfg.resolved_background_ply()
         combined_models = dict(gs_cfg.body_gaussians)
-        if gs_cfg.background_ply:
-            combined_models["background"] = gs_cfg.background_ply
+        if background_ply:
+            combined_models["background"] = background_ply
         self._gs_renderer = GSRendererMuJoCo(combined_models, self.model)
         fg_cfg = BatchSplatConfig(
             body_gaussians=dict(gs_cfg.body_gaussians),
@@ -170,15 +247,15 @@ class GSUnifiedMujocoEnv(UnifiedMujocoEnv):
             MjxBatchSplatRenderer(
                 BatchSplatConfig(
                     body_gaussians={},
-                    background_ply=gs_cfg.background_ply,
+                    background_ply=background_ply,
                     minibatch=512,
                 ),
                 self.model,
             )
-            if gs_cfg.background_ply
+            if background_ply
             else None
         )
-        if gs_cfg.background_ply:
+        if background_ply:
             self.get_logger().debug(
                 f"GS renderer initialised with {len(gs_cfg.body_gaussians)} body gaussian(s) + background"
             )
@@ -547,6 +624,7 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         super().__init__(config, **kwargs)
 
         gs_cfg = config.gaussian_render
+        background_ply = gs_cfg.resolved_background_ply()
 
         # Single shared foreground renderer
         self._fg_gs_renderer = MjxBatchSplatRenderer(
@@ -563,12 +641,12 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
             MjxBatchSplatRenderer(
                 BatchSplatConfig(
                     body_gaussians={},
-                    background_ply=gs_cfg.background_ply,
+                    background_ply=background_ply,
                     minibatch=512,
                 ),
                 self.envs[0].model,
             )
-            if gs_cfg.background_ply
+            if background_ply
             else None
         )
 
@@ -588,7 +666,7 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         ] = {}
 
         n_bodies = len(gs_cfg.body_gaussians)
-        bg_str = " + background" if gs_cfg.background_ply else ""
+        bg_str = " + background" if background_ply else ""
         self.envs[0].get_logger().debug(
             f"Batched GS renderer initialised with {n_bodies} body gaussian(s){bg_str}"
         )
