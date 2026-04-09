@@ -4,6 +4,7 @@ os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = ""
 
 import numpy as np
 import mujoco
+import logging
 
 try:
     import cv2
@@ -53,23 +54,23 @@ class TactileSensorManager:
 
         total_force = sum(len(v) for v in self.force_sensor_ids.values())
         total_torque = sum(len(v) for v in self.torque_sensor_ids.values())
-
+        logger = logging.getLogger(TactileSensorManager.__name__)
         if not self.enable:
-            print(
-                f"[INFO] Tactile sensors initialized (visualization disabled), "
+            logger.debug(
+                f"Tactile sensors initialized (visualization disabled), "
                 f"force sensors={total_force}, torque sensors={total_torque}, "
                 f"rows={len(self.row_order)}, panels={self.n_panels}, n_points_per_panel={self.n_points}"
             )
             return
 
         self.ready = True
-        print(
-            f"[INFO] Tactile visualizer ready, force sensors={total_force}, torque sensors={total_torque}, "
+        logger.debug(
+            f"Tactile visualizer ready, force sensors={total_force}, torque sensors={total_torque}, "
             f"rows={len(self.row_order)}, panels={self.n_panels}, n_points_per_panel={self.n_points}"
         )
         for prefix in self.panel_order:
-            print(
-                f"[INFO] panel={prefix.rstrip('_')}: "
+            logger.debug(
+                f"panel={prefix.rstrip('_')}: "
                 f"force={len(self.force_sensor_ids.get(prefix, []))}, "
                 f"torque={len(self.torque_sensor_ids.get(prefix, []))}"
             )
