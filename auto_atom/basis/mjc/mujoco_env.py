@@ -210,10 +210,34 @@ class UnifiedMujocoEnv(MujocoBasis):
         super().__init__(config, **kwargs)
         self._operator_states: dict[str, _OperatorState] = {}
         self._key_creator = KeyCreator(self.config.structured)
+        self._auto_register_operators()
 
     # ==================================================================
     # Operator registration
     # ==================================================================
+
+    def _auto_register_operators(self) -> None:
+        """Auto-register operators that have ``root_body`` configured."""
+        for op in self._operators.values():
+            if not op.root_body:
+                continue
+            ik_solver = None
+            arm_aidx = self._op_arm_aidx.get(op.name, np.array([]))
+            if len(arm_aidx) > 0 and op.ik_factory is not None:
+                joint_names = self._actuator_joint_names(op.name)
+                ik_solver = op.ik_factory(
+                    model=self.model,
+                    arm_joint_names=joint_names,
+                    **op.ik_params,
+                )
+            self.register_operator(
+                op.name,
+                root_body=op.root_body,
+                eef_site=op.pose_site,
+                ik_solver=ik_solver,
+                mocap_body=op.mocap_body,
+                freejoint=op.freejoint,
+            )
 
     def register_operator(
         self,

@@ -20,6 +20,16 @@ env:
       eef_output_name: eef
       pose_site: eef_pose
       tactile_prefixes: ["left_", "right_"]
+      root_body: link0
+      ik_factory: auto_atom.backend.mjc.ik.mink_ik_solver.MinkIKSolver
+      ik_params:
+        frame_name: eef_pose
+        root_body_name: link0
+        n_iterations: 300
+        dt: 0.1
+        position_cost: 1.0
+        orientation_cost: 1.0
+        posture_cost: 1e-4
 
 backend: auto_atom.backend.mjc.ik.mink_ik_solver.build_franka_backend
 

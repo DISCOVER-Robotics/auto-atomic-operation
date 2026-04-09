@@ -17,5 +17,12 @@ env:
       eef_actuators: [xfg_claw_joint]
       eef_output_name: gripper
       pose_site: eef_pose
+      root_body: arm_base
+      ik_factory: auto_atom.backend.mjc.ik.airbot_kdl_ik_solver.AirbotKdlIKSolver
+      ik_params:
+        arm_base_body: arm_base
+        tcp_site_name: eef_pose
+        arm_type: play_short
+        eef_type: none
 
 backend: auto_atom.backend.mjc.ik.airbot_kdl_ik_solver.build_airbot_play_xf9600_backend

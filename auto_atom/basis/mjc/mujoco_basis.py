@@ -12,7 +12,14 @@ from math import tan, pi
 from pathlib import Path
 import copy
 from typing import Any, Callable, Dict, List, Set, Optional, Tuple
-from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ImportString,
+    model_validator,
+    field_validator,
+)
 from auto_atom.basis.mjc.tactile.tactile_sensor import TactileSensorManager
 import time
 import numpy as np
@@ -131,6 +138,23 @@ class OperatorBinding(BaseModel, frozen=True):
     tactile_prefixes: List[str] = Field(default_factory=list)
     """Tactile panel name prefixes that belong to this operator's end-effector.
     An empty list means all panels are assigned to this operator (only valid for a single operator)."""
+
+    root_body: str = ""
+    """Root body name for the operator's base frame.
+    When non-empty, triggers auto-registration in ``UnifiedMujocoEnv.__init__``."""
+
+    mocap_body: str = ""
+    """Mocap body name for non-joint-mode operators."""
+
+    freejoint: str = ""
+    """Freejoint name for mocap operators."""
+
+    ik_factory: Optional[ImportString] = None
+    """Import path to IK solver class/callable.  Called as
+    ``ik_factory(model=model, arm_joint_names=names, **ik_params)``."""
+
+    ik_params: Dict[str, Any] = Field(default_factory=dict)
+    """Solver-specific keyword arguments passed to *ik_factory*."""
 
 
 class EnvConfig(BaseModel, frozen=True):
@@ -664,6 +688,15 @@ class MujocoBasis:
             np.asarray(joint_indices, dtype=np.int32),
             np.asarray(velocity_indices, dtype=np.int32),
         )
+
+    def _actuator_joint_names(self, operator_name: str) -> List[str]:
+        """Return joint names for the arm actuators of the given operator."""
+        arm_aidx = self._op_arm_aidx[operator_name]
+        names = []
+        for aidx in arm_aidx:
+            jid = int(self.model.actuator_trnid[aidx, 0])
+            names.append(mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, jid))
+        return names
 
     def _split_component_joint_state_indices(
         self, operator_name: str
