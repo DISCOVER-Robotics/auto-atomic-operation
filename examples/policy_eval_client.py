@@ -157,7 +157,7 @@ def main() -> None:
         )
         for r in evaluator.records:
             print(f"  {r.stage_name}: {r.status.value}")
-        print(f"Success: {list(summary.final_success)}")
+        print(f"Success: {np.atleast_1d(summary.final_success).tolist()}")
     finally:
         evaluator.close()
 
