@@ -482,10 +482,16 @@ class GSUnifiedMujocoEnv(UnifiedMujocoEnv):
             op: i for i, op in enumerate(self.config.heatmap_operations)
         }
 
+        # Convert shared inputs to GPU tensors once.
+        body_pos_t = torch.as_tensor(body_pos, device=dev, dtype=torch.float32)
+        body_quat_t = torch.as_tensor(body_quat, device=dev, dtype=torch.float32)
+        cam_pos_t = torch.as_tensor(cam_pos, device=dev, dtype=torch.float32)
+        cam_xmat_t = torch.as_tensor(cam_xmat, device=dev, dtype=torch.float32)
+
         for object_name, renderer in self._gs_mask_renderers.items():
-            gsb = renderer.batch_update_gaussians(body_pos, body_quat)
+            gsb = renderer.batch_update_gaussians(body_pos_t, body_quat_t)
             alpha_t, obj_depth_t = renderer.batch_env_render(
-                gsb, cam_pos, cam_xmat, height, width, fovy
+                gsb, cam_pos_t, cam_xmat_t, height, width, fovy
             )
 
             # Stay on GPU: max over channels, clean NaN
@@ -724,33 +730,25 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
                 )
                 # fg_rgb: (Nenv, Ncam, H, W, 3)
 
-            # ---- Batch-convert color/depth on GPU, then single .cpu() ----
-            # Convert full tensors once on GPU before slicing per camera,
-            # to avoid repeated per-camera GPU→CPU transfers.
-            color_src = full_rgb if full_rgb is not None else fg_rgb
-            color_np = None
-            if color_src is not None and self.config.to_numpy:
-                color_np = (
-                    torch.clamp(color_src, 0.0, 1.0)
-                    .mul(255)
-                    .to(torch.uint8)
-                    .cpu()
-                    .numpy()
-                )  # (Nenv, Ncam, H, W, 3)
-            depth_np = None
-            if full_depth is not None and self.config.to_numpy:
-                depth_np = full_depth[..., 0].cpu().numpy()  # (Nenv, Ncam, H, W)
-
+            # ---- Distribute per-camera outputs ----
             kc = self._key_creator
             for cam_idx, cam_name in enumerate(cam_names):
                 spec = self._camera_specs[cam_name]
                 # color
-                if cam_name in gs_color_set and color_src is not None:
-                    if color_np is not None:
-                        rgb = color_np[:, cam_idx]
-                    else:
-                        rgb = color_src[:, cam_idx]
-                        rgb = torch.clamp(rgb, 0.0, 1.0).mul(255).to(torch.uint8)
+                has_color = True
+                if cam_name in gs_color_set and full_rgb is not None:
+                    rgb = full_rgb[:, cam_idx]  # (Nenv, H, W, 3)
+                    rgb = torch.clamp(rgb, 0.0, 1.0).mul(255).to(torch.uint8)
+                    if self.config.to_numpy:
+                        rgb = rgb.cpu().numpy()
+                elif cam_name in gs_color_set and fg_rgb is not None:
+                    rgb = fg_rgb[:, cam_idx]
+                    rgb = torch.clamp(rgb, 0.0, 1.0).mul(255).to(torch.uint8)
+                    if self.config.to_numpy:
+                        rgb = rgb.cpu().numpy()
+                else:
+                    has_color = False
+                if has_color:
                     obs[kc.create_color_key(cam_name)] = {
                         "data": rgb
                         if not structured
@@ -762,11 +760,11 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
 
                 # depth
                 if cam_name in gs_depth_set and full_depth is not None:
-                    if depth_np is not None:
-                        depth = depth_np[:, cam_idx]
+                    depth = full_depth[:, cam_idx, :, :, 0]  # (Nenv, H, W)
+                    if self.config.to_numpy:
+                        depth = depth.cpu().numpy()
                         depth[depth > spec.depth_max] = 0.0
                     else:
-                        depth = full_depth[:, cam_idx, :, :, 0]
                         depth = torch.where(
                             depth > spec.depth_max,
                             torch.zeros_like(depth),
@@ -1011,10 +1009,18 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         heatmap_ops_list = self.config.heatmap_operations
         heatmap_ops_index = {op: i for i, op in enumerate(heatmap_ops_list)}
 
+        # Convert shared inputs to GPU tensors ONCE so that per-object
+        # batch_update_gaussians / batch_env_render skip their internal
+        # torch.tensor() calls (isinstance check short-circuits).
+        body_pos_t = torch.as_tensor(body_pos, device=dev, dtype=torch.float32)
+        body_quat_t = torch.as_tensor(body_quat, device=dev, dtype=torch.float32)
+        cam_pos_t = torch.as_tensor(cam_pos, device=dev, dtype=torch.float32)
+        cam_xmat_t = torch.as_tensor(cam_xmat, device=dev, dtype=torch.float32)
+
         for object_name, renderer in self._gs_mask_renderers.items():
-            gsb = renderer.batch_update_gaussians(body_pos, body_quat)
+            gsb = renderer.batch_update_gaussians(body_pos_t, body_quat_t)
             alpha_t, obj_depth_t = renderer.batch_env_render(
-                gsb, cam_pos, cam_xmat, height, width, fovy
+                gsb, cam_pos_t, cam_xmat_t, height, width, fovy
             )
             # alpha_t: (B, Ncam, H, W, 3), obj_depth_t: (B, Ncam, H, W, 1)
             # max over channels, stay on GPU
