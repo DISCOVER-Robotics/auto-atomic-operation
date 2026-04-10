@@ -28,7 +28,7 @@ from auto_atom.backend.mjc.mujoco_backend import (
     MujocoOperatorHandler,
     MujocoTaskBackend,
 )
-from auto_atom.basis.mjc.mujoco_env import UnifiedMujocoEnv
+from auto_atom.basis.mjc.mujoco_env import BatchedUnifiedMujocoEnv, UnifiedMujocoEnv
 from auto_atom.runner.common import get_config_dir, prepare_task_file
 from auto_atom.runtime import TaskRunner
 from auto_atom.utils.pose import (
@@ -74,8 +74,8 @@ def _draw_base_marker(viewer, base_pose: PoseState) -> None:
     with viewer.lock():
         scn = viewer.user_scn
         scn.ngeom = 0  # clear previous markers
-        pos = np.asarray(base_pose.position, dtype=np.float64)
-        R = quaternion_to_rotation_matrix(base_pose.orientation)
+        pos = np.asarray(base_pose.position[0], dtype=np.float64)
+        R = quaternion_to_rotation_matrix(base_pose.orientation[0])
         for axis_idx in range(3):
             if scn.ngeom >= scn.maxgeom:
                 break
@@ -110,7 +110,14 @@ class OperatorPanel:
         self.handler = handler
         self.env = env
         self.viewer = viewer
-        self._is_mocap = not handler._joint_mode
+        # Resolve the single UnifiedMujocoEnv that has the viewer.
+        if isinstance(env, BatchedUnifiedMujocoEnv):
+            self._single_env = env.envs[env.config.viewer_env_index]
+        else:
+            self._single_env = env
+        # Determine if this is a mocap (non-joint) operator.
+        op_state = self._single_env._operator_states.get(handler.operator_name)
+        self._is_mocap = op_state is not None and not op_state.joint_mode
 
         frame = ttk.LabelFrame(parent, text=f"Operator: {handler.name}")
         frame.pack(fill="x", padx=6, pady=4)
@@ -128,7 +135,7 @@ class OperatorPanel:
         ef.pack(fill="x", padx=4, pady=2)
         ttk.Label(ef, text="EEF ctrl:").pack(side="left")
         self.eef_ctrl_var = tk.StringVar(
-            value=str(float(handler._home_ctrl[handler.eef_ctrl_index]))
+            value=str(float(handler._home_ctrl[0, handler.eef_ctrl_index]))
         )
         ttk.Entry(ef, textvariable=self.eef_ctrl_var, width=12).pack(
             side="left", padx=4
@@ -140,7 +147,7 @@ class OperatorPanel:
 
         # Initial marker draw.
         if self._is_mocap and self.viewer is not None:
-            _draw_base_marker(self.viewer, handler._base_pose)
+            _draw_base_marker(self.viewer, handler.get_base_pose())
 
     # -- internal builders --
 
@@ -201,25 +208,25 @@ class OperatorPanel:
 
         # Populate with current values.
         pose = read_fn()
-        pos_var.set(_fmt(pose.position))
-        ori_var.set(_fmt(pose.orientation))
+        pos_var.set(_fmt(pose.position[0]))
+        ori_var.set(_fmt(pose.orientation[0]))
 
     def _on_mode_change(self, mode_var, ori_var, ori_label, read_fn):
         """Switch between quaternion and euler display."""
         pose = read_fn()
         if mode_var.get() == "euler":
             ori_label.config(text="Euler (ypr):")
-            rpy = quaternion_to_rpy(pose.orientation)
+            rpy = quaternion_to_rpy(pose.orientation[0])
             # Display as yaw, pitch, roll.
             ori_var.set(_fmt((rpy[2], rpy[1], rpy[0])))
         else:
             ori_label.config(text="Quat (xyzw):")
-            ori_var.set(_fmt(pose.orientation))
+            ori_var.set(_fmt(pose.orientation[0]))
 
     # -- read current state --
 
     def _read_base_pose(self) -> PoseState:
-        return self.handler._base_pose
+        return self.handler.get_base_pose()
 
     def _read_eef_pose(self) -> PoseState:
         return self.handler.get_end_effector_pose()
@@ -258,12 +265,14 @@ class OperatorPanel:
         if pose is None:
             return
         # base_pose is a *virtual* arm base — it does NOT move the EEF body.
-        self.handler._base_pose = pose
+        self.handler.env.override_operator_base_pose(
+            self.handler.operator_name, pose.position, pose.orientation
+        )
         if self.viewer is not None:
             _draw_base_marker(self.viewer, pose)
         self.env.refresh_viewer()
         print(
-            f"[base_pose] position={list(pose.position)}, orientation={list(pose.orientation)}"
+            f"[base_pose] position={list(pose.position[0])}, orientation={list(pose.orientation[0])}"
         )
 
     def _apply_eef(self):
@@ -275,7 +284,9 @@ class OperatorPanel:
         self.env.refresh_viewer()
         # Re-read actual EEF pose after physics settle.
         actual = self.handler.get_end_effector_pose()
-        print(f"[eef] target={list(pose.position)}, actual={list(actual.position)}")
+        print(
+            f"[eef] target={list(pose.position[0])}, actual={list(actual.position[0])}"
+        )
 
     def _apply_eef_ctrl(self):
         try:
@@ -283,19 +294,20 @@ class OperatorPanel:
         except ValueError:
             print("EEF ctrl must be a single float")
             return
-        self.handler._home_ctrl[self.handler.eef_ctrl_index] = val
+        self.handler._home_ctrl[0, self.handler.eef_ctrl_index] = val
         self.handler.home()
         # Step physics directly (no viewer sync per step) so coupled gripper
         # joints (spring, follower, pad) settle without freezing the UI.
+        se = self._single_env
         for _ in range(200):
-            mujoco.mj_step(self.env.model, self.env.data)
+            mujoco.mj_step(se.model, se.data)
         self.env.refresh_viewer()
         print(f"[eef_ctrl] {val}")
 
     def _print_yaml(self):
-        bp = self.handler._base_pose
+        bp = self.handler.get_base_pose()
         ep = self.handler.get_end_effector_pose()
-        eef_val = float(self.handler._home_ctrl[self.handler.eef_ctrl_index])
+        eef_val = float(self.handler._home_ctrl[0, self.handler.eef_ctrl_index])
 
         def _flist(vals):
             return "[" + ", ".join(f"{v:.6f}" for v in vals) + "]"
@@ -303,11 +315,11 @@ class OperatorPanel:
         print()
         print("initial_state:")
         print("  base_pose:")
-        print(f"    position: {_flist(bp.position)}")
-        print(f"    orientation: {_flist(bp.orientation)}")
+        print(f"    position: {_flist(bp.position[0])}")
+        print(f"    orientation: {_flist(bp.orientation[0])}")
         print("  arm:")
-        print(f"    position: {_flist(ep.position)}")
-        print(f"    orientation: {_flist(ep.orientation)}")
+        print(f"    position: {_flist(ep.position[0])}")
+        print(f"    orientation: {_flist(ep.orientation[0])}")
         print(f"  eef: {eef_val}")
         print()
 
@@ -336,7 +348,13 @@ def main(cfg: DictConfig) -> None:
     env.refresh_viewer()
 
     # Resolve viewer handle.
-    viewer = env._viewer  # may be None if viewer is disabled
+    # BatchedUnifiedMujocoEnv wraps individual envs; viewer lives on the
+    # sub-env selected by viewer_env_index.
+    if isinstance(env, BatchedUnifiedMujocoEnv):
+        _viewer_env = env.envs[env.config.viewer_env_index]
+    else:
+        _viewer_env = env
+    viewer = _viewer_env._viewer  # may be None if viewer is disabled
 
     # ── tkinter UI ──
     root = tk.Tk()
@@ -350,7 +368,7 @@ def main(cfg: DictConfig) -> None:
 
     # Periodic viewer sync.
     def tick():
-        if env._viewer_running():
+        if _viewer_env._viewer_running():
             env.refresh_viewer()
         root.after(50, tick)
 

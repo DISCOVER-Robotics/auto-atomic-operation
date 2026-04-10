@@ -32,7 +32,9 @@ from ...runtime import (
 )
 from ...utils.pose import (
     PoseState,
+    compose_pose,
     euler_to_quaternion,
+    inverse_pose,
     orientation_within_tolerance_nullable,
     position_within_tolerance,
     position_within_tolerance_nullable,
@@ -726,6 +728,12 @@ class MujocoTaskBackend(SceneBackend):
                         f"Object '{name}' randomization must be a PoseRandomRange, "
                         "not an operator randomization config."
                     )
+                if rand_range.reference == RandomizationReference.ABSOLUTE_BASE:
+                    raise ValueError(
+                        f"Object '{name}' randomization cannot use "
+                        "'absolute_base' — only operator end-effector "
+                        "randomization is defined in a base frame."
+                    )
                 base_pose = self._default_object_poses.get(
                     name, self.object_handlers[name].get_pose()
                 )
@@ -735,6 +743,14 @@ class MujocoTaskBackend(SceneBackend):
                 handler = self.operator_handlers[name]
                 if isinstance(rand_range, OperatorRandomizationConfig):
                     if rand_range.base is not None:
+                        if (
+                            rand_range.base.reference
+                            == RandomizationReference.ABSOLUTE_BASE
+                        ):
+                            raise ValueError(
+                                f"Operator '{name}' base randomization cannot "
+                                "use 'absolute_base' — the base IS the frame."
+                            )
                         default_base_pose = self._default_operator_base_poses.get(
                             name, handler.get_base_pose()
                         )
@@ -743,24 +759,44 @@ class MujocoTaskBackend(SceneBackend):
                         )
                         handler.set_pose(sampled_base, env_mask=env_mask)
                     if rand_range.eef is not None:
-                        default_eef_pose = self._default_operator_eef_poses.get(
-                            name, handler.get_end_effector_pose()
-                        )
-                        sampled_eef = self._sample_random_pose(
-                            default_eef_pose, rand_range.eef, env_mask
+                        sampled_eef = self._sample_operator_eef_pose(
+                            handler, name, rand_range.eef, env_mask
                         )
                         handler.set_home_end_effector_pose(
                             sampled_eef,
                             env_mask=env_mask,
                         )
                 else:
-                    default_eef_pose = self._default_operator_eef_poses.get(
-                        name, handler.get_end_effector_pose()
-                    )
-                    sampled_eef = self._sample_random_pose(
-                        default_eef_pose, rand_range, env_mask
+                    sampled_eef = self._sample_operator_eef_pose(
+                        handler, name, rand_range, env_mask
                     )
                     handler.set_home_end_effector_pose(sampled_eef, env_mask=env_mask)
+
+    def _sample_operator_eef_pose(
+        self,
+        handler: MujocoOperatorHandler,
+        name: str,
+        rand_range: PoseRandomRange,
+        env_mask: np.ndarray,
+    ) -> PoseState:
+        """Sample a new home EEF world pose, handling ``absolute_base`` mode.
+
+        In ``absolute_base`` mode the default EEF pose is first transformed
+        into the operator's base frame, sampled there, then transformed back
+        to world. In the other two modes (relative / absolute_world) we
+        sample directly against the world-frame default pose.
+        """
+        default_eef_world = self._default_operator_eef_poses.get(
+            name, handler.get_end_effector_pose()
+        )
+        if rand_range.reference != RandomizationReference.ABSOLUTE_BASE:
+            return self._sample_random_pose(default_eef_world, rand_range, env_mask)
+        base_world = handler.get_base_pose()
+        default_eef_in_base = compose_pose(inverse_pose(base_world), default_eef_world)
+        sampled_in_base = self._sample_random_pose(
+            default_eef_in_base, rand_range, env_mask
+        )
+        return compose_pose(base_world, sampled_in_base)
 
     def _sample_random_pose(
         self, base_pose: PoseState, rand_range: PoseRandomRange, env_mask: np.ndarray
@@ -768,7 +804,10 @@ class MujocoTaskBackend(SceneBackend):
         base_pose = base_pose.broadcast_to(self.batch_size)
         position = base_pose.position.copy()
         orientation = base_pose.orientation.copy()
-        is_absolute = rand_range.reference == RandomizationReference.ABSOLUTE
+        is_absolute = rand_range.reference in (
+            RandomizationReference.ABSOLUTE_WORLD,
+            RandomizationReference.ABSOLUTE_BASE,
+        )
         pos_ranges = (rand_range.x, rand_range.y, rand_range.z)
         rot_ranges = (rand_range.roll, rand_range.pitch, rand_range.yaw)
         rot_any = any(r is not None for r in rot_ranges)

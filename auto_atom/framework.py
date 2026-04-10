@@ -104,10 +104,14 @@ class RandomizationReference(str, Enum):
     RELATIVE = "relative"
     """Ranges are additive offsets from the entity's default/initial pose
     (current default behavior)."""
-    ABSOLUTE = "absolute"
+    ABSOLUTE_WORLD = "absolute_world"
     """Ranges are absolute world-frame values — metres for position axes,
     radians for Euler orientation axes. The entity's default pose is ignored
     for any axis that has an explicit range."""
+    ABSOLUTE_BASE = "absolute_base"
+    """Ranges are absolute values expressed in the operator's base frame.
+    The sampled pose is transformed back into world frame before being
+    applied. Only valid for operator end-effector randomization."""
 
 
 class PoseReference(str, Enum):
@@ -187,19 +191,24 @@ class PlacedToleranceConfig(BaseModel, extra="forbid"):
 class PoseRandomRange(BaseModel):
     """Per-entity pose randomization bounds.
 
-    When ``reference`` is ``"relative"`` (default), each per-axis
-    ``[min, max]`` range is an additive offset applied to the entity's
-    default pose — the existing behavior. When ``reference`` is
-    ``"absolute"``, each range is interpreted as absolute world-frame
-    values: metres for position, radians for Euler orientation. In that
-    mode the default pose is ignored for any axis that has a range set.
+    The ``reference`` field selects one of three modes:
+
+    - ``"relative"`` (default): each per-axis ``[min, max]`` range is an
+      additive offset applied to the entity's default/initial pose.
+    - ``"absolute_world"``: ranges are absolute world-frame values —
+      metres for position, radians for Euler orientation. The default
+      pose is ignored for any axis that has an explicit range.
+    - ``"absolute_base"``: ranges are absolute values expressed in the
+      operator's base frame. The sampled pose is then transformed into
+      world frame before being applied. Only valid for operator
+      end-effector randomization.
 
     A ``None`` value on an axis (the default) means "do not randomize
-    this axis" — it keeps its value from the entity's default pose in
-    **both** modes. Axes are independent, so absolute-mode ``x``/``y``
-    with ``z``/``roll``/``pitch``/``yaw`` left as ``None`` produces the
-    natural "place anywhere on this rectangle, keep default height and
-    orientation" behavior.
+    this axis" — it keeps its value from the default pose (in the
+    relevant frame) in all modes. Axes are independent, so absolute-mode
+    ``x``/``y`` with ``z``/``roll``/``pitch``/``yaw`` left as ``None``
+    produces the natural "place anywhere on this rectangle, keep default
+    height and orientation" behavior.
 
     Example YAML entries::
 
@@ -211,13 +220,22 @@ class PoseRandomRange(BaseModel):
             yaw: [-0.524, 0.524]
             collision_radius: 0.04
 
-        # Absolute: sampled as world-frame coordinates
+        # Absolute world-frame: sampled as world-frame coordinates
         randomization:
           arm:
-            reference: absolute
+            reference: absolute_world
             x: [0.10, 0.45]
             y: [-0.15, 0.15]
             # z/roll/pitch/yaw omitted → kept at default pose values
+
+        # Absolute base-frame: sampled in the operator's base frame,
+        # transformed to world before being applied (operator eef only)
+        randomization:
+          arm:
+            reference: absolute_base
+            x: [0.20, 0.35]
+            y: [-0.10, 0.10]
+            z: [0.15, 0.25]
     """
 
     model_config = ConfigDict(extra="forbid")

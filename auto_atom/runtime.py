@@ -933,16 +933,19 @@ class TaskRunner:
     ) -> None:
         """Apply per-waypoint randomization to pose actions in-place.
 
-        Supports both ``relative`` mode (sampled values are added to the
+        Supports ``relative`` mode (sampled values are added to the
         waypoint's existing position/orientation — the default) and
-        ``absolute`` mode (sampled values replace the waypoint's
+        ``absolute_world`` mode (sampled values replace the waypoint's
         position/orientation entirely). A ``None`` axis is skipped and
         keeps the waypoint's original value in either mode.
 
-        The waypoint's reference frame (``PoseControlConfig.reference``,
-        e.g. ``OBJECT_WORLD``) is not affected by absolute-mode
-        randomization — the sampled numbers are still interpreted in the
-        waypoint's own frame by the pose controller.
+        ``absolute_base`` is **not** supported for per-waypoint randomization
+        because the waypoint already carries its own ``reference`` field
+        (e.g. ``BASE``, ``OBJECT_WORLD``) which selects the frame in which
+        the sampled numbers are interpreted by the pose controller. To
+        randomize in the base frame, set ``PoseControlConfig.reference =
+        BASE`` and use ``absolute_world`` (or ``relative``) in the
+        waypoint's ``randomization``.
         """
         rng = getattr(context.backend, "_rng", None)
         if rng is None:
@@ -953,7 +956,14 @@ class TaskRunner:
             rand = action.pose.randomization
             if rand is None:
                 continue
-            is_absolute = rand.reference == RandomizationReference.ABSOLUTE
+            if rand.reference == RandomizationReference.ABSOLUTE_BASE:
+                raise ValueError(
+                    "Per-waypoint randomization does not support "
+                    "'absolute_base'. Set the waypoint's own `reference` "
+                    "field (e.g. BASE) and use 'absolute_world' or "
+                    "'relative' instead."
+                )
+            is_absolute = rand.reference == RandomizationReference.ABSOLUTE_WORLD
             pos_ranges = (rand.x, rand.y, rand.z)
             rot_ranges = (rand.roll, rand.pitch, rand.yaw)
             pos = list(action.pose.position)

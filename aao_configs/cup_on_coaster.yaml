@@ -18,9 +18,15 @@ env:
 task:
   randomization:
     cup:
-      x: [-0.02, 0.02]
-      y: [-0.02, 0.02]
+      x: [0.2, 0.5]
+      y: [-0.32, 0.25]
       collision_radius: 0.04
+      reference: absolute_world
+    coaster:
+      x: [0.2, 0.5]
+      y: [-0.32, 0.25]
+      collision_radius: 0.04
+      reference: absolute_world
   stages:
     - name: pick_cup
       object: cup
@@ -40,7 +46,6 @@ task:
             reference: eef_world
         eef:
           close: true
-
     - name: place_cup
       object: coaster
       operation: place
@@ -60,3 +65,6 @@ task:
             reference: object_world
         eef:
           close: false
+        placed_tolerance:
+          position: [null, null, null]
+          orientation: [null, null, null]
