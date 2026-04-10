@@ -11,10 +11,16 @@ env:
 
 task:
   randomization:
+    arm:
+      x: [-0.3, 0.35]
+      y: [-0.32, 0.10]
+      z: [0.05, 0.1]
+      collision_radius: 0.15
     blue_duck:
-      x: [-0.01, 0.01]
-      y: [-0.01, 0.01]
-      collision_radius: 0.05
+      x: [0.2, 0.7]
+      y: [0.05, 0.30]
+      collision_radius: 0.04
+      reference: absolute_world
     # chicken_doll:
     #   x: [-0.01, 0.01]
     #   y: [-0.01, 0.01]
