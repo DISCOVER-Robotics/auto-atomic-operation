@@ -587,6 +587,16 @@ class MujocoOperatorHandler(OperatorHandler):
             and grasp_check["lateral_ok"]
         )
 
+    @staticmethod
+    def _is_body_or_ancestor(model: Any, body_id: int, ancestor_id: int) -> bool:
+        """Return True if *body_id* equals *ancestor_id* or is a descendant."""
+        bid = body_id
+        while bid > 0:
+            if bid == ancestor_id:
+                return True
+            bid = int(model.body_parentid[bid])
+        return False
+
     def _check_grasp_conditions(
         self,
         env_index: int,
@@ -613,9 +623,15 @@ class MujocoOperatorHandler(OperatorHandler):
             geom2 = int(contact.geom2)
             body1 = int(single_env.model.geom_bodyid[geom1])
             body2 = int(single_env.model.geom_bodyid[geom2])
-            if target_body_id not in {body1, body2}:
+            b1_match = self._is_body_or_ancestor(
+                single_env.model, body1, target_body_id
+            )
+            b2_match = self._is_body_or_ancestor(
+                single_env.model, body2, target_body_id
+            )
+            if not b1_match and not b2_match:
                 continue
-            other_geom = geom2 if body1 == target_body_id else geom1
+            other_geom = geom2 if b1_match else geom1
             other_name = (
                 mujoco.mj_id2name(
                     single_env.model, mujoco.mjtObj.mjOBJ_GEOM, other_geom
@@ -961,8 +977,14 @@ class MujocoTaskBackend(SceneBackend):
                 geom2 = int(contact.geom2)
                 body1 = int(single_env.model.geom_bodyid[geom1])
                 body2 = int(single_env.model.geom_bodyid[geom2])
-                if target_body_id in {body1, body2}:
-                    other_body = body2 if body1 == target_body_id else body1
+                b1_match = self._is_body_or_ancestor(
+                    single_env.model, body1, target_body_id
+                )
+                b2_match = self._is_body_or_ancestor(
+                    single_env.model, body2, target_body_id
+                )
+                if b1_match or b2_match:
+                    other_body = body2 if b1_match else body1
                     if other_body in operator_body_ids:
                         result[env_index] = True
                         break
