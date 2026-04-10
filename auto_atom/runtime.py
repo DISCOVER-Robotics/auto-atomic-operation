@@ -23,6 +23,7 @@ from .framework import (
     OperationConditionType,
     OperationConstraint,
     Orientation,
+    PlacedToleranceConfig,
     Position,
     PoseControlConfig,
     PoseReference,
@@ -35,8 +36,10 @@ from .utils.pose import (
     compose_pose,
     euler_to_quaternion,
     inverse_pose,
+    orientation_within_tolerance_nullable,
     pose_config_to_pose_state,
     position_within_tolerance,
+    position_within_tolerance_nullable,
     quaternion_angular_distance,
     rotate_pose_around_axis,
 )
@@ -349,6 +352,7 @@ class ActiveStageState:
     actions: List[PrimitiveAction]
     action_index: int = 0
     initial_object_pose: Optional[PoseState] = None
+    held_object_name: Optional[str] = None
 
 
 @dataclass
@@ -786,6 +790,20 @@ class TaskRunner:
                 state.phase_step = phase_step
                 return
 
+            # Resolve target object pose for PLACED condition
+            target_object_pose: Optional[PoseState] = None
+            held_name: Optional[str] = active.held_object_name
+            if op == Operation.PLACE:
+                control = active.plan.stage.param
+                ref = getattr(control, "placed_reference", "object")
+                target_obj_name = active.plan.stage.object
+                if ref == "object" and target_obj_name:
+                    target_handler = context.backend.get_object_handler(target_obj_name)
+                    if target_handler is not None:
+                        target_object_pose = target_handler.get_pose().select(env_index)
+                else:
+                    target_object_pose = self._pre_move_end_pose(active)
+
             success_failure = (
                 None
                 if op == Operation.PRESS
@@ -796,6 +814,8 @@ class TaskRunner:
                     condition_type=OperationConditionType.SUCCESS,
                     initial_pose=active.initial_object_pose,
                     completion_pose=self._completion_pose_from_active(active),
+                    target_object_pose=target_object_pose,
+                    held_object_name=held_name,
                 )
             )
             if success_failure is not None:
@@ -876,6 +896,11 @@ class TaskRunner:
         initial_object_pose: Optional[PoseState] = None
         if target is not None:
             initial_object_pose = target.get_pose().select(env_index)
+        held_object_name: Optional[str] = None
+        if plan.stage.operation == Operation.PLACE:
+            held_object_name = self._find_grasped_object(
+                context.backend, plan.operator_name, env_index
+            )
         actions = deepcopy(
             self.builder.build_actions(plan.stage, plan.last_orientation_before)[0]
         )
@@ -886,7 +911,19 @@ class TaskRunner:
             target=target,
             actions=actions,
             initial_object_pose=initial_object_pose,
+            held_object_name=held_object_name,
         )
+
+    @staticmethod
+    def _find_grasped_object(
+        backend: SceneBackend, operator_name: str, env_index: int
+    ) -> Optional[str]:
+        """Return the name of the object currently grasped by the operator."""
+        handlers = getattr(backend, "object_handlers", {})
+        for name in handlers:
+            if backend.is_object_grasped(operator_name, name)[env_index]:
+                return name
+        return None
 
     @staticmethod
     def _apply_waypoint_randomization(
@@ -935,6 +972,8 @@ class TaskRunner:
         condition_type: OperationConditionType,
         initial_pose: Optional[PoseState] = None,
         completion_pose: Optional[PoseControlConfig] = None,
+        target_object_pose: Optional[PoseState] = None,
+        held_object_name: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         return _check_stage_condition(
             env_index=env_index,
@@ -943,6 +982,8 @@ class TaskRunner:
             condition_type=condition_type,
             initial_pose=initial_pose,
             completion_pose=completion_pose,
+            target_object_pose=target_object_pose,
+            held_object_name=held_object_name,
         )
 
     @staticmethod
@@ -980,6 +1021,25 @@ class TaskRunner:
             if action.kind == "pose" and action.resolved_pose is not None:
                 return action.resolved_pose
         return None
+
+    @staticmethod
+    def _pre_move_end_pose(active: ActiveStageState) -> Optional[PoseState]:
+        """Return the resolved pose of the last pre_move waypoint (before the
+        first eef action) as a single-batch PoseState."""
+        last_pose = None
+        for action in active.actions:
+            if action.kind == "eef":
+                break
+            if action.kind == "pose" and action.resolved_pose is not None:
+                last_pose = action.resolved_pose
+        if last_pose is None:
+            return None
+        return PoseState(
+            position=np.asarray(last_pose.position, dtype=np.float64).reshape(1, 3),
+            orientation=np.asarray(last_pose.orientation, dtype=np.float64).reshape(
+                1, 4
+            ),
+        )
 
     @staticmethod
     def _run_action(
@@ -1346,6 +1406,8 @@ def _check_stage_condition(
     condition_type: OperationConditionType,
     initial_pose: Optional[PoseState] = None,
     completion_pose: Optional[PoseControlConfig] = None,
+    target_object_pose: Optional[PoseState] = None,
+    held_object_name: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     constraints = OPERATION_CONDITIONS.get(plan.stage.operation)
     if not constraints:
@@ -1407,6 +1469,72 @@ def _check_stage_condition(
             satisfied = position_within_tolerance(
                 pos_diff, eff_pos_tol
             ) and orientation_error <= float(eff_ori_tol)
+    elif constraint == OperationConstraint.PLACED:
+        if is_grasping:
+            satisfied = False
+        elif target_object_pose is None or not held_object_name:
+            # No target info or no held object recorded — fall back to released
+            satisfied = True
+        else:
+            handler = backend.get_object_handler(held_object_name)
+            if handler is None:
+                satisfied = True
+            else:
+                current = handler.get_pose()
+                pos_diff = np.asarray(
+                    current.position[env_index], dtype=np.float64
+                ) - np.asarray(target_object_pose.position[0], dtype=np.float64)
+                # Resolve tolerance: stage > operator > default
+                control = plan.stage.param
+                stage_pt: Optional[PlacedToleranceConfig] = getattr(
+                    control, "placed_tolerance", None
+                )
+                op_tol = getattr(
+                    getattr(
+                        backend.get_operator_handler(operator_name), "control", None
+                    ),
+                    "tolerance",
+                    None,
+                )
+                op_placed: Optional[PlacedToleranceConfig] = getattr(
+                    op_tol, "placed", None
+                )
+
+                def _is_configured(val):
+                    """True when val is an explicit tolerance, not all-None."""
+                    if val is None:
+                        return False
+                    if isinstance(val, (list, np.ndarray)):
+                        return any(v is not None for v in val)
+                    return True
+
+                stage_pos = stage_pt.position if stage_pt is not None else None
+                stage_ori = stage_pt.orientation if stage_pt is not None else None
+                op_pos = op_placed.position if op_placed is not None else None
+                op_ori = op_placed.orientation if op_placed is not None else None
+                # Resolution chain: stage > operator > None (no constraint).
+                # All-None (or unset) means "don't check that dimension".
+                eff_pos = (
+                    stage_pos
+                    if _is_configured(stage_pos)
+                    else op_pos
+                    if _is_configured(op_pos)
+                    else None
+                )
+                eff_ori = (
+                    stage_ori
+                    if _is_configured(stage_ori)
+                    else op_ori
+                    if _is_configured(op_ori)
+                    else None
+                )
+                pos_ok = position_within_tolerance_nullable(pos_diff, eff_pos)
+                ori_ok = orientation_within_tolerance_nullable(
+                    current.orientation[env_index],
+                    target_object_pose.orientation[0],
+                    eff_ori,
+                )
+                satisfied = pos_ok and ori_ok
     else:
         satisfied = True
 
@@ -1438,6 +1566,10 @@ def _check_stage_condition(
         OperationConstraint.REACHED: (
             "target_not_reached",
             "operator end-effector is not within tolerance of the target pose",
+        ),
+        OperationConstraint.PLACED: (
+            "placement_failed",
+            "held object is not within tolerance of the target position",
         ),
     }.get(constraint, ("condition_mismatch", "stage condition is not satisfied"))
     details = {
@@ -1475,6 +1607,39 @@ def _check_stage_condition(
                     np.asarray(completion_pose.orientation, dtype=np.float64),
                 )
             )
+    elif constraint == OperationConstraint.PLACED:
+        details["held_object"] = held_object_name or ""
+        details["placed_reference"] = getattr(
+            plan.stage.param, "placed_reference", "object"
+        )
+        if held_object_name and target_object_pose is not None:
+            handler = backend.get_object_handler(held_object_name)
+            if handler is not None:
+                current = handler.get_pose()
+                details["target_position"] = [
+                    float(v) for v in target_object_pose.position[0]
+                ]
+                details["current_position"] = [
+                    float(v) for v in current.position[env_index]
+                ]
+                details["position_error"] = float(
+                    np.linalg.norm(
+                        np.asarray(current.position[env_index], dtype=np.float64)
+                        - np.asarray(target_object_pose.position[0], dtype=np.float64)
+                    )
+                )
+                details["target_orientation"] = [
+                    float(v) for v in target_object_pose.orientation[0]
+                ]
+                details["current_orientation"] = [
+                    float(v) for v in current.orientation[env_index]
+                ]
+                details["orientation_error"] = float(
+                    quaternion_angular_distance(
+                        current.orientation[env_index],
+                        target_object_pose.orientation[0],
+                    )
+                )
     return details
 
 

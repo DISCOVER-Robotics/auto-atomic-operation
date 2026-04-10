@@ -21,10 +21,6 @@ task:
       x: [-0.02, 0.02]
       y: [-0.02, 0.02]
       collision_radius: 0.04
-    arm:
-      x: [-0.01, 0.01]
-      y: [-0.01, 0.01]
-      collision_radius: 0.15
   stages:
     - name: pick_cup
       object: cup

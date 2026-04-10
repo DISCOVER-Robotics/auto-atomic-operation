@@ -15,6 +15,7 @@ from ...framework import (
     EefControlConfig,
     OperatorRandomizationConfig,
     OperatorConfig,
+    PlacedToleranceConfig,
     PoseControlConfig,
     PoseRandomRange,
     PoseReference,
@@ -31,7 +32,9 @@ from ...runtime import (
 from ...utils.pose import (
     PoseState,
     euler_to_quaternion,
+    orientation_within_tolerance_nullable,
     position_within_tolerance,
+    position_within_tolerance_nullable,
     quaternion_angular_distance,
     quaternion_to_rpy,
     quaternion_to_rotation_matrix,
@@ -45,6 +48,9 @@ class MujocoToleranceConfig(BaseModel):
     a 3-element list ``[x, y, z]`` checks each axis independently."""
     orientation: float = 0.08
     eef: float = 0.03
+    placed: Optional[PlacedToleranceConfig] = None
+    """Tolerance for the PLACED post-condition. Falls back to
+    ``position=0.02, orientation=None`` (unchecked) when ``None``."""
 
 
 class MujocoGraspConfig(BaseModel):
@@ -99,6 +105,28 @@ class MujocoObjectHandler(ObjectHandler):
             single_env.data.qpos[qpos_adr : qpos_adr + 7] = [x, y, z, qw, qx, qy, qz]
             single_env.data.qvel[dof_adr : dof_adr + 6] = 0.0
             mujoco.mj_forward(single_env.model, single_env.data)
+
+    def is_at_target(
+        self,
+        target_pose: PoseState,
+        position_tolerance: Union[float, List[Optional[float]], None] = 0.02,
+        orientation_tolerance: Union[float, List[Optional[float]], None] = None,
+    ) -> np.ndarray:
+        """Return a bool per env whether the object is within tolerance of the
+        target pose."""
+        current = self.get_pose()
+        target = target_pose.broadcast_to(self.env.batch_size)
+        result = np.zeros(self.env.batch_size, dtype=bool)
+        for i in range(self.env.batch_size):
+            pos_diff = np.asarray(current.position[i], dtype=np.float64) - np.asarray(
+                target.position[i], dtype=np.float64
+            )
+            pos_ok = position_within_tolerance_nullable(pos_diff, position_tolerance)
+            ori_ok = orientation_within_tolerance_nullable(
+                current.orientation[i], target.orientation[i], orientation_tolerance
+            )
+            result[i] = pos_ok and ori_ok
+        return result
 
 
 @dataclass

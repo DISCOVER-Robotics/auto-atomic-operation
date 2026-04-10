@@ -46,6 +46,9 @@ class OperationConstraint(str, Enum):
     """Whether the target object has been displaced from its original pose (e.g., the distance between the current pose of the object and its original pose is greater than a certain threshold) after the operation."""
     REACHED = "reached"
     """Whether the operator end-effector is within tolerance of the final target pose for the stage."""
+    PLACED = "placed"
+    """Whether the operator has released the held object AND the held object
+    is within tolerance of the target position/orientation."""
     NONE = "none"
     """No constraint."""
 
@@ -76,7 +79,7 @@ OPERATION_CONDITIONS = {
     },
     Operation.PLACE: {
         _Condition.PERFORM: OperationConstraint.GRASPED,
-        _Condition.SUCCESS: OperationConstraint.RELEASED,
+        _Condition.SUCCESS: OperationConstraint.PLACED,
     },
     Operation.PUSH: {
         _Condition.SUCCESS: OperationConstraint.DISPLACED,
@@ -149,6 +152,20 @@ class WaypointToleranceConfig(BaseModel, extra="forbid"):
     a 3-element list ``[x, y, z]`` checks each axis independently."""
     orientation: Optional[float] = None
     """Orientation tolerance in radians (quaternion angular distance)."""
+
+
+class PlacedToleranceConfig(BaseModel, extra="forbid"):
+    """Tolerance for the PLACED post-condition. Each dimension can be null
+    to skip checking that dimension."""
+
+    position: Optional[Union[float, List[Optional[float]]]] = [None, None, None]
+    """Position tolerance. Scalar = L2-norm threshold. List ``[x, y, z]`` =
+    per-axis thresholds where ``null`` means no constraint on that axis."""
+
+    orientation: Optional[Union[float, List[Optional[float]]]] = [None, None, None]
+    """Orientation tolerance in radians. Scalar = quaternion angular distance
+    threshold. List ``[roll, pitch, yaw]`` = per-axis Euler thresholds where
+    ``null`` means no constraint on that axis."""
 
 
 class PoseRandomRange(BaseModel):
@@ -243,6 +260,15 @@ class StageControlConfig(BaseModel):
     """Optional pose controls to execute after the main stage action."""
     eef: Optional[EefControlConfig] = None
     """The configuration for the end-effector control in this stage. If not specified, no end-effector control will be performed in this stage."""
+    placed_reference: str = "object"
+    """Target reference for the PLACED post-condition. ``'object'`` uses the
+    stage object's current pose (the destination); ``'pre_move'`` uses the
+    last pre_move waypoint resolved position. When the stage has no object,
+    ``'pre_move'`` is always used regardless of this setting."""
+    placed_tolerance: Optional[PlacedToleranceConfig] = PlacedToleranceConfig()
+    """Per-stage tolerance override for the PLACED post-condition. Falls back
+    to the operator-level placed tolerance, then to ``position=0.02,
+    orientation=null``."""
 
 
 class StageConfig(BaseModel):

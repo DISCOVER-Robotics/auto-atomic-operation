@@ -105,19 +105,82 @@ An object is considered "displaced" when:
 
 ## 4. Placed Condition
 
-**Implementation**: `MujocoObjectHandler.is_at_target()`
+**Constraint**: `OperationConstraint.PLACED`
 
-An object is "placed" at the target when:
+**Implementation**: Compound check in `_check_stage_condition()` + `MujocoObjectHandler.is_at_target()`
 
-**Position error**: `||current_pos - target_pos|| <= threshold`
+The `place` operation succeeds when **both** conditions are met:
 
-### Configurable Parameters
+1. **Released**: The operator is no longer grasping any object.
+2. **At target**: The **held object** (auto-detected as the object grasped by the operator at stage start) is within tolerance of the **target position**.
 
-| Parameter | Location | Default | Description |
-|-----------|----------|---------|-------------|
-| `position_tolerance` | `MujocoObjectHandler.__init__` | `0.02` m | Maximum distance from target to count as placed |
+### Target Position Resolution
 
-**Usage**: Pass when creating the object handler (not currently exposed in YAML configs).
+The target position depends on the `placed_reference` config and whether a stage object is set:
+
+| `placed_reference` | `stage.object` set? | Target position |
+|---------------------|---------------------|-----------------|
+| `"object"` (default) | Yes | `stage.object`'s current pose (the destination reference object) |
+| `"object"` | No | Last pre_move waypoint resolved position |
+| `"pre_move"` | Yes or No | Last pre_move waypoint resolved position |
+
+**Note**: `stage.object` in a place stage is the **destination reference** (e.g., coaster, box), not the object being placed. The held object is auto-detected via `is_object_grasped()`.
+
+### Tolerance
+
+Position tolerance supports:
+- **Scalar** (float): L2-norm threshold (e.g., `0.02` = 2cm sphere)
+- **Per-axis** (`[x, y, z]`): Each element is a per-axis threshold. Any element can be `null` to skip that axis (e.g., `[0.03, 0.03, null]` = 3cm XY, ignore Z).
+
+Orientation tolerance:
+- **Scalar** (float): Quaternion angular distance in radians.
+- **`null`** (default): Orientation is not checked.
+
+### Tolerance Resolution Chain
+
+| Priority | Source | Location |
+|----------|--------|----------|
+| 1 (highest) | `placed_tolerance` | `StageControlConfig` (per-stage in YAML) |
+| 2 | `tolerance.placed` | `MujocoToleranceConfig` (operator-level control config) |
+| 3 (fallback) | — | `null` (no constraint — check degrades to released-only) |
+
+A value is considered "configured" only if it is a scalar or a list with at
+least one non-null element. An all-null list is treated as unset, so the next
+level of the chain is consulted. When nothing is configured at any level, the
+dimension is not checked — the PLACED condition then only requires release.
+
+### YAML Example
+
+```yaml
+- name: place_cup_on_coaster
+  object: coaster            # destination reference object
+  operation: place
+  param:
+    pre_move:
+      - position: [0.0, 0.0, 0.15]
+        reference: object_world
+      - position: [0.0, 0.0, 0.035]
+        reference: object_world
+    post_move:
+      - position: [0.0, 0.0, 0.2]
+        reference: object_world
+    eef:
+      close: false
+    placed_tolerance:
+      position: [0.03, 0.03, null]  # 3cm XY, no Z check
+      orientation: null              # no orientation check
+    placed_reference: object         # default
+```
+
+### Failure Diagnostics
+
+When the PLACED condition fails, the following details are included:
+- `held_object`: Name of the object that was being placed
+- `placed_reference`: The reference mode used (`"object"` or `"pre_move"`)
+- `target_position`, `current_position`: World positions
+- `position_error`: L2 distance between current and target
+- `target_orientation`, `current_orientation`: World orientations
+- `orientation_error`: Angular distance in radians
 
 ---
 
