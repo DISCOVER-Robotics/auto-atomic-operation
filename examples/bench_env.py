@@ -10,6 +10,7 @@ Examples:
     python examples/bench_env.py cup_on_coaster_gs 20 --profile
 """
 
+import json
 import sys
 import time
 from pathlib import Path
@@ -169,6 +170,32 @@ print(
         _mean_hz(total),
     )
 )
+
+
+def _stat_dict(arr_ms: np.ndarray) -> dict:
+    return {
+        "mean_ms": round(float(arr_ms.mean()), 2),
+        "std_ms": round(float(arr_ms.std()), 2),
+        "min_ms": round(float(arr_ms.min()), 2),
+        "max_ms": round(float(arr_ms.max()), 2),
+        "mean_hz": round(_mean_hz(arr_ms), 2),
+    }
+
+
+bench_result = {
+    "config_name": CONFIG_NAME,
+    "batch_size": backend.batch_size,
+    "iterations": N,
+    "overrides": overrides,
+    "capture_observation": _stat_dict(obs_arr),
+    "update": _stat_dict(upd_arr),
+    "total": _stat_dict(total),
+}
+
+out_path = Path("outputs") / "bench" / f"{CONFIG_NAME}.json"
+out_path.parent.mkdir(parents=True, exist_ok=True)
+out_path.write_text(json.dumps(bench_result, indent=2, ensure_ascii=False) + "\n")
+print(f"\nBenchmark saved to {out_path.resolve()}")
 
 _log_progress("tearing down backend")
 backend.teardown()
