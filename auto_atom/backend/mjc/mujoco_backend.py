@@ -85,8 +85,6 @@ class MujocoObjectHandler(ObjectHandler):
         return PoseState(position=pos, orientation=quat)
 
     def set_pose(self, pose: PoseState, env_mask: Optional[np.ndarray] = None) -> None:
-        if self.freejoint_name is None:
-            return
         pose = pose.broadcast_to(self.env.batch_size)
         mask = (
             np.ones(self.env.batch_size, dtype=bool)
@@ -96,17 +94,35 @@ class MujocoObjectHandler(ObjectHandler):
         for env_index, single_env in enumerate(self.env.envs):
             if not mask[env_index]:
                 continue
-            jid = mujoco.mj_name2id(
-                single_env.model, mujoco.mjtObj.mjOBJ_JOINT, self.freejoint_name
-            )
-            if jid < 0:
-                continue
-            qpos_adr = int(single_env.model.jnt_qposadr[jid])
-            dof_adr = int(single_env.model.jnt_dofadr[jid])
             x, y, z = pose.position[env_index]
             qx, qy, qz, qw = pose.orientation[env_index]
-            single_env.data.qpos[qpos_adr : qpos_adr + 7] = [x, y, z, qw, qx, qy, qz]
-            single_env.data.qvel[dof_adr : dof_adr + 6] = 0.0
+            if self.freejoint_name is not None:
+                jid = mujoco.mj_name2id(
+                    single_env.model, mujoco.mjtObj.mjOBJ_JOINT, self.freejoint_name
+                )
+                if jid >= 0:
+                    qpos_adr = int(single_env.model.jnt_qposadr[jid])
+                    dof_adr = int(single_env.model.jnt_dofadr[jid])
+                    single_env.data.qpos[qpos_adr : qpos_adr + 7] = [
+                        x,
+                        y,
+                        z,
+                        qw,
+                        qx,
+                        qy,
+                        qz,
+                    ]
+                    single_env.data.qvel[dof_adr : dof_adr + 6] = 0.0
+                    mujoco.mj_forward(single_env.model, single_env.data)
+                    continue
+
+            bid = mujoco.mj_name2id(
+                single_env.model, mujoco.mjtObj.mjOBJ_BODY, self.body_name
+            )
+            if bid < 0:
+                continue
+            single_env.model.body_pos[bid] = [x, y, z]
+            single_env.model.body_quat[bid] = [qw, qx, qy, qz]
             mujoco.mj_forward(single_env.model, single_env.data)
 
     def is_at_target(
@@ -1130,6 +1146,9 @@ def build_mujoco_backend(
     object_handlers: Dict[str, MujocoObjectHandler] = {}
     model = env.envs[0].model
     for object_name in object_names:
+        body_name = object_name
+        if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, f"{object_name}_gs") >= 0:
+            body_name = f"{object_name}_gs"
         freejoint_name: Optional[str] = None
         if (
             mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"{object_name}_joint")
@@ -1144,7 +1163,7 @@ def build_mujoco_backend(
         object_handlers[object_name] = MujocoObjectHandler(
             name=object_name,
             env=env,
-            body_name=object_name,
+            body_name=body_name,
             freejoint_name=freejoint_name,
         )
 
