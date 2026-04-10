@@ -134,6 +134,43 @@ mask 循环中每个 object 都调用 `batch_update_gaussians(body_pos, body_qua
 
 ---
 
+## Benchmark 结果 (cup_on_coaster_gs, 2026-04-10)
+
+> 测试环境: cup_on_coaster_gs (2 mask objects, 3 cameras 1280x720, color+depth+heat_map)
+> 测试工具: `tests/run_bench_suite.py` + `tests/plot_bench_results.py`
+> 注意事项: task-level 第一步作为 warmup 不纳入计时，避免 CUDA JIT 编译影响结果
+
+### Task-Level 循环频率
+
+| batch_size | task update | task update + obs | obs 带来的每步开销 | env 吞吐量 |
+|---|---|---|---|---|
+| 1 | 110.9 Hz (9.0 ms) | 11.9 Hz (84.0 ms) | 75.0 ms | 11.9 env-step/s |
+| 2 | 49.2 Hz (20.3 ms) | 8.4 Hz (119.0 ms) | 98.7 ms | 16.8 env-step/s |
+| 4 | 24.7 Hz (40.5 ms) | 3.9 Hz (256.4 ms) | 215.9 ms | 15.6 env-step/s |
+| 8 | 12.2 Hz (82.0 ms) | 1.9 Hz (526.3 ms) | 444.3 ms | 15.2 env-step/s |
+
+### Env-Level 分解 (capture_observation + update 紧凑循环)
+
+| batch_size | capture | update | total | capture 占比 |
+|---|---|---|---|---|
+| 1 | 56.7 ms | 1.28 ms | 57.98 ms | 97.8% |
+| 2 | 92.95 ms | 2.44 ms | 95.39 ms | 97.4% |
+| 4 | 245.66 ms | 4.84 ms | 250.50 ms | 98.1% |
+| 8 | 466.61 ms | 10.18 ms | 476.79 ms | 97.9% |
+
+### GPU 显存
+
+所有 batch_size 下峰值显存均为 **514 MB**，显存不随 batch_size 增长（受 GS model 大小主导）。
+
+### 关键结论
+
+1. **observation 获取是性能瓶颈**: capture_observation 占总耗时 >97%，物理 update 不到 3%
+2. **batch 吞吐量**: batch_size=2 时 env 吞吐最优 (16.8 env-step/s)，更大 batch 因 GS 渲染线性增长而吞吐趋于饱和 (~15 env-step/s)
+3. **task-level vs env-level 一致性**: task-level 的 obs 开销 ≈ env-level capture + ~10-18ms (runner 逻辑 + CUDA 同步开销)，两组数据吻合
+4. **warmup 重要性**: 首次 capture_observation 触发 gsplat CUDA JIT 编译（耗时数十秒），必须排除在计时之外。task-level 和 env-level 均已实现 warmup 机制
+
+---
+
 ## 后续优化方向
 
 ### A. 合并多 mask object 为单次渲染 (预估 -50~60% mask 时间)

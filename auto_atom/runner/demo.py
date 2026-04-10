@@ -43,6 +43,12 @@ def main(cfg: DictConfig) -> None:
     use_input = bool(cfg.get("use_input", False))
     max_updates = int(cfg.get("max_updates", 300))
     perf_count = bool(cfg.get("perf_count", False))
+    _last_obs = [None]  # mutable container to hold observation across steps
+
+    def _step_fn(_step, _update):
+        if perf_count:
+            _last_obs[0] = runner._context.backend.env.capture_observation()
+        return runner.update()
 
     try:
         round_summaries = run_example_rounds(
@@ -50,12 +56,7 @@ def main(cfg: DictConfig) -> None:
             use_input=use_input,
             hooks=ExampleLoopHooks(
                 reset_fn=runner.reset,
-                step_fn=lambda _step, _update: (
-                    runner._context.backend.env.capture_observation()
-                    if perf_count
-                    else None,
-                    runner.update(),
-                )[1],
+                step_fn=_step_fn,
                 summarize_fn=lambda update, steps_used, max_updates, elapsed_time_sec: (
                     runner.summarize(
                         update,
