@@ -25,6 +25,7 @@
 
 - **Gaussian Splatting**
   - [GS Rendering Alignment](gs_rendering_alignment.md)
+  - [GS Background Offset Tuning](gs_background_offset_tuning.md)
   - [GS Rendering Performance](gs_rendering_performance.md)
   - [GS Collision Box Sizing](gs_scene_collision_box_sizing.md)
 

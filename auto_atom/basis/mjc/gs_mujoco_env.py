@@ -232,17 +232,41 @@ class GSUnifiedMujocoEnv(UnifiedMujocoEnv):
         super().__init__(config)
         self.config: GSEnvConfig
         gs_cfg = config.gaussian_render
-        background_ply = gs_cfg.resolved_background_ply()
-        combined_models = dict(gs_cfg.body_gaussians)
-        if background_ply:
-            combined_models["background"] = background_ply
-        self._gs_renderer = GSRendererMuJoCo(combined_models, self.model)
+        self._gs_background_source_ply = gs_cfg.background_ply
+        self._gs_renderer: GSRendererMuJoCo | None = None
         fg_cfg = BatchSplatConfig(
             body_gaussians=dict(gs_cfg.body_gaussians),
             background_ply=None,
             minibatch=512,
         )
         self._fg_gs_renderer = MjxBatchSplatRenderer(fg_cfg, self.model)
+        self._bg_gs_renderer: MjxBatchSplatRenderer | None = None
+        self.set_background_offset(gs_cfg.resolved_background_offset())
+        background_ply = gs_cfg.resolved_background_ply()
+        if background_ply:
+            self.get_logger().debug(
+                f"GS renderer initialised with {len(gs_cfg.body_gaussians)} body gaussian(s) + background"
+            )
+        else:
+            self.get_logger().debug(
+                f"GS renderer initialised with {len(gs_cfg.body_gaussians)} body gaussian(s)"
+            )
+        self._gs_mask_renderers = self._build_gs_mask_renderers(
+            dict(gs_cfg.body_gaussians)
+        )
+
+    def set_background_offset(
+        self, offset_xyz: tuple[float, float, float] | list[float]
+    ) -> tuple[float, float, float]:
+        offset_xyz = _normalize_xyz_offset(offset_xyz)
+        background_ply = _materialize_shifted_background_ply(
+            self._gs_background_source_ply,
+            offset_xyz,
+        )
+        combined_models = dict(self.config.gaussian_render.body_gaussians)
+        if background_ply:
+            combined_models["background"] = background_ply
+        self._gs_renderer = GSRendererMuJoCo(combined_models, self.model)
         self._bg_gs_renderer = (
             MjxBatchSplatRenderer(
                 BatchSplatConfig(
@@ -255,17 +279,8 @@ class GSUnifiedMujocoEnv(UnifiedMujocoEnv):
             if background_ply
             else None
         )
-        if background_ply:
-            self.get_logger().debug(
-                f"GS renderer initialised with {len(gs_cfg.body_gaussians)} body gaussian(s) + background"
-            )
-        else:
-            self.get_logger().debug(
-                f"GS renderer initialised with {len(gs_cfg.body_gaussians)} body gaussian(s)"
-            )
-        self._gs_mask_renderers = self._build_gs_mask_renderers(
-            dict(gs_cfg.body_gaussians)
-        )
+        object.__setattr__(self.config.gaussian_render, "background_offset", offset_xyz)
+        return offset_xyz
 
     def capture_observation(self) -> dict[str, dict[str, Any]]:
         obs = super().capture_observation()
@@ -624,7 +639,7 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         super().__init__(config, **kwargs)
 
         gs_cfg = config.gaussian_render
-        background_ply = gs_cfg.resolved_background_ply()
+        self._gs_background_source_ply = gs_cfg.background_ply
 
         # Single shared foreground renderer
         self._fg_gs_renderer = MjxBatchSplatRenderer(
@@ -637,18 +652,7 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         )
 
         # Single shared background renderer (optional)
-        self._bg_gs_renderer: MjxBatchSplatRenderer | None = (
-            MjxBatchSplatRenderer(
-                BatchSplatConfig(
-                    body_gaussians={},
-                    background_ply=background_ply,
-                    minibatch=512,
-                ),
-                self.envs[0].model,
-            )
-            if background_ply
-            else None
-        )
+        self._bg_gs_renderer: MjxBatchSplatRenderer | None = None
 
         # Per-object mask renderers (shared) — build via env[0] which has
         # .model, .get_logger(), and .config.mask_objects needed by the builder.
@@ -665,11 +669,38 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
             tuple[tuple[int, ...], int, int], tuple[torch.Tensor, torch.Tensor]
         ] = {}
 
+        self.set_background_offset(gs_cfg.resolved_background_offset())
+        background_ply = gs_cfg.resolved_background_ply()
+
         n_bodies = len(gs_cfg.body_gaussians)
         bg_str = " + background" if background_ply else ""
         self.envs[0].get_logger().debug(
             f"Batched GS renderer initialised with {n_bodies} body gaussian(s){bg_str}"
         )
+
+    def set_background_offset(
+        self, offset_xyz: tuple[float, float, float] | list[float]
+    ) -> tuple[float, float, float]:
+        offset_xyz = _normalize_xyz_offset(offset_xyz)
+        background_ply = _materialize_shifted_background_ply(
+            self._gs_background_source_ply,
+            offset_xyz,
+        )
+        self._bg_gs_renderer = (
+            MjxBatchSplatRenderer(
+                BatchSplatConfig(
+                    body_gaussians={},
+                    background_ply=background_ply,
+                    minibatch=512,
+                ),
+                self.envs[0].model,
+            )
+            if background_ply
+            else None
+        )
+        self._bg_cache.clear()
+        object.__setattr__(self.config.gaussian_render, "background_offset", offset_xyz)
+        return offset_xyz
 
     # ------------------------------------------------------------------
     # observation capture

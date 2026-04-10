@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from pprint import pprint
 from time import perf_counter
-from typing import Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import numpy as np
 from hydra.utils import instantiate
@@ -139,11 +140,17 @@ def run_example_rounds(
     return round_summaries
 
 
-def print_final_summary(round_summaries: Sequence[ExecutionSummary]) -> None:
+def print_final_summary(
+    round_summaries: Sequence[ExecutionSummary],
+    *,
+    init_time_sec: Optional[float] = None,
+) -> None:
     print()
     print("=" * 60)
     print("SUMMARY")
     print("=" * 60)
+    if init_time_sec is not None:
+        print(f"Sim init time: {init_time_sec:.3f}s")
     if not round_summaries:
         print("Success rate: 0/0")
         print("=" * 60)
@@ -159,9 +166,15 @@ def print_final_summary(round_summaries: Sequence[ExecutionSummary]) -> None:
         round_env_success = _count_env_successes(summary)
         batch_size = len(summary.final_success)
         failure_lines = _format_failure_lines(summary)
+        loop_freq = (
+            summary.updates_used / summary.elapsed_time_sec
+            if summary.elapsed_time_sec > 0
+            else float("inf")
+        )
         round_payload = {
             "status": tag,
             "success_rate": f"{round_env_success}/{batch_size}",
+            "loop_frequency": f"{loop_freq:.1f} Hz ({summary.updates_used} steps in {summary.elapsed_time_sec:.3f}s)",
             "completed_stage_info": _format_completed_stage_info(
                 summary.completed_stage_info
             ),
@@ -179,9 +192,67 @@ def print_final_summary(round_summaries: Sequence[ExecutionSummary]) -> None:
         }
         if failure_lines:
             round_payload["failure_reasons"] = failure_lines
-        print(f"  Round {i}: [{tag}]")
+        print(f"Round {i}")
         pprint(round_payload, sort_dicts=False)
     print("=" * 60)
+
+
+def save_final_summary(
+    round_summaries: Sequence[ExecutionSummary],
+    path: str | Path = "summary.json",
+    *,
+    init_time_sec: Optional[float] = None,
+    run_config: Optional[Dict[str, Any]] = None,
+) -> Path:
+    """Save summary statistics to a JSON file."""
+    data: Dict[str, Any] = {}
+    if run_config:
+        data["run_config"] = run_config
+    if init_time_sec is not None:
+        data["init_time_sec"] = round(init_time_sec, 3)
+
+    env_successes = sum(_count_env_successes(s) for s in round_summaries)
+    env_total = sum(len(s.final_success) for s in round_summaries)
+    data["success_rate"] = f"{env_successes}/{env_total}"
+
+    rounds_data: List[Dict[str, Any]] = []
+    for summary in round_summaries:
+        loop_freq = (
+            summary.updates_used / summary.elapsed_time_sec
+            if summary.elapsed_time_sec > 0
+            else float("inf")
+        )
+        entry: Dict[str, Any] = {
+            "status": "OK" if bool(np.all(summary.final_success)) else "FAIL",
+            "success_rate": f"{_count_env_successes(summary)}/{len(summary.final_success)}",
+            "loop_frequency_hz": round(loop_freq, 1),
+            "updates_used": summary.updates_used,
+            "elapsed_time_sec": round(summary.elapsed_time_sec, 3),
+            "completed_stage_info": _format_completed_stage_info(
+                summary.completed_stage_info
+            ),
+            "completion_steps": _format_optional_int_list(summary.env_completion_steps),
+            "completion_time": _format_optional_time_list(
+                summary.env_completion_time_sec
+            ),
+            "completion_sim_time": _format_optional_time_list(
+                summary.env_completion_sim_time_sec
+            ),
+            "sim_time": _format_sim_time_stats(summary.env_completion_sim_time_sec),
+            "completed_stages": summary.completed_stage_count.tolist(),
+            "final_stage": summary.final_stage_name,
+            "final_success": summary.final_success.tolist(),
+        }
+        failure_lines = _format_failure_lines(summary)
+        if failure_lines:
+            entry["failure_reasons"] = failure_lines
+        rounds_data.append(entry)
+    data["rounds"] = rounds_data
+
+    out = Path(path)
+    out.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    print(f"Summary saved to {out.resolve()}")
+    return out
 
 
 def _format_failure_lines(summary: ExecutionSummary) -> List[str]:
