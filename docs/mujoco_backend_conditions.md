@@ -17,13 +17,13 @@ The MuJoCo backend evaluates post-conditions after each operation to determine s
 
 **Implementation**: `MujocoOperatorHandler._is_target_grasped()`
 
-An object is considered "grasped" when the gripper is sufficiently closed and either of the following holds:
+An object is considered "grasped" when the gripper is sufficiently closed and both of the following hold:
 
-1. Physical bilateral finger contact is detected
-2. The object lies inside the gripper-centered grasp envelope in EEF coordinates
+1. Physical bilateral finger contact is detected.
+2. The optional lateral threshold check passes.
 
-This hybrid rule keeps the predicate contact-aware while remaining robust to
-small contact-solver misses in scenes that are known to execute successfully.
+This keeps the predicate contact-aware while still allowing an additional
+gripper-centered geometric sanity check in scenes that need it.
 
 ### 1.1 Bilateral Contact
 - **Left finger contact**: At least one contact pair where the object body touches a geom with name starting with `left_`
@@ -31,14 +31,13 @@ small contact-solver misses in scenes that are known to execute successfully.
 
 **Detection method**: Iterates through `env.data.contact` array, checks `geom_bodyid` to find contacts involving the target body, then checks geom names.
 
-### 1.2 Geometric Grasp Envelope
+### 1.2 Optional Lateral Check
 - **Lateral error**: Distance between object and EEF center on the plane perpendicular to grasp direction
 - **Computed in EEF frame**: Object position is transformed to gripper coordinate system
-- **Lateral threshold**: `lateral_error <= lateral_threshold` (default fallback `0.03` m)
-- **Axial threshold**: Object center must also stay within a small distance along the grasp axis (currently `0.03` m)
+- **Lateral threshold**: Disabled by default with `lateral_threshold: 0.0`; when set above zero, the check is `lateral_error <= lateral_threshold`
 
-**Rationale**: Ensures the object is still inside the grasp volume even when the
-physics contact manifold is sparse or momentarily unstable.
+**Rationale**: Ensures the object is still laterally inside the grasp volume when
+bilateral contact alone is too permissive for a scene.
 
 **Key improvement**: Unlike world-frame horizontal checks, this works correctly for any grasp orientation (vertical, horizontal, or angled).
 
@@ -46,9 +45,8 @@ physics contact manifold is sparse or momentarily unstable.
 
 | Parameter | Location | Default | Description |
 |-----------|----------|---------|-------------|
-| `lateral_threshold` | `MujocoGraspConfig` | `0.03` m fallback | Max lateral distance perpendicular to grasp direction |
+| `lateral_threshold` | `MujocoGraspConfig` | `0.0` m | Max lateral distance perpendicular to grasp direction; `0.0` disables the lateral check |
 | `grasp_axis` | `MujocoGraspConfig` | `2` (Z) | Grasp direction axis in EEF frame: 0=X, 1=Y, 2=Z |
-| `axial_threshold` | internal heuristic | `0.03` m | Max object-center distance along grasp axis for envelope fallback |
 
 ### Debugging
 
@@ -87,7 +85,7 @@ None. Pure contact detection based on MuJoCo's contact solver.
 
 ## 3. Displaced Condition
 
-**Implementation**: `MujocoObjectHandler.is_displaced()`
+**Implementation**: `SceneBackend.is_object_displaced()`
 
 An object is considered "displaced" when:
 
@@ -202,16 +200,16 @@ quat_diff = target_quat * inverse(current_quat)
 angle = 2 * arccos(|quat_diff.w|)
 ```
 
-**Threshold**: `orientation_tolerance` (default 0.1 radians ≈ 5.7°)
+**Threshold**: `orientation_tolerance` (default 0.08 radians ≈ 4.6°)
 
 ### Configurable Parameters
 
 | Parameter | Location | Default | Description |
 |-----------|----------|---------|-------------|
-| `position_tolerance` | `MujocoOperatorHandler` | `0.01` m | Position error threshold |
-| `orientation_tolerance` | `MujocoOperatorHandler` | `0.1` rad | Orientation error threshold |
+| `position_tolerance` | `MujocoControlConfig.tolerance.position` | `0.01` m | Position error threshold |
+| `orientation_tolerance` | `MujocoControlConfig.tolerance.orientation` | `0.08` rad | Orientation error threshold |
 
-**Usage**: Set in backend config (not currently exposed in YAML).
+**Usage**: Set under `task_operators[].control.tolerance` in YAML.
 
 ---
 
@@ -228,7 +226,7 @@ The gripper action is "reached" based on the operation:
 
 | Parameter | Location | Default | Description |
 |-----------|----------|---------|-------------|
-| `eef_grasp_settle_steps` | `MujocoOperatorHandler` | `10` | Simulation steps to wait before checking grasp |
+| `control.grasp.settle_steps` | `MujocoGraspConfig` | `5` | Simulation steps to wait before checking grasp |
 
 ### 6.2 Closing (without target / fallback)
 **Condition**: `actual_qpos >= max(target_ctrl - eef_tolerance, 0.45)`
@@ -244,8 +242,8 @@ Gripper has opened to within tolerance of fully open, or reached the minimum ope
 
 | Parameter | Location | Default | Description |
 |-----------|----------|---------|-------------|
-| `eef_tolerance` | `MujocoOperatorHandler` | `0.03` | Gripper position tolerance |
-| `eef_grasp_settle_steps` | `MujocoOperatorHandler` | `10` | Steps to wait before grasp check |
+| `control.tolerance.eef` | `MujocoToleranceConfig` | `0.03` | Gripper position tolerance |
+| `control.grasp.settle_steps` | `MujocoGraspConfig` | `5` | Steps to wait before grasp check |
 
 ---
 
@@ -255,9 +253,9 @@ All control actions have a maximum step limit:
 
 | Parameter | Location | Default | Description |
 |-----------|----------|---------|-------------|
-| `command_timeout_steps` | `MujocoOperatorHandler` | `600` | Max simulation steps per action |
+| `control.timeout_steps` | `MujocoControlConfig` | `100` | Max simulation steps per action |
 
-At 500 Hz simulation frequency with 20 Hz control, this equals 30 seconds real-time.
+At 600 Hz simulation frequency with 30 Hz control, this equals about 3.3 seconds of simulated time.
 
 ---
 
@@ -266,7 +264,7 @@ At 500 Hz simulation frequency with 20 Hz control, this equals 30 seconds real-t
 Parameters are now structured under `control` in the operator configuration:
 
 ```yaml
-operators:
+task_operators:
   - name: arm
     control:
       tolerance:

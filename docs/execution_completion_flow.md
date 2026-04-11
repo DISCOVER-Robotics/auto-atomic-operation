@@ -145,7 +145,7 @@ Examples:
   - success condition: `grasped`
 - `place`
   - perform condition: `grasped`
-  - success condition: `released`
+  - success condition: `placed`
 - `push`
   - success condition: `displaced`
 - `pull`
@@ -206,9 +206,9 @@ This means `eef` completion alone does not guarantee `pick` success.
 
 - Stage runs `pre_move -> eef -> post_move`
 - Before stage start, runner checks `grasped`
-- After the full stage finishes, runner checks `released`
+- After the full stage finishes, runner checks `placed`
 
-So opening the gripper may be "done" at the primitive level, but the stage can still fail if the object is still effectively grasped afterward.
+So opening the gripper may be "done" at the primitive level, but the stage can still fail if the object is still effectively grasped or, when a placement target is available, the held object is outside the configured placement tolerance. See `docs/mujoco_backend_conditions.md` for the target and tolerance resolution rules.
 
 ### `pull`
 
@@ -275,7 +275,7 @@ flowchart TD
 - `pre_move` and `post_move` completion are purely pose-tolerance based in the MuJoCo backend.
 - `eef` completion is gripper-state based, with special grasp detection when closing on a target object.
 - Primitive `REACHED` does not always mean the stage has semantically succeeded.
-- Stage success depends on operation-specific condition checks such as `grasped`, `released`, `contacted`, or `displaced`.
+- Stage success depends on operation-specific condition checks such as `grasped`, `released`, `placed`, `contacted`, or `displaced`.
 - If you are debugging an execution, inspect both:
   - primitive action details in `TaskUpdate.details`
   - stage-condition failures recorded by `TaskRunner`

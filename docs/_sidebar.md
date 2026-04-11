@@ -33,6 +33,7 @@
   - [Data Collection](data_collection.md)
   - [Policy Evaluation](policy_evaluation.md)
   - [Tune Initial State](tune_initial_state.md)
+  - [Benchmark Suite](skills/bench.md)
 
 - **Task Tuning**
   - [Open Door Tuning](open_door_tuning.md)

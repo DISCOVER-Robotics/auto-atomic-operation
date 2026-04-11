@@ -77,7 +77,7 @@ task:
         eef:
           close: false
 
-operators:
+task_operators:
   - name: arm_a
 ```
 
@@ -132,7 +132,8 @@ auto_atom/
 ├── runtime.py          # Task execution engine (TaskRunner, TaskFlowBuilder)
 ├── mock.py             # In-memory mock backend for testing
 ├── basis/
-│   └── mujoco_env.py   # UnifiedMujocoEnv — Mujoco wrapper with sensor suite
+│   └── mjc/
+│       └── mujoco_env.py   # UnifiedMujocoEnv — Mujoco wrapper with sensor suite
 ├── backend/
 │   └── mjc/            # Mujoco backend (operators, objects, scene)
 └── utils/

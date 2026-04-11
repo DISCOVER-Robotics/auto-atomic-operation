@@ -210,6 +210,7 @@ Configuration files related to 3D GS end with `_gs.yaml` and are run in the same
 - **[Execution Completion Flow](docs/execution_completion_flow.md)** — how `pre_move`, `eef`, and `post_move` decide they are done, how that feeds into stage success/failure, and a flowchart of the control path
 - **[Policy Evaluation](docs/policy_evaluation.md)** — evaluate an external policy model with `PolicyEvaluator`, reuse `TaskUpdate` / `ExecutionRecord` / `ExecutionSummary`, and connect policy outputs to environment actions
 - **[Tune Initial State](docs/tune_initial_state.md)** — interactive tkinter + MuJoCo viewer tool for tuning operator base pose, EEF pose, and gripper before writing the values into task YAML
+- **[Benchmark Suite](docs/skills/bench.md)** — run the benchmark suite and generate performance plots/analysis for task-level and environment-level loops
 - **[XML / Mesh / GS Migration Notes](docs/skills/xml_mesh_gs_migration_notes.md)** — if you want to migrate your own XML, mesh, or Gaussian assets into this project's normalized asset layout, use this as the reference checklist
 
 ## Quick Start
@@ -247,7 +248,7 @@ task:
         eef:
           close: false
 
-operators:
+task_operators:
   - name: arm_a
 ```
 
@@ -283,7 +284,7 @@ A task file has four top-level keys:
 | `env`       | Hydra `_target_` instantiation of the batched environment, registered via `ComponentRegistry` |
 | `backend`   | Dotted import path to the backend factory function                                    |
 | `task`      | Task definition: `env_name`, `seed`, and a list of `stages`                           |
-| `operators` | Named operators with assigned roles                                                   |
+| `task_operators` | Named task operators passed to the backend factory; backend-specific settings live here |
 
 ### Stage definition
 
@@ -316,7 +317,7 @@ Pre- and post-conditions constrain when an operation may run and what constitute
 | `grasp`   | Close the gripper at the current position to grasp an object | eef | `released` | Before eef | `grasped` | After eef |
 | `release` | Open the gripper at the current position to release the held object | eef | `grasped` | Before eef | `released` | After eef |
 | `pick`    | Approach the object, grasp it, then retreat | pre_move, eef | `released` | Before pre_move | `grasped` | After post_move |
-| `place`   | Approach the target, release the object, then retreat | pre_move, eef | `grasped` | Before pre_move | `released` | After post_move |
+| `place`   | Approach the target, release the object, then retreat | pre_move, eef | `grasped` | Before pre_move | `placed` | After post_move |
 | `push`    | Move to the object and push it to the target location | pre_move | — | — | `displaced` | After post_move |
 | `pull`    | Move to the object, grasp it, then pull to the target | pre_move | `grasped` | After eef | `grasped` | After post_move |
 | `press`   | Move to the object and press it at the target pose | pre_move | — | — | `contacted` | After eef |
@@ -330,6 +331,7 @@ Pre- and post-conditions constrain when an operation may run and what constitute
 | `contacted`  | Operator end-effector is in contact with the target object                      |
 | `displaced`  | Target object has moved beyond a threshold distance from its original pose      |
 | `reached`    | Operator end-effector is within tolerance of the stage's final target pose      |
+| `placed`     | Operator has released the held object and, when a placement target is available, the object is within placement tolerance |
 
 For detailed implementation of these conditions in the MuJoCo backend, including detection logic and configurable thresholds, see [MuJoCo Backend Conditions](docs/mujoco_backend_conditions.md).
 
@@ -353,7 +355,8 @@ auto_atom/
 ├── runtime.py          # Task execution engine (TaskRunner, TaskFlowBuilder)
 ├── mock.py             # In-memory mock backend for testing
 ├── basis/
-│   └── mujoco_env.py   # UnifiedMujocoEnv — Mujoco wrapper with sensor suite
+│   └── mjc/
+│       └── mujoco_env.py   # UnifiedMujocoEnv — Mujoco wrapper with sensor suite
 ├── backend/
 │   └── mjc/            # Mujoco backend (operators, objects, scene)
 └── utils/

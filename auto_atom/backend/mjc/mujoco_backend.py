@@ -52,8 +52,12 @@ class MujocoToleranceConfig(BaseModel):
     orientation: float = 0.08
     eef: float = 0.03
     placed: Optional[PlacedToleranceConfig] = None
-    """Tolerance for the PLACED post-condition. Falls back to
-    ``position=0.02, orientation=None`` (unchecked) when ``None``."""
+    """Operator-level tolerance for the PLACED post-condition.
+
+    When ``None``, placement tolerance falls back to the stage-level
+    ``placed_tolerance`` only; if neither level is configured, the placement
+    check degrades to released-only.
+    """
 
 
 class MujocoGraspConfig(BaseModel):

@@ -24,7 +24,7 @@ class Operation(str, Enum):
     PICK = "pick"
     """Execute pre_move → eef (close gripper) → post_move to approach an object and grasp it. Pre-condition `released` is checked before the pre_move phase; post-condition `grasped` is checked after the post_move phase. Failure occurs when the post-condition `grasped` is not satisfied."""
     PLACE = "place"
-    """Execute pre_move → eef (open gripper) → post_move to approach a target pose and release the held object. Pre-condition `grasped` is checked before the pre_move phase; post-condition `released` is checked after the post_move phase. Failure occurs when the post-condition `released` is not satisfied."""
+    """Execute pre_move → eef (open gripper) → post_move to approach a target pose and release the held object. Pre-condition `grasped` is checked before the pre_move phase; post-condition `placed` is checked after the post_move phase. Failure occurs when the held object is still grasped or, when a placement target is available, outside placement tolerance."""
     PUSH = "push"
     """Execute pre_move → post_move to approach and push an object to a target pose. No pre-condition is checked; post-condition `displaced` is checked after the post_move phase. Failure occurs when the post-condition `displaced` is not satisfied (the object has not moved beyond the displacement threshold)."""
     PULL = "pull"
@@ -349,8 +349,9 @@ class StageControlConfig(BaseModel):
     ``'pre_move'`` is always used regardless of this setting."""
     placed_tolerance: Optional[PlacedToleranceConfig] = PlacedToleranceConfig()
     """Per-stage tolerance override for the PLACED post-condition. Falls back
-    to the operator-level placed tolerance, then to ``position=0.02,
-    orientation=null``."""
+    to the operator-level placed tolerance. If neither level configures a
+    non-null position or orientation tolerance, placement degrades to
+    released-only."""
 
 
 class StageConfig(BaseModel):
@@ -482,4 +483,4 @@ class TaskFileConfig(BaseModel):
     """The task-level configuration describing stages, scene, and environment selection."""
     task_operators: List[OperatorConfig] = []
     """The operator definitions available to the selected backend for this task file.
-    Accepts both ``task_operators`` and the legacy alias ``operators`` from YAML."""
+    Use ``task_operators`` in YAML; ``env.operators`` is reserved for environment-level operator bindings."""

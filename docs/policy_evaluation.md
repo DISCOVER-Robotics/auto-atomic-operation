@@ -266,7 +266,7 @@ Examples:
 - `pick`
   - success condition: `grasped`
 - `place`
-  - success condition: `released`
+  - success condition: `placed`
 - `push`
   - success condition: `displaced`
 - `pull`
