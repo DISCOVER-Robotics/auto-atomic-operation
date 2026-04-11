@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo.svg" alt="Auto Atomic Operation Logo" width="200">
+
 <h1>Auto Atomic Operation</h1>
 
 [![PyPI](https://img.shields.io/pypi/v/auto-atomic-operation)](https://pypi.org/project/auto-atomic-operation/)
