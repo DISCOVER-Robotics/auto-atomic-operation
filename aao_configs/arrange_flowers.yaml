@@ -19,14 +19,21 @@ env:
 
 task:
   randomization:
+    vase:
+      x: [0.22, 0.58]
+      y: [-0.32, 0.27]
+      collision_radius: 0.04
+      reference: absolute_world
     flower:
       x: [-0.005, 0.005]
       y: [-0.005, 0.005]
       collision_radius: 0.04
-    arm:
-      x: [-0.05, 0.05]
-      y: [-0.05, 0.05]
-      collision_radius: 0.15
+      reference: vase
+    vase2:
+      x: [0.22, 0.58]
+      y: [-0.32, 0.27]
+      collision_radius: 0.04
+      reference: absolute_world
   stages:
     # Stage 1: Pick flower
     # flower center z≈0.19, mesh collision extends ~3cm from center
@@ -37,10 +44,11 @@ task:
       operator: arm
       param:
         pre_move:
-          - position: [0.0, 0.0, 0.12]
-            orientation: [0.0, 0.70710678, 0.0, 0.70710678]
-            reference: object_world
-          - position: [0.0, 0.0, 0.04]
+          - position: [-0.03, -0.03, 0.135]
+            # orientation: [0.0, 0.70710678, 0.0, 0.70710678]
+            rotation: [0.0, 1.5708, 0.7853]
+            reference: object
+          - position: [-0.03, -0.03, 0.035]
             reference: object_world
         post_move:
           - position: [0.0, 0.0, 0.25]

@@ -1,5 +1,6 @@
 - **Getting Started**
   - [Home](README.md)
+  - [CLI Reference](cli_reference.md)
 
 - **Task Configuration**
   - [Action Space](action_space.md)
@@ -33,6 +34,10 @@
   - [Data Collection](data_collection.md)
   - [Policy Evaluation](policy_evaluation.md)
   - [Tune Initial State](tune_initial_state.md)
+  - [Tune Randomization Extremes](tune_randomization_extremes.md)
+  - [Save Rendering](save_rendering.md)
+  - [Visualize PLY](visualize_ply.md)
+  - [Benchmark Suite](skills/bench.md)
 
 - **Task Tuning**
   - [Open Door Tuning](open_door_tuning.md)

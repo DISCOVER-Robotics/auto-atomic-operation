@@ -7,7 +7,7 @@ A backend connects the task runner to a specific robot or simulator. The runtime
 
 This separation keeps the basis environment reusable for other purposes (e.g. data collection, RL training) without pulling in task runner logic.
 
-The built-in Mujoco integration in [`auto_atom/basis/mujoco_env.py`](../auto_atom/basis/mujoco_env.py) and [`auto_atom/backend/mjc/`](../auto_atom/backend/mjc/) follows exactly this pattern and serves as the canonical reference.
+The built-in Mujoco integration in [`auto_atom/basis/mjc/mujoco_env.py`](../auto_atom/basis/mjc/mujoco_env.py) and [`auto_atom/backend/mjc/`](../auto_atom/backend/mjc/) follows exactly this pattern and serves as the canonical reference.
 
 ---
 
@@ -55,7 +55,7 @@ task:
           close: true
 
 # --- Operator declarations ---
-operators:
+task_operators:
   - name: arm_a
 ```
 
@@ -419,7 +419,7 @@ task:
         eef:
           close: false
 
-operators:
+task_operators:
   - name: arm_a
 
 ```
@@ -454,6 +454,6 @@ The built-in Mujoco backend follows exactly this pattern:
 
 | Layer | File |
 |-------|------|
-| Basis environment | [`auto_atom/basis/mujoco_env.py`](../auto_atom/basis/mujoco_env.py) |
+| Basis environment | [`auto_atom/basis/mjc/mujoco_env.py`](../auto_atom/basis/mjc/mujoco_env.py) |
 | Backend adapters + factory | [`auto_atom/backend/mjc/mujoco_backend.py`](../auto_atom/backend/mjc/mujoco_backend.py) |
 | Minimal mock (no external deps) | [`auto_atom/mock.py`](../auto_atom/mock.py) |

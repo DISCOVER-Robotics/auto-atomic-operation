@@ -52,6 +52,13 @@ backend: auto_atom.backend.mjc.mujoco_backend.build_mujoco_backend
 task:
   env_name: ${task_name}
   seed: 42
+  randomization:
+    arm:
+      eef:
+        x: [-0.3, 0.35]
+        y: [-0.32, 0.10]
+        z: [-0.1, 0.1]
+        collision_radius: 0.15
 
 task_operators:
   - name: arm

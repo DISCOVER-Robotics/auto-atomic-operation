@@ -21,7 +21,7 @@ DEFAULT_PYTHON = "/home/ghz/.mini_conda3/envs/airbot_play_data/bin/python"
 DEFAULT_BATCH_SIZES = [1, 2, 4, 8]
 DEFAULT_CONFIG = "cup_on_coaster_gs"
 DEFAULT_MAX_UPDATES = 300
-DEFAULT_ITERATIONS = 10
+DEFAULT_ITERATIONS = 100
 DEFAULT_SAMPLE_INTERVAL_SEC = 0.1
 
 TASK_UPDATE_ONLY = "task_update_only"

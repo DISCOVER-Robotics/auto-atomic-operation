@@ -9,8 +9,8 @@ Add a `randomization` block under `task` in your YAML config.
 Keys are object or operator names.
 
 - Objects take a direct per-axis range.
-- Operators can still use the old direct form for base randomization, or use a
-  nested form to randomize `base` and `eef` independently.
+- Operators may use the direct per-axis form (which now means end-effector
+  randomization) or a nested form to randomize `base` and `eef` independently.
 
 ```yaml
 task:
@@ -18,47 +18,134 @@ task:
   # randomization_debug: true  # see "Debug Mode" below
   randomization:
     source_block:
-      x: [-0.03, 0.03]        # metres, world frame
+      x: [-0.03, 0.03]         # metres, world frame
       y: [-0.03, 0.03]
-      # yaw: [-0.524, 0.524]  # radians
+      # yaw: [-0.524, 0.524]   # radians
       collision_radius: 0.04   # metres, for collision rejection
     arm:
+      # Direct form → randomizes the operator's home EEF pose
       x: [-0.015, 0.015]
       y: [-0.015, 0.015]
       collision_radius: 0.15
-    arm_precise:
-      base:
-        x: [-0.015, 0.015]
-        y: [-0.015, 0.015]
-      eef:
-        x: [-0.01, 0.01]
-        y: [-0.01, 0.01]
-        z: [-0.005, 0.005]
+    # Nested form (same operator name) — randomizes base and eef independently:
+    # arm:
+    #   base:
+    #     x: [-0.015, 0.015]
+    #     y: [-0.015, 0.015]
+    #   eef:
+    #     x: [-0.01, 0.01]
+    #     y: [-0.01, 0.01]
+    #     z: [-0.005, 0.005]
 ```
 
 ### Supported axes
 
-| Axis    | Unit    | Description                         |
-|---------|---------|-------------------------------------|
-| `x`     | metres  | World X displacement                |
-| `y`     | metres  | World Y displacement                |
-| `z`     | metres  | World Z displacement                |
-| `roll`  | radians | Additive roll offset (about X)      |
-| `pitch` | radians | Additive pitch offset (about Y)     |
-| `yaw`   | radians | Additive yaw offset (about Z)       |
+| Axis    | Unit    | Description            |
+|---------|---------|------------------------|
+| `x`     | metres  | X translation          |
+| `y`     | metres  | Y translation          |
+| `z`     | metres  | Z translation          |
+| `roll`  | radians | Rotation about X       |
+| `pitch` | radians | Rotation about Y       |
+| `yaw`   | radians | Rotation about Z       |
 
-Each axis takes a `[min, max]` tuple. Omitted axes default to `[0, 0]` (no randomization).
+Each axis takes a `[min, max]` tuple. **Omitted axes default to `None`**,
+meaning "do not randomize this axis — keep the default pose's value for it".
+This is true in every mode, including the absolute modes described below.
+
+### Reference modes
+
+Each randomization entry (and each sub-entry in the nested operator form) can
+set a `reference` field that selects how the `[min, max]` ranges are
+interpreted:
+
+| `reference`       | Meaning                                                                                 |
+|-------------------|-----------------------------------------------------------------------------------------|
+| `relative` (default) | Sampled values are **added** to the entity's default pose (the existing behavior). |
+| `absolute_world`  | Sampled values are **absolute world-frame** coordinates (metres) / Euler angles (rad). |
+| `absolute_base`   | Sampled values are absolute coordinates in the **operator's base frame**, then transformed to world before being applied. **Only valid for operator EEF randomization** (direct operator form or the nested `eef:` sub-entry). |
+| `<entity_name>`   | **Entity-reference mode.** The referenced entity is randomized first (dependency ordering via topological sort). Then a **delta-carry** is applied: `delta = ref_sampled * ref_default⁻¹` is computed and applied to this entity's default pose, preserving the original spatial relationship. After carrying, the per-axis ranges are applied as additive offsets (like `relative` mode). |
+
+Examples:
+
+```yaml
+task:
+  randomization:
+    # Place the cup anywhere in a world-frame rectangle on the table,
+    # keeping its default height and orientation
+    cup:
+      reference: absolute_world
+      x: [0.30, 0.50]
+      y: [-0.15, 0.15]
+      collision_radius: 0.04
+
+    # Place the arm's home EEF anywhere in a box defined in the arm's base
+    # frame — useful when the base itself is randomized or when the "right
+    # side of the robot" matters more than "the right side of the room"
+    arm:
+      reference: absolute_base
+      x: [0.20, 0.35]
+      y: [-0.10, 0.10]
+      z: [0.15, 0.25]
+
+    # Mixed (nested form): small relative jitter of the base plus an
+    # absolute-base EEF box — uses the same operator name "arm"
+    arm:
+      base:
+        x: [-0.01, 0.01]
+        y: [-0.01, 0.01]
+      eef:
+        reference: absolute_base
+        x: [0.25, 0.35]
+        y: [-0.05, 0.05]
+        z: [0.20, 0.30]
+```
+
+Entity-reference example (arrange_flowers: flower tracks vase):
+
+```yaml
+task:
+  randomization:
+    vase:
+      reference: absolute_world
+      x: [0.22, 0.58]
+      y: [-0.32, 0.27]
+    flower:
+      reference: vase            # carry with vase, then jitter ±5mm
+      x: [-0.005, 0.005]
+      y: [-0.005, 0.005]
+    vase2:
+      reference: absolute_world
+      x: [0.22, 0.58]
+      y: [-0.32, 0.27]
+```
+
+When `vase` moves from its default to a new position, the flower is "carried"
+by the same rigid displacement (preserving the original spatial relationship),
+then receives its own small perturbation on top. This ensures the flower always
+stays inside the vase's opening regardless of where the vase is placed.
+
+The entries are automatically topologically sorted — `vase` is processed before
+`flower`. Circular references (A → B → A) raise a ``ValueError``.
+
+Restrictions on `absolute_base`:
+
+- Object entries reject `absolute_base` (no base frame is defined for an object).
+- The nested `base:` sub-entry rejects `absolute_base` (the base IS the frame).
+- Per-waypoint `randomization` rejects `absolute_base`; use the waypoint's own
+  `reference: base` field together with `relative` or `absolute_world` instead.
 
 ### Operator semantics
 
 For operator entries:
 
-- direct form `arm: {x: ..., y: ...}` remains backward-compatible and means
-  base randomization
-- `base` randomizes `get_base_pose()`
-  - for mocap operators this is the virtual base frame
-  - for joint-mode operators this is the base reference frame
-- `eef` randomizes the operator home end-effector pose in world frame
+- **Direct form** `arm: {x: ..., y: ...}` randomizes the operator's **home
+  end-effector pose** (previously it randomized the base).
+- **Nested form** lets you configure `base` and `eef` independently:
+  - `base` randomizes `get_base_pose()`
+    - for mocap operators this is the virtual base frame
+    - for joint-mode operators this is the base reference frame
+  - `eef` randomizes the operator home end-effector pose
   - reset updates the stored home EEF pose and then homes the operator to it
   - `base` and `eef` can be configured together
 
@@ -73,9 +160,10 @@ last sample is applied with a warning.
 
 In addition to entity-level randomization under `task.randomization`, individual
 waypoints inside a stage's `pre_move` / `post_move` list may carry their own
-`randomization` block. This adds a per-reset offset that is added to the
-waypoint's nominal `position` (and optionally orientation) at stage execution
-time, independently of entity pose randomization.
+`randomization` block. At stage execution time this perturbs the waypoint's
+nominal `position` (and optionally orientation), independently of entity pose
+randomization. The same `reference` modes (`relative` / `absolute_world`) are
+supported as for entity randomization.
 
 ```yaml
 stages:
@@ -98,10 +186,19 @@ stages:
 Semantics:
 
 - Supported axes are the same as entity randomization (`x/y/z/roll/pitch/yaw`);
-  omitted axes default to `[0, 0]`.
-- Offsets are expressed in the waypoint's own `reference` frame (e.g.
-  `object_world`, `world`, `eef_world`), so the perturbation follows the frame
-  the waypoint is anchored to.
+  **omitted axes default to `None` and are not touched** — the waypoint keeps
+  its nominal value on that axis.
+- Supports `reference: relative` (default) and `reference: absolute_world`.
+  In relative mode the sampled values are added to the waypoint's nominal
+  position/orientation; in `absolute_world` mode they replace it.
+- `reference: absolute_base` is **not supported** for per-waypoint randomization
+  because a waypoint already carries its own `reference` field (e.g.
+  `object_world`, `world`, `eef_world`, `base`) that selects the frame in which
+  the sampled numbers are interpreted by the pose controller. To randomize in
+  the base frame, set the waypoint's `reference: base` and use `absolute_world`
+  or `relative` inside its `randomization` block.
+- The sampled numbers are always expressed in the waypoint's own `reference`
+  frame, so the perturbation follows the frame the waypoint is anchored to.
 - Sampling happens once per `reset()` using the same RNG as entity
   randomization, so `task.seed` reproduces per-waypoint offsets as well.
 - Per-waypoint randomization is independent from entity randomization and does
@@ -122,11 +219,21 @@ The randomization logic lives in `SceneBackend` (the mixin used by `MujocoTaskBa
    - Calls `_record_default_poses()` if not already recorded.
    - Calls `_apply_randomization()` which:
      1. Resolves each key to an object handler or operator handler.
-     2. Samples a uniform random offset per axis within `[min, max]`.
-     3. Applies the offset to the default pose (translation is additive;
-        rotation is additive in RPY then converted back to quaternion).
-     4. Applies object poses, operator base poses, and operator home EEF poses
-        through their respective APIs.
+     2. For each axis with a `[min, max]` tuple (axes set to `None` are
+        skipped), samples a uniform random value.
+     3. Combines the sampled values with the default pose according to
+        `reference`:
+        - `relative` — adds the sampled values to the default pose
+          (translation additive; rotation additive in RPY then converted
+          back to quaternion).
+        - `absolute_world` — replaces the default pose's value on each
+          sampled axis with the sampled value; unsampled axes are left at
+          their default.
+        - `absolute_base` (operator EEF only) — transforms the default
+          EEF world pose into the operator's base frame, replaces sampled
+          axes there, then transforms the result back to world.
+     4. Applies object poses, operator base poses, and operator home EEF
+        poses through their respective APIs.
    - Refreshes the viewer.
 
 3. **`TaskRunner.reset()`** — after the backend reset, collects the realized
@@ -143,9 +250,12 @@ The randomization logic lives in `SceneBackend` (the mixin used by `MujocoTaskBa
 Each randomization key is resolved in order:
 1. `object_handlers[name]` — uses `get_pose()` / `set_pose()`.
 2. `operator_handlers[name]`
-   - direct form uses `get_base_pose()` / `set_pose()`
-   - nested form can additionally use `get_end_effector_pose()` /
+   - direct form uses `get_end_effector_pose()` /
      `set_home_end_effector_pose()`
+   - nested form can additionally randomize the base via `get_base_pose()` /
+     `set_pose()`
+   - for `reference: absolute_base` the sampler also calls `get_base_pose()`
+     to transform between the base frame and world
 3. If neither matches, a warning is emitted and the key is skipped.
 
 ## Multi-Round Evaluation

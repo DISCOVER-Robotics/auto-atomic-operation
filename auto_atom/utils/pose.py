@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List, Tuple, Union
+from typing import Iterable, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -317,3 +317,62 @@ def position_within_tolerance(
     if isinstance(tolerance, (list, np.ndarray)) and len(tolerance) == 3:
         return bool(np.all(np.abs(pos_diff) <= np.asarray(tolerance, dtype=np.float64)))
     return float(np.linalg.norm(pos_diff)) <= float(tolerance)
+
+
+def position_within_tolerance_nullable(
+    pos_diff: np.ndarray,
+    tolerance: Union[float, List[Optional[float]], None],
+) -> bool:
+    """Check position difference against tolerance, with per-axis null support.
+
+    Args:
+        pos_diff: 3-element array of position differences (x, y, z).
+        tolerance: ``None`` = always pass. Scalar = L2-norm threshold.
+            List ``[x, y, z]`` = per-axis thresholds where ``None`` elements
+            mean that axis is unchecked.
+
+    Returns:
+        True if the position is within tolerance.
+    """
+    if tolerance is None:
+        return True
+    if isinstance(tolerance, (list, np.ndarray)) and len(tolerance) == 3:
+        if all(t is None for t in tolerance):
+            return True
+        for i, tol in enumerate(tolerance):
+            if tol is not None and abs(float(pos_diff[i])) > float(tol):
+                return False
+        return True
+    return float(np.linalg.norm(pos_diff)) <= float(tolerance)
+
+
+def orientation_within_tolerance_nullable(
+    q1: np.ndarray,
+    q2: np.ndarray,
+    tolerance: Union[float, List[Optional[float]], None],
+) -> bool:
+    """Check orientation difference against tolerance.
+
+    Args:
+        q1: Current orientation quaternion (xyzw).
+        q2: Target orientation quaternion (xyzw).
+        tolerance: ``None`` = always pass. Scalar = quaternion angular
+            distance threshold. List ``[roll, pitch, yaw]`` = per-axis
+            Euler thresholds where ``None`` elements are unchecked.
+
+    Returns:
+        True if the orientation is within tolerance.
+    """
+    if tolerance is None:
+        return True
+    if isinstance(tolerance, (list, np.ndarray)) and len(tolerance) == 3:
+        if all(t is None for t in tolerance):
+            return True
+        r1, p1, y1 = quaternion_to_rpy(np.asarray(q1, dtype=np.float64))
+        r2, p2, y2 = quaternion_to_rpy(np.asarray(q2, dtype=np.float64))
+        diffs = [abs(r1 - r2), abs(p1 - p2), abs(y1 - y2)]
+        for diff, tol in zip(diffs, tolerance):
+            if tol is not None and diff > float(tol):
+                return False
+        return True
+    return quaternion_angular_distance(q1, q2) <= float(tolerance)

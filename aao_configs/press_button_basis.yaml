@@ -29,11 +29,6 @@ task:
       x: [-0.01, 0.01]
       y: [-0.01, 0.01]
       collision_radius: 0.05
-    arm:
-      x: [-0.01, 0.01]
-      y: [-0.01, 0.01]
-      collision_radius: 0.15
-
   stages:
     - name: press_${object_name}
       object: ${object_name}

@@ -6,7 +6,7 @@ import logging
 import mujoco
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Union
 from pydantic import BaseModel
 from ...basis.mjc.mujoco_env import BatchedUnifiedMujocoEnv, EnvConfig
 from ...framework import (
@@ -15,9 +15,11 @@ from ...framework import (
     EefControlConfig,
     OperatorRandomizationConfig,
     OperatorConfig,
+    PlacedToleranceConfig,
     PoseControlConfig,
     PoseRandomRange,
     PoseReference,
+    RandomizationReference,
 )
 from ...runtime import (
     ComponentRegistry,
@@ -30,8 +32,12 @@ from ...runtime import (
 )
 from ...utils.pose import (
     PoseState,
+    compose_pose,
     euler_to_quaternion,
+    inverse_pose,
+    orientation_within_tolerance_nullable,
     position_within_tolerance,
+    position_within_tolerance_nullable,
     quaternion_angular_distance,
     quaternion_to_rpy,
     quaternion_to_rotation_matrix,
@@ -45,6 +51,13 @@ class MujocoToleranceConfig(BaseModel):
     a 3-element list ``[x, y, z]`` checks each axis independently."""
     orientation: float = 0.08
     eef: float = 0.03
+    placed: Optional[PlacedToleranceConfig] = None
+    """Operator-level tolerance for the PLACED post-condition.
+
+    When ``None``, placement tolerance falls back to the stage-level
+    ``placed_tolerance`` only; if neither level is configured, the placement
+    check degrades to released-only.
+    """
 
 
 class MujocoGraspConfig(BaseModel):
@@ -70,14 +83,38 @@ class MujocoObjectHandler(ObjectHandler):
     env: BatchedUnifiedMujocoEnv
     body_name: str
     freejoint_name: Optional[str] = None
+    _descendant_body_ids: Optional[Dict[int, frozenset]] = field(
+        init=False, repr=False, default=None
+    )
+
+    def get_descendant_body_ids(self, model: Any) -> frozenset:
+        """Return a frozenset of body IDs that are the target body or its
+        descendants. Cached per model (model topology is static)."""
+        model_id = id(model)
+        if (
+            self._descendant_body_ids is not None
+            and model_id in self._descendant_body_ids
+        ):
+            return self._descendant_body_ids[model_id]
+        target_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self.body_name)
+        ids: set = set()
+        if target_bid >= 0:
+            ids.add(target_bid)
+            for bid in range(model.nbody):
+                parent = int(model.body_parentid[bid])
+                if parent in ids and bid != 0:
+                    ids.add(bid)
+        result = frozenset(ids)
+        if self._descendant_body_ids is None:
+            self._descendant_body_ids = {}
+        self._descendant_body_ids[model_id] = result
+        return result
 
     def get_pose(self) -> PoseState:
         pos, quat = self.env.get_body_pose(self.body_name)
         return PoseState(position=pos, orientation=quat)
 
     def set_pose(self, pose: PoseState, env_mask: Optional[np.ndarray] = None) -> None:
-        if self.freejoint_name is None:
-            return
         pose = pose.broadcast_to(self.env.batch_size)
         mask = (
             np.ones(self.env.batch_size, dtype=bool)
@@ -87,18 +124,58 @@ class MujocoObjectHandler(ObjectHandler):
         for env_index, single_env in enumerate(self.env.envs):
             if not mask[env_index]:
                 continue
-            jid = mujoco.mj_name2id(
-                single_env.model, mujoco.mjtObj.mjOBJ_JOINT, self.freejoint_name
-            )
-            if jid < 0:
-                continue
-            qpos_adr = int(single_env.model.jnt_qposadr[jid])
-            dof_adr = int(single_env.model.jnt_dofadr[jid])
             x, y, z = pose.position[env_index]
             qx, qy, qz, qw = pose.orientation[env_index]
-            single_env.data.qpos[qpos_adr : qpos_adr + 7] = [x, y, z, qw, qx, qy, qz]
-            single_env.data.qvel[dof_adr : dof_adr + 6] = 0.0
+            if self.freejoint_name is not None:
+                jid = mujoco.mj_name2id(
+                    single_env.model, mujoco.mjtObj.mjOBJ_JOINT, self.freejoint_name
+                )
+                if jid >= 0:
+                    qpos_adr = int(single_env.model.jnt_qposadr[jid])
+                    dof_adr = int(single_env.model.jnt_dofadr[jid])
+                    single_env.data.qpos[qpos_adr : qpos_adr + 7] = [
+                        x,
+                        y,
+                        z,
+                        qw,
+                        qx,
+                        qy,
+                        qz,
+                    ]
+                    single_env.data.qvel[dof_adr : dof_adr + 6] = 0.0
+                    mujoco.mj_forward(single_env.model, single_env.data)
+                    continue
+
+            bid = mujoco.mj_name2id(
+                single_env.model, mujoco.mjtObj.mjOBJ_BODY, self.body_name
+            )
+            if bid < 0:
+                continue
+            single_env.model.body_pos[bid] = [x, y, z]
+            single_env.model.body_quat[bid] = [qw, qx, qy, qz]
             mujoco.mj_forward(single_env.model, single_env.data)
+
+    def is_at_target(
+        self,
+        target_pose: PoseState,
+        position_tolerance: Union[float, List[Optional[float]], None] = 0.02,
+        orientation_tolerance: Union[float, List[Optional[float]], None] = None,
+    ) -> np.ndarray:
+        """Return a bool per env whether the object is within tolerance of the
+        target pose."""
+        current = self.get_pose()
+        target = target_pose.broadcast_to(self.env.batch_size)
+        result = np.zeros(self.env.batch_size, dtype=bool)
+        for i in range(self.env.batch_size):
+            pos_diff = np.asarray(current.position[i], dtype=np.float64) - np.asarray(
+                target.position[i], dtype=np.float64
+            )
+            pos_ok = position_within_tolerance_nullable(pos_diff, position_tolerance)
+            ori_ok = orientation_within_tolerance_nullable(
+                current.orientation[i], target.orientation[i], orientation_tolerance
+            )
+            result[i] = pos_ok and ori_ok
+        return result
 
 
 @dataclass
@@ -118,6 +195,12 @@ class MujocoOperatorHandler(OperatorHandler):
     joint_interp_speed: float = 0.05
     max_joint_delta: float = 0.35
 
+    _operator_body_ids_cache: Optional[Dict[int, frozenset]] = field(
+        init=False, repr=False, default=None
+    )
+    _left_right_geom_cache: Optional[Dict[int, Dict[int, str]]] = field(
+        init=False, repr=False, default=None
+    )
     _last_move_key: List[str | None] = field(init=False, repr=False)
     _last_eef_key: List[str | None] = field(init=False, repr=False)
     _last_target: List[Optional[MujocoObjectHandler]] = field(init=False, repr=False)
@@ -132,6 +215,55 @@ class MujocoOperatorHandler(OperatorHandler):
     @property
     def name(self) -> str:
         return self.operator_name
+
+    def get_operator_body_ids(self, model: Any) -> frozenset:
+        """Return all body IDs belonging to this operator (root + descendants).
+        Cached per model (topology is static)."""
+        model_id = id(model)
+        if (
+            self._operator_body_ids_cache is not None
+            and model_id in self._operator_body_ids_cache
+        ):
+            return self._operator_body_ids_cache[model_id]
+        root_bid = mujoco.mj_name2id(
+            model, mujoco.mjtObj.mjOBJ_BODY, self.root_body_name
+        )
+        ids: set = set()
+        if root_bid >= 0:
+            ids.add(root_bid)
+            for bid in range(model.nbody):
+                parent = int(model.body_parentid[bid])
+                if parent in ids and bid != 0:
+                    ids.add(bid)
+        result = frozenset(ids)
+        if self._operator_body_ids_cache is None:
+            self._operator_body_ids_cache = {}
+        self._operator_body_ids_cache[model_id] = result
+        return result
+
+    def get_left_right_geom_ids(self, model: Any) -> Dict[int, str]:
+        """Return a dict mapping geom_id → 'left' or 'right' for gripper
+        finger geoms. Cached per model."""
+        model_id = id(model)
+        if (
+            self._left_right_geom_cache is not None
+            and model_id in self._left_right_geom_cache
+        ):
+            return self._left_right_geom_cache[model_id]
+        mapping: Dict[int, str] = {}
+        operator_bodies = self.get_operator_body_ids(model)
+        for gid in range(model.ngeom):
+            if int(model.geom_bodyid[gid]) not in operator_bodies:
+                continue
+            name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, gid) or ""
+            if name.startswith("left_"):
+                mapping[gid] = "left"
+            elif name.startswith("right_"):
+                mapping[gid] = "right"
+        if self._left_right_geom_cache is None:
+            self._left_right_geom_cache = {}
+        self._left_right_geom_cache[model_id] = mapping
+        return mapping
 
     def __post_init__(self) -> None:
         self._last_move_key = [None] * self.env.batch_size
@@ -546,10 +678,9 @@ class MujocoOperatorHandler(OperatorHandler):
         target: "MujocoObjectHandler",
     ) -> Dict[str, Any]:
         single_env = self.env.envs[env_index]
-        target_body_id = mujoco.mj_name2id(
-            single_env.model, mujoco.mjtObj.mjOBJ_BODY, target.body_name
-        )
-        if target_body_id < 0:
+        model = single_env.model
+        target_bodies = target.get_descendant_body_ids(model)
+        if not target_bodies:
             return {
                 "left_contact": False,
                 "right_contact": False,
@@ -558,27 +689,29 @@ class MujocoOperatorHandler(OperatorHandler):
                 "lateral_threshold": 0.03,
             }
 
+        left_right_geoms = self.get_left_right_geom_ids(model)
         left_contact = False
         right_contact = False
-        for idx in range(single_env.data.ncon):
-            contact = single_env.data.contact[idx]
+        geom_bodyid = model.geom_bodyid
+        data = single_env.data
+        for idx in range(data.ncon):
+            contact = data.contact[idx]
             geom1 = int(contact.geom1)
             geom2 = int(contact.geom2)
-            body1 = int(single_env.model.geom_bodyid[geom1])
-            body2 = int(single_env.model.geom_bodyid[geom2])
-            if target_body_id not in {body1, body2}:
+            body1 = int(geom_bodyid[geom1])
+            body2 = int(geom_bodyid[geom2])
+            b1_match = body1 in target_bodies
+            b2_match = body2 in target_bodies
+            if not b1_match and not b2_match:
                 continue
-            other_geom = geom2 if body1 == target_body_id else geom1
-            other_name = (
-                mujoco.mj_id2name(
-                    single_env.model, mujoco.mjtObj.mjOBJ_GEOM, other_geom
-                )
-                or ""
-            )
-            if other_name.startswith("left_"):
+            other_geom = geom2 if b1_match else geom1
+            side = left_right_geoms.get(other_geom)
+            if side == "left":
                 left_contact = True
-            if other_name.startswith("right_"):
+            elif side == "right":
                 right_contact = True
+            if left_contact and right_contact:
+                break
 
         target_pose = target.get_pose()
         eef_pose = self.get_end_effector_pose()
@@ -689,49 +822,199 @@ class MujocoTaskBackend(SceneBackend):
             self._default_operator_base_poses[name] = handler.get_base_pose()
             self._default_operator_eef_poses[name] = handler.get_end_effector_pose()
 
+    # ------------------------------------------------------------------
+    #  Randomization: ordering, reference resolution, and application
+    # ------------------------------------------------------------------
+
+    def _randomization_order(self) -> List[str]:
+        """Return randomization keys in dependency order (referenced first).
+
+        An entry whose ``reference`` is another entity name depends on that
+        entity being sampled first. Cycles raise ``ValueError``.
+        """
+        deps: Dict[str, Set[str]] = {name: set() for name in self.randomization}
+        for name, rand in self.randomization.items():
+            sub_refs: list = []
+            if isinstance(rand, OperatorRandomizationConfig):
+                if rand.base is not None:
+                    sub_refs.append(rand.base.reference)
+                if rand.eef is not None:
+                    sub_refs.append(rand.eef.reference)
+            else:
+                sub_refs.append(rand.reference)
+            for ref in sub_refs:
+                if isinstance(ref, RandomizationReference):
+                    continue
+                if ref in self.randomization:
+                    deps[name].add(ref)
+        order: List[str] = []
+        visited: Set[str] = set()
+        visiting: Set[str] = set()
+
+        def _visit(n: str) -> None:
+            if n in visited:
+                return
+            if n in visiting:
+                raise ValueError(f"Circular randomization reference involving '{n}'")
+            visiting.add(n)
+            for dep in deps[n]:
+                _visit(dep)
+            visiting.remove(n)
+            visited.add(n)
+            order.append(n)
+
+        for name in self.randomization:
+            _visit(name)
+        return order
+
+    def _resolve_reference_base_pose(
+        self,
+        reference: Union[RandomizationReference, str],
+        sampled_poses: Dict[str, PoseState],
+        default_pose: PoseState,
+    ) -> PoseState:
+        """Resolve the base pose to feed ``_sample_random_pose``.
+
+        For enum modes the entity's own ``default_pose`` is returned.
+
+        For an entity-name reference, the delta-carry algorithm is applied:
+        ``delta = ref_sampled * ref_default⁻¹``, then ``delta * default_pose``
+        so the current entity moves with the referenced entity while
+        preserving their original spatial relationship.
+        """
+        if isinstance(reference, RandomizationReference):
+            return default_pose
+        # --- Entity-name reference: delta-carry ---
+        ref_sampled = sampled_poses.get(reference)
+        # Resolve the reference entity's default pose.
+        if reference in self._default_object_poses:
+            ref_default = self._default_object_poses[reference]
+        elif reference in self._default_operator_eef_poses:
+            ref_default = self._default_operator_eef_poses[reference]
+        elif reference in self.object_handlers:
+            ref_default = self.object_handlers[reference].get_pose()
+        elif reference in self.operator_handlers:
+            ref_default = self.operator_handlers[reference].get_end_effector_pose()
+        else:
+            raise ValueError(
+                f"Randomization reference '{reference}' is not a known mode "
+                "('relative', 'absolute_world', 'absolute_base') nor an "
+                "existing object/operator name."
+            )
+        if ref_sampled is None:
+            return default_pose  # entity not randomized → no delta
+        delta = compose_pose(ref_sampled, inverse_pose(ref_default))
+        return compose_pose(delta, default_pose)
+
     def _apply_randomization(self, env_mask: np.ndarray) -> None:
-        for name, rand_range in self.randomization.items():
+        sampled_poses: Dict[str, PoseState] = {}
+        for name in self._randomization_order():
+            rand_range = self.randomization[name]
             if name in self.object_handlers:
                 if isinstance(rand_range, OperatorRandomizationConfig):
                     raise TypeError(
-                        f"Object '{name}' randomization must be a PoseRandomRange, "
-                        "not an operator randomization config."
+                        f"Object '{name}' randomization must be a "
+                        "PoseRandomRange, not an operator randomization "
+                        "config."
                     )
-                base_pose = self._default_object_poses.get(
+                if rand_range.reference == RandomizationReference.ABSOLUTE_BASE:
+                    raise ValueError(
+                        f"Object '{name}' randomization cannot use "
+                        "'absolute_base' — only operator end-effector "
+                        "randomization is defined in a base frame."
+                    )
+                default_pose = self._default_object_poses.get(
                     name, self.object_handlers[name].get_pose()
+                )
+                base_pose = self._resolve_reference_base_pose(
+                    rand_range.reference, sampled_poses, default_pose
                 )
                 sampled = self._sample_random_pose(base_pose, rand_range, env_mask)
                 self.object_handlers[name].set_pose(sampled, env_mask=env_mask)
+                sampled_poses[name] = sampled
             elif name in self.operator_handlers:
                 handler = self.operator_handlers[name]
                 if isinstance(rand_range, OperatorRandomizationConfig):
                     if rand_range.base is not None:
-                        default_base_pose = self._default_operator_base_poses.get(
+                        if (
+                            rand_range.base.reference
+                            == RandomizationReference.ABSOLUTE_BASE
+                        ):
+                            raise ValueError(
+                                f"Operator '{name}' base randomization "
+                                "cannot use 'absolute_base' — the base IS "
+                                "the frame."
+                            )
+                        default_base = self._default_operator_base_poses.get(
                             name, handler.get_base_pose()
                         )
+                        base_pose = self._resolve_reference_base_pose(
+                            rand_range.base.reference,
+                            sampled_poses,
+                            default_base,
+                        )
                         sampled_base = self._sample_random_pose(
-                            default_base_pose, rand_range.base, env_mask
+                            base_pose, rand_range.base, env_mask
                         )
                         handler.set_pose(sampled_base, env_mask=env_mask)
+                        sampled_poses[name] = sampled_base
                     if rand_range.eef is not None:
-                        default_eef_pose = self._default_operator_eef_poses.get(
-                            name, handler.get_end_effector_pose()
-                        )
-                        sampled_eef = self._sample_random_pose(
-                            default_eef_pose, rand_range.eef, env_mask
+                        sampled_eef = self._sample_operator_eef_pose(
+                            handler,
+                            name,
+                            rand_range.eef,
+                            env_mask,
+                            sampled_poses,
                         )
                         handler.set_home_end_effector_pose(
                             sampled_eef,
                             env_mask=env_mask,
                         )
+                        sampled_poses[name] = sampled_eef
                 else:
-                    default_base_pose = self._default_operator_base_poses.get(
-                        name, handler.get_base_pose()
+                    sampled_eef = self._sample_operator_eef_pose(
+                        handler,
+                        name,
+                        rand_range,
+                        env_mask,
+                        sampled_poses,
                     )
-                    sampled_base = self._sample_random_pose(
-                        default_base_pose, rand_range, env_mask
-                    )
-                    handler.set_pose(sampled_base, env_mask=env_mask)
+                    handler.set_home_end_effector_pose(sampled_eef, env_mask=env_mask)
+                    sampled_poses[name] = sampled_eef
+            else:
+                logging.getLogger(MujocoTaskBackend.__name__).warning(
+                    "Randomization key '%s' does not match any object or "
+                    "operator handler — skipping.",
+                    name,
+                )
+
+    def _sample_operator_eef_pose(
+        self,
+        handler: MujocoOperatorHandler,
+        name: str,
+        rand_range: PoseRandomRange,
+        env_mask: np.ndarray,
+        sampled_poses: Dict[str, PoseState],
+    ) -> PoseState:
+        """Sample a new home EEF world pose.
+
+        Handles entity-name references (delta-carry) and ``absolute_base``
+        mode (sample in operator base frame, transform back to world).
+        """
+        default_eef_world = self._default_operator_eef_poses.get(
+            name, handler.get_end_effector_pose()
+        )
+        base_pose_for_sampler = self._resolve_reference_base_pose(
+            rand_range.reference, sampled_poses, default_eef_world
+        )
+        if rand_range.reference != RandomizationReference.ABSOLUTE_BASE:
+            return self._sample_random_pose(base_pose_for_sampler, rand_range, env_mask)
+        base_world = handler.get_base_pose()
+        default_in_base = compose_pose(inverse_pose(base_world), base_pose_for_sampler)
+        sampled_in_base = self._sample_random_pose(
+            default_in_base, rand_range, env_mask
+        )
+        return compose_pose(base_world, sampled_in_base)
 
     def _sample_random_pose(
         self, base_pose: PoseState, rand_range: PoseRandomRange, env_mask: np.ndarray
@@ -739,20 +1022,59 @@ class MujocoTaskBackend(SceneBackend):
         base_pose = base_pose.broadcast_to(self.batch_size)
         position = base_pose.position.copy()
         orientation = base_pose.orientation.copy()
+        is_absolute = rand_range.reference in (
+            RandomizationReference.ABSOLUTE_WORLD,
+            RandomizationReference.ABSOLUTE_BASE,
+        )
+        pos_ranges = (rand_range.x, rand_range.y, rand_range.z)
+        rot_ranges = (rand_range.roll, rand_range.pitch, rand_range.yaw)
+        rot_any = any(r is not None for r in rot_ranges)
         for env_index, enabled in enumerate(env_mask):
             if not enabled:
                 continue
-            position[env_index, 0] += float(self._rng.uniform(*rand_range.x))
-            position[env_index, 1] += float(self._rng.uniform(*rand_range.y))
-            position[env_index, 2] += float(self._rng.uniform(*rand_range.z))
-            r, p, y = quaternion_to_rpy(orientation[env_index])
-            orientation[env_index] = euler_to_quaternion(
-                (
-                    r + float(self._rng.uniform(*rand_range.roll)),
-                    p + float(self._rng.uniform(*rand_range.pitch)),
-                    y + float(self._rng.uniform(*rand_range.yaw)),
-                )
-            )
+            for axis, rng_pair in enumerate(pos_ranges):
+                if rng_pair is None:
+                    continue
+                sampled = float(self._rng.uniform(*rng_pair))
+                if is_absolute:
+                    position[env_index, axis] = sampled
+                else:
+                    position[env_index, axis] += sampled
+            if rot_any:
+                r0, p0, y0 = quaternion_to_rpy(orientation[env_index])
+                if is_absolute:
+                    r_val = (
+                        r0
+                        if rot_ranges[0] is None
+                        else float(self._rng.uniform(*rot_ranges[0]))
+                    )
+                    p_val = (
+                        p0
+                        if rot_ranges[1] is None
+                        else float(self._rng.uniform(*rot_ranges[1]))
+                    )
+                    y_val = (
+                        y0
+                        if rot_ranges[2] is None
+                        else float(self._rng.uniform(*rot_ranges[2]))
+                    )
+                else:
+                    r_val = r0 + (
+                        0.0
+                        if rot_ranges[0] is None
+                        else float(self._rng.uniform(*rot_ranges[0]))
+                    )
+                    p_val = p0 + (
+                        0.0
+                        if rot_ranges[1] is None
+                        else float(self._rng.uniform(*rot_ranges[1]))
+                    )
+                    y_val = y0 + (
+                        0.0
+                        if rot_ranges[2] is None
+                        else float(self._rng.uniform(*rot_ranges[2]))
+                    )
+                orientation[env_index] = euler_to_quaternion((r_val, p_val, y_val))
         return PoseState(position=position, orientation=orientation)
 
     def get_element_pose(self, name: str, env_index: int = 0) -> PoseState:
@@ -822,30 +1144,25 @@ class MujocoTaskBackend(SceneBackend):
             return np.zeros(self.batch_size, dtype=bool)
         result = np.zeros(self.batch_size, dtype=bool)
         for env_index, single_env in enumerate(self.env.envs):
-            target_body_id = mujoco.mj_name2id(
-                single_env.model, mujoco.mjtObj.mjOBJ_BODY, target.body_name
-            )
-            if target_body_id < 0:
+            model = single_env.model
+            target_bodies = target.get_descendant_body_ids(model)
+            if not target_bodies:
                 continue
-            root_body_id = mujoco.mj_name2id(
-                single_env.model, mujoco.mjtObj.mjOBJ_BODY, operator.root_body_name
-            )
-            operator_body_ids: set[int] = set()
-            for bid in range(single_env.model.nbody):
-                parent = int(single_env.model.body_parentid[bid])
-                if bid == root_body_id or (parent in operator_body_ids and bid != 0):
-                    operator_body_ids.add(bid)
-            for idx in range(single_env.data.ncon):
-                contact = single_env.data.contact[idx]
-                geom1 = int(contact.geom1)
-                geom2 = int(contact.geom2)
-                body1 = int(single_env.model.geom_bodyid[geom1])
-                body2 = int(single_env.model.geom_bodyid[geom2])
-                if target_body_id in {body1, body2}:
-                    other_body = body2 if body1 == target_body_id else body1
-                    if other_body in operator_body_ids:
-                        result[env_index] = True
-                        break
+            operator_bodies = operator.get_operator_body_ids(model)
+            geom_bodyid = model.geom_bodyid
+            data = single_env.data
+            for idx in range(data.ncon):
+                contact = data.contact[idx]
+                body1 = int(geom_bodyid[int(contact.geom1)])
+                body2 = int(geom_bodyid[int(contact.geom2)])
+                b1_target = body1 in target_bodies
+                b2_target = body2 in target_bodies
+                if not b1_target and not b2_target:
+                    continue
+                other_body = body2 if b1_target else body1
+                if other_body in operator_bodies:
+                    result[env_index] = True
+                    break
         return result
 
     def set_interest_objects_and_operations(
@@ -1023,9 +1340,44 @@ def build_mujoco_backend(
             handler._home_ctrl[:, handler.eef_ctrl_index] = operator.initial_state.eef
 
     object_names = {stage.object for stage in config.stages if stage.object}
-    object_handlers: Dict[str, MujocoObjectHandler] = {}
+    # Also register objects mentioned in the randomization dict (they may not
+    # appear in any stage but still need handlers for pose get/set).
     model = env.envs[0].model
+
+    def _body_exists(name: str) -> bool:
+        """Check if a body (or its _gs variant) exists in the MuJoCo model."""
+        if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name) >= 0:
+            return True
+        if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, f"{name}_gs") >= 0:
+            return True
+        return False
+
+    _rand_candidate_names: set = set()
+    for rand_name in config.randomization:
+        if rand_name not in operator_handlers:
+            _rand_candidate_names.add(rand_name)
+    for rand_range in config.randomization.values():
+        refs: list = []
+        if isinstance(rand_range, OperatorRandomizationConfig):
+            if rand_range.base is not None:
+                refs.append(rand_range.base.reference)
+            if rand_range.eef is not None:
+                refs.append(rand_range.eef.reference)
+        else:
+            refs.append(rand_range.reference)
+        for ref in refs:
+            if isinstance(ref, str) and not isinstance(ref, RandomizationReference):
+                if ref not in operator_handlers:
+                    _rand_candidate_names.add(ref)
+    for cand in _rand_candidate_names:
+        if _body_exists(cand):
+            object_names.add(cand)
+
+    object_handlers: Dict[str, MujocoObjectHandler] = {}
     for object_name in object_names:
+        body_name = object_name
+        if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, f"{object_name}_gs") >= 0:
+            body_name = f"{object_name}_gs"
         freejoint_name: Optional[str] = None
         if (
             mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"{object_name}_joint")
@@ -1040,7 +1392,7 @@ def build_mujoco_backend(
         object_handlers[object_name] = MujocoObjectHandler(
             name=object_name,
             env=env,
-            body_name=object_name,
+            body_name=body_name,
             freejoint_name=freejoint_name,
         )
 

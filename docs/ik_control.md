@@ -191,37 +191,40 @@ def solve(target_pose_in_base, current_qpos) -> Optional[np.ndarray]:
 
 ## YAML 配置
 
-### 基础配置：base_franka.yaml
+### 基础配置：basis_franka.yaml + 任务 YAML
 
 ```yaml
 env:
-    config:
-      operators:
-        - name: arm
-          arm_actuators: [actuator1, actuator2, ..., actuator7]  # 触发 joint 模式
-          eef_actuators: [fingers_actuator]
-          pose_site: gripper        # EEF 位姿读取 site
-      sim_freq: 500
-      update_freq: 100              # 每个控制步的物理 substeps = sim_freq / update_freq
+  operators:
+    arm:
+      arm_actuators: [actuator1, actuator2, ..., actuator7]  # 触发 joint 模式
+      eef_actuators: [fingers_actuator]
+      pose_site: eef_pose        # EEF 位姿读取 site
+  sim_freq: 500
+  update_freq: 100              # 每个控制步的物理 substeps = sim_freq / update_freq
 
 backend: auto_atom.backend.mjc.ik.mink_ik_solver.build_franka_backend
 
-stages:
-  - name: pick_source
-    param:
-      pre_move:
-        - position: [0.0, 0.0, 0.12]
-          orientation: [-0.7071, 0.7071, 0.0, 0.0]
-          reference: object_world
-          max_linear_step: 0.02
-          max_angular_step: 0.18
-        - position: [0.0, 0.0, 0.006]
-          orientation: [-0.7071, 0.7071, 0.0, 0.0]
-          reference: object_world
-          max_linear_step: 0.005
-          max_angular_step: 0.08
+task:
+  stages:
+    - name: pick_source
+      object: source_block
+      operation: pick
+      operator: arm
+      param:
+        pre_move:
+          - position: [0.0, 0.0, 0.12]
+            orientation: [-0.7071, 0.7071, 0.0, 0.0]
+            reference: object_world
+            max_linear_step: 0.02
+            max_angular_step: 0.18
+          - position: [0.0, 0.0, 0.006]
+            orientation: [-0.7071, 0.7071, 0.0, 0.0]
+            reference: object_world
+            max_linear_step: 0.005
+            max_angular_step: 0.08
 
-operators:
+task_operators:
   - name: arm
     ik:
       joint_control_mode: solve_once_interpolate
@@ -316,7 +319,7 @@ operators:
 3. **`base_pose` 应匹配 XML 中机械臂底座的实际位置**
 
 ```yaml
-operators:
+task_operators:
   - name: arm
     initial_state:
       base_pose:

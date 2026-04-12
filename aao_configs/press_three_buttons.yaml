@@ -29,10 +29,6 @@ task:
       x: [-0.01, 0.01]
       y: [-0.01, 0.01]
       collision_radius: 0.05
-    arm:
-      x: [-0.01, 0.01]
-      y: [-0.01, 0.01]
-      collision_radius: 0.15
   stages:
     # Stage 1: Press blue button
     # button_blue center z=0.08, cylinder top z=0.10

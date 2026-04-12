@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Gradient for the atom orbits -->
+    <linearGradient id="orbitGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90D9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2C5F8A;stop-opacity:1" />
+    </linearGradient>
+    <!-- Gradient for the gripper -->
+    <linearGradient id="gripperGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#5BA8F7;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3D7AC7;stop-opacity:1" />
+    </linearGradient>
+    <!-- Gradient for the core nucleus -->
+    <radialGradient id="coreGrad" cx="50%" cy="45%" r="50%">
+      <stop offset="0%" style="stop-color:#FFD166;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#EF8A17;stop-opacity:1" />
+    </radialGradient>
+    <!-- Gradient for electrons -->
+    <radialGradient id="electronGrad" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" style="stop-color:#7ED4F5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4A90D9;stop-opacity:1" />
+    </radialGradient>
+    <!-- Shadow filter -->
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="248" fill="#0F1B2D" />
+  <circle cx="256" cy="256" r="240" fill="none" stroke="#1E3A5F" stroke-width="1.5" opacity="0.6"/>
+
+  <!-- Atom orbits (3 elliptical orbits) -->
+  <!-- Orbit 1: horizontal-ish -->
+  <ellipse cx="256" cy="240" rx="155" ry="55" fill="none" stroke="url(#orbitGrad)" stroke-width="3" opacity="0.7" transform="rotate(-20, 256, 240)"/>
+  <!-- Orbit 2: tilted left -->
+  <ellipse cx="256" cy="240" rx="155" ry="55" fill="none" stroke="url(#orbitGrad)" stroke-width="3" opacity="0.7" transform="rotate(40, 256, 240)"/>
+  <!-- Orbit 3: tilted right -->
+  <ellipse cx="256" cy="240" rx="155" ry="55" fill="none" stroke="url(#orbitGrad)" stroke-width="3" opacity="0.7" transform="rotate(100, 256, 240)"/>
+
+  <!-- Central nucleus (representing the "atomic" core) -->
+  <circle cx="256" cy="240" r="32" fill="url(#coreGrad)" filter="url(#shadow)"/>
+  <!-- Inner glow ring -->
+  <circle cx="256" cy="240" r="38" fill="none" stroke="#FFD166" stroke-width="1.5" opacity="0.3"/>
+
+  <!-- Electrons on orbits -->
+  <!-- Electron 1 on orbit 1 -->
+  <g transform="rotate(-20, 256, 240)">
+    <circle cx="111" cy="240" r="9" fill="url(#electronGrad)" filter="url(#shadow)"/>
+  </g>
+  <!-- Electron 2 on orbit 2 -->
+  <g transform="rotate(40, 256, 240)">
+    <circle cx="401" cy="240" r="9" fill="url(#electronGrad)" filter="url(#shadow)"/>
+  </g>
+  <!-- Electron 3 on orbit 3 -->
+  <g transform="rotate(100, 256, 240)">
+    <circle cx="135" cy="210" r="9" fill="url(#electronGrad)" filter="url(#shadow)"/>
+  </g>
+
+  <!-- Robotic gripper icon overlaid on the nucleus -->
+  <!-- Gripper base (vertical bar) -->
+  <rect x="250" y="210" width="12" height="24" rx="3" fill="url(#gripperGrad)" filter="url(#shadow)"/>
+  <!-- Left finger -->
+  <path d="M248 234 L242 250 L248 252 L252 236 Z" fill="url(#gripperGrad)" filter="url(#shadow)"/>
+  <!-- Right finger -->
+  <path d="M264 234 L270 250 L264 252 L260 236 Z" fill="url(#gripperGrad)" filter="url(#shadow)"/>
+  <!-- Small gripped cube -->
+  <rect x="249" y="248" width="14" height="14" rx="2" fill="#FFD166" opacity="0.9" filter="url(#shadow)"/>
+
+  <!-- "AAO" text at bottom -->
+  <text x="256" y="370" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="36" font-weight="700" letter-spacing="8" fill="#C8DDEF">
+    A A O
+  </text>
+
+  <!-- Subtitle -->
+  <text x="256" y="400" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" letter-spacing="3" fill="#6B8DB5" opacity="0.85">
+    AUTO ATOMIC OPERATION
+  </text>
+</svg>
