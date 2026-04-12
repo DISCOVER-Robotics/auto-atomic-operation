@@ -981,6 +981,12 @@ class MujocoTaskBackend(SceneBackend):
                     )
                     handler.set_home_end_effector_pose(sampled_eef, env_mask=env_mask)
                     sampled_poses[name] = sampled_eef
+            else:
+                logging.getLogger(MujocoTaskBackend.__name__).warning(
+                    "Randomization key '%s' does not match any object or "
+                    "operator handler — skipping.",
+                    name,
+                )
 
     def _sample_operator_eef_pose(
         self,

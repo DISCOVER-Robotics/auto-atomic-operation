@@ -27,14 +27,15 @@ task:
       x: [-0.015, 0.015]
       y: [-0.015, 0.015]
       collision_radius: 0.15
-    arm_precise:
-      base:
-        x: [-0.015, 0.015]
-        y: [-0.015, 0.015]
-      eef:
-        x: [-0.01, 0.01]
-        y: [-0.01, 0.01]
-        z: [-0.005, 0.005]
+    # Nested form (same operator name) — randomizes base and eef independently:
+    # arm:
+    #   base:
+    #     x: [-0.015, 0.015]
+    #     y: [-0.015, 0.015]
+    #   eef:
+    #     x: [-0.01, 0.01]
+    #     y: [-0.01, 0.01]
+    #     z: [-0.005, 0.005]
 ```
 
 ### Supported axes
@@ -87,8 +88,9 @@ task:
       y: [-0.10, 0.10]
       z: [0.15, 0.25]
 
-    # Mixed: small relative jitter of the base plus an absolute-base EEF box
-    arm_precise:
+    # Mixed (nested form): small relative jitter of the base plus an
+    # absolute-base EEF box — uses the same operator name "arm"
+    arm:
       base:
         x: [-0.01, 0.01]
         y: [-0.01, 0.01]
