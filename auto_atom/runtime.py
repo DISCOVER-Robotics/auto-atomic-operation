@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -9,24 +10,23 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional, Protocol, runtime_checkable
 
-import math
 import numpy as np
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 
 from .framework import (
+    OPERATION_CONDITIONS,
     ArcControlConfig,
     AutoAtomConfig,
     EefControlConfig,
-    OPERATION_CONDITIONS,
     Operation,
     OperationConditionType,
     OperationConstraint,
     Orientation,
     PlacedToleranceConfig,
-    Position,
     PoseControlConfig,
     PoseReference,
+    Position,
     RandomizationReference,
     StageConfig,
     StageControlConfig,
@@ -159,7 +159,11 @@ class EnvProtocol(Protocol):
     def capture_observation(self) -> Dict[str, Dict[str, Any]]: ...
 
     def apply_joint_action(
-        self, operator: str, action: Any, env_mask: Optional[np.ndarray] = None
+        self,
+        operator: str,
+        action: Any,
+        env_mask: Optional[np.ndarray] = None,
+        kinematic: bool = False,
     ) -> None: ...
 
     def apply_pose_action(
@@ -169,6 +173,7 @@ class EnvProtocol(Protocol):
         orientation: Any,
         gripper: Any = None,
         env_mask: Optional[np.ndarray] = None,
+        kinematic: bool = False,
     ) -> None: ...
 
 
@@ -662,6 +667,10 @@ class TaskRunner:
         # self._set_interest_focus()
         return self._build_task_update()
 
+    def get_env(self) -> EnvProtocol:
+        """Return the underlying environment object managed by this runner."""
+        return self._require_context().backend.env
+
     def close(self) -> None:
         if self._context is None:
             return
@@ -719,6 +728,7 @@ class TaskRunner:
             target=active.target,
             backend=context.backend,
             env_mask=mask,
+            reference_site=active.plan.stage.site,
         )
         signal = result.signals[env_index]
         details = {
@@ -727,6 +737,34 @@ class TaskRunner:
             "action_index": active.action_index,
             **result.details[env_index],
         }
+        if (
+            action.kind == "pose"
+            and action.pose is not None
+            and action.pose.arc is not None
+        ):
+            arc_cfg = action.pose.arc
+            arc_info: Dict[str, Any] = {
+                "pivot": arc_cfg.pivot
+                if isinstance(arc_cfg.pivot, str)
+                else [float(v) for v in arc_cfg.pivot],
+                "axis": [float(v) for v in arc_cfg.axis],
+                "angle": float(arc_cfg.angle),
+                "absolute": bool(arc_cfg.absolute),
+            }
+            if arc_cfg.absolute and isinstance(arc_cfg.pivot, str):
+                try:
+                    current_joint = float(
+                        context.backend.get_joint_angle(arc_cfg.pivot, env_index)
+                    )
+                    arc_info["current_joint_angle"] = current_joint
+                    arc_info["target_joint_angle"] = float(arc_cfg.angle)
+                    arc_info["delta_joint_angle"] = float(arc_cfg.angle) - current_joint
+                except (KeyError, NotImplementedError):
+                    pass
+            elif action.arc_cumulative_angle is not None:
+                arc_info["cumulative_angle"] = float(action.arc_cumulative_angle)
+            details["action"] = "arc"
+            details["arc"] = arc_info
 
         if signal == ControlSignal.RUNNING:
             phase, phase_step = self._action_phase(active.actions, active.action_index)
@@ -853,7 +891,7 @@ class TaskRunner:
                 state.done = True
                 state.success = True
             else:
-                state.success = None
+                state.success = False
             return
 
         failure = self._build_action_failure_details(active.plan, details, signal)
@@ -1113,13 +1151,19 @@ class TaskRunner:
         target: Optional[ObjectHandler],
         backend: SceneBackend,
         env_mask: np.ndarray,
+        reference_site: Optional[str] = None,
     ) -> ControlResult:
         if action.kind == "pose" and action.pose is not None:
             is_arc = action.pose.arc is not None
-            is_snapshot = action.pose.reference in {
-                PoseReference.EEF_WORLD,
-                PoseReference.EEF,
-            } or (is_arc and not action.pose.arc.absolute)
+            is_snapshot = (
+                action.pose.reference
+                in {
+                    PoseReference.EEF_WORLD,
+                    PoseReference.EEF,
+                }
+                or (is_arc and not action.pose.arc.absolute)
+                or action.pose.static
+            )
             if is_snapshot and action.resolved_pose is not None:
                 resolved_pose = action.resolved_pose
             else:
@@ -1130,6 +1174,7 @@ class TaskRunner:
                     target=target,
                     backend=backend,
                     action=action,
+                    reference_site=reference_site,
                 )
                 action.resolved_pose = resolved_pose
             return operator.move_to_pose(resolved_pose, target, env_mask=env_mask)
@@ -1145,6 +1190,7 @@ class TaskRunner:
         target: Optional[ObjectHandler],
         backend: SceneBackend,
         action: Optional[PrimitiveAction] = None,
+        reference_site: Optional[str] = None,
     ) -> PoseControlConfig:
         arc = pose.arc
         assert arc is not None
@@ -1168,6 +1214,7 @@ class TaskRunner:
                     pose=pose,
                     target=target,
                     backend=backend,
+                    reference_site=reference_site,
                 )
             if snapshot.start_eef_pose is None:
                 snapshot.start_eef_pose = operator.get_end_effector_pose().select(
@@ -1184,6 +1231,7 @@ class TaskRunner:
                 pose=pose,
                 target=target,
                 backend=backend,
+                reference_site=reference_site,
             )
             current_eef = operator.get_end_effector_pose().select(env_index)
         rotated = rotate_pose_around_axis(current_eef, pivot_world_pos, arc.axis, angle)
@@ -1205,16 +1253,19 @@ class TaskRunner:
         target: Optional[ObjectHandler],
         backend: SceneBackend,
         action: Optional[PrimitiveAction] = None,
+        reference_site: Optional[str] = None,
     ) -> PoseControlConfig:
         if pose.arc is not None:
             return TaskRunner._resolve_arc_command(
-                env_index, operator, pose, target, backend, action
+                env_index, operator, pose, target, backend, action, reference_site
             )
         reference_pose = TaskRunner._resolve_reference_pose(
             env_index=env_index,
             operator=operator,
             pose=pose,
             target=target,
+            reference_site=reference_site,
+            backend=backend,
         )
         current_pose = operator.get_end_effector_pose().select(env_index)
         local_pose = TaskRunner._pose_config_to_local_pose(pose)
@@ -1251,6 +1302,8 @@ class TaskRunner:
         operator: OperatorHandler,
         pose: PoseControlConfig,
         target: Optional[ObjectHandler],
+        reference_site: Optional[str] = None,
+        backend: Optional[SceneBackend] = None,
     ) -> PoseState:
         reference = pose.reference
         if reference == PoseReference.AUTO:
@@ -1264,6 +1317,9 @@ class TaskRunner:
         if reference == PoseReference.EEF:
             return operator.get_end_effector_pose().select(env_index)
         if reference == PoseReference.OBJECT_WORLD:
+            if reference_site is not None and backend is not None:
+                site_pose = backend.get_element_pose(reference_site, env_index)
+                return PoseState(position=site_pose.position[0])
             if target is None:
                 raise ValueError(
                     "Pose reference OBJECT_WORLD requires a target object."
@@ -1274,6 +1330,8 @@ class TaskRunner:
             eef_pose = operator.get_end_effector_pose().select(env_index)
             return PoseState(position=eef_pose.position[0])
         if reference == PoseReference.OBJECT:
+            if reference_site is not None and backend is not None:
+                return backend.get_element_pose(reference_site, env_index)
             if target is None:
                 raise ValueError("Pose reference OBJECT requires a target object.")
             return target.get_pose().select(env_index)
@@ -1286,6 +1344,7 @@ class TaskRunner:
         pose: PoseControlConfig,
         target: Optional[ObjectHandler],
         backend: SceneBackend,
+        reference_site: Optional[str] = None,
     ) -> Position:
         arc = pose.arc
         assert arc is not None
@@ -1299,6 +1358,8 @@ class TaskRunner:
             operator=operator,
             pose=pose,
             target=target,
+            reference_site=reference_site,
+            backend=backend,
         )
         pivot_local = PoseState(position=arc.pivot)
         composed = compose_pose(reference_pose, pivot_local)
@@ -1420,6 +1481,22 @@ class TaskRunner:
                 ),
             }
             initial_poses[name] = entry_details
+
+        # Collect camera poses if camera randomization is configured.
+        cam_rand = getattr(context.backend, "camera_randomization", {})
+        if cam_rand:
+            camera_poses: Dict[str, Any] = {}
+            get_cam_pose = getattr(context.backend, "_get_camera_pose", None)
+            if get_cam_pose is not None:
+                for cam_name in cam_rand:
+                    try:
+                        pose = get_cam_pose(cam_name).select(env_index)
+                        camera_poses[cam_name] = self._serialize_pose(pose)
+                    except (KeyError, AttributeError):
+                        continue
+            if camera_poses:
+                initial_poses["_cameras"] = camera_poses
+
         if not initial_poses:
             return {}
         return {"initial_poses": initial_poses}
@@ -1779,6 +1856,7 @@ def _resolve_policy_completion_pose(
     target: Optional[ObjectHandler],
     backend: SceneBackend,
     action: PrimitiveAction,
+    reference_site: Optional[str] = None,
 ) -> Optional[PoseControlConfig]:
     if action.pose is None:
         return None
@@ -1790,6 +1868,7 @@ def _resolve_policy_completion_pose(
         target=target,
         backend=backend,
         action=completion_action,
+        reference_site=reference_site,
     )
 
 
@@ -1811,8 +1890,7 @@ def load_task_file(path: str | Path) -> TaskFileConfig:
     if not isinstance(config, DictConfig):
         raise TypeError(f"YAML root must be a mapping: {config_path}")
 
-    if "env" in config and config.env is not None:
-        instantiate(config.env)
+    instantiate(config)
     raw = OmegaConf.to_container(config, resolve=True)
     if not isinstance(raw, dict):
         raise TypeError(f"YAML root must be a mapping: {config_path}")
@@ -1847,9 +1925,7 @@ def load_task_file_hydra(
     with initialize_config_dir(config_dir=resolved_dir, version_base=None):
         cfg = compose(config_name=config_name, overrides=overrides or [])
 
-    if "env" in cfg and cfg.env is not None:
-        hydra_instantiate(cfg.env)
-
+    hydra_instantiate(cfg)
     raw = OmegaConf.to_container(cfg, resolve=True)
     if not isinstance(raw, dict):
         raise TypeError("Config root must be a mapping.")

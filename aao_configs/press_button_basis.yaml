@@ -1,5 +1,6 @@
 defaults:
   - _self_
+  # use 3dgs by default
   - press_three_buttons_gs_mixin
 
 scene_name: press_three_buttons
@@ -17,17 +18,26 @@ env:
 
 task:
   randomization:
+    arm:
+      eef:
+        x: [-0.2, 0.21]
+        y: [-0.2, 0.06]
+        z: [-0.1, 0.07]
+        collision_radius: 0.15
     button_blue:
-      x: [-0.01, 0.01]
-      y: [-0.01, 0.01]
+      x: [0.2, 0.7]
+      y: [-0.25, 0.15]
+      reference: absolute_world
       collision_radius: 0.05
     button_green:
-      x: [-0.01, 0.01]
-      y: [-0.01, 0.01]
+      x: [0.2, 0.7]
+      y: [-0.25, 0.15]
+      reference: absolute_world
       collision_radius: 0.05
     button_pink:
-      x: [-0.01, 0.01]
-      y: [-0.01, 0.01]
+      x: [0.2, 0.7]
+      y: [-0.25, 0.15]
+      reference: absolute_world
       collision_radius: 0.05
   stages:
     - name: press_${object_name}
@@ -39,13 +49,13 @@ task:
           - position: [0.0, 0.0, 0.12]
             orientation: [0.0, 0.70710678, 0.0, 0.70710678]
             reference: object_world
-          - position: [0.0, 0.0, 0.035]
+          - position: [0.0, 0.0, 0.05]
             reference: object_world
         post_move:
           - position: [0.0, 0.0, 0.12]
             reference: object_world
 
 task_operators:
-  - name: arm
+  arm:
     initial_state:
-      eef: 0.82 # closed gripper for pressing buttons
+      eef: 0.7 # partially closed to avoid preloading an empty gripper before press

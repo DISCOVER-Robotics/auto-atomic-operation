@@ -22,7 +22,6 @@ from .common import (
     save_final_summary,
 )
 
-
 if "--list" in sys.argv:
     list_demos(get_config_dir())
     sys.exit(0)
@@ -41,13 +40,13 @@ def main(cfg: DictConfig) -> None:
 
     rounds = int(cfg.get("rounds", 1))
     use_input = bool(cfg.get("use_input", False))
-    max_updates = int(cfg.get("max_updates", 300))
+    max_updates = int(cfg.get("max_updates", 600))
     perf_count = bool(cfg.get("perf_count", False))
     _last_obs = [None]  # mutable container to hold observation across steps
 
     def _step_fn(_step, _update):
         if perf_count:
-            _last_obs[0] = runner._context.backend.env.capture_observation()
+            _last_obs[0] = runner.get_env().capture_observation()
         return runner.update()
 
     try:

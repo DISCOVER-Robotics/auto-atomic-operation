@@ -7,6 +7,8 @@ task_name: close_drawer
 
 env:
   initial_joint_positions:
+    # Task-specific arm home — gripper horizontal, facing the drawer.
+    robotiq_freejoint: [0.0, -0.2, 0.15, 0.7071408, 0.7070727, 0.0, 0.0]
     drawer_slide: -0.12
   mask_objects: ["handle"]
   operations: ["pull"]
@@ -31,11 +33,11 @@ task:
       param:
         pre_move:
           # Step 1: align with handle height, stay 10 cm in front
-          - position: [0.0, -0.10, 0.0]
+          - position: [0.0, -0.10, 0.01]
             orientation: [0.5, 0.5, 0.5, 0.5]
             reference: object_world
           # Step 2: advance to grasp position — EEF at handle center in Y
-          - position: [0.0, 0.0, 0.0]
+          - position: [0.0, 0.0, 0.01]
             reference: object_world
         eef:
           close: true

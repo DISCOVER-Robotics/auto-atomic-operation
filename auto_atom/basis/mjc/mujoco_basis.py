@@ -7,24 +7,27 @@ stepping.  It deliberately does **not** provide ``step(action)`` or
 ``UnifiedMujocoEnv`` subclass defined in ``mujoco_env.py``.
 """
 
-from enum import Enum
-from math import tan, pi
-from pathlib import Path
 import copy
-from typing import Any, Callable, Dict, List, Set, Optional, Tuple
+import logging
+import time
+from enum import Enum
+from math import pi, tan
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+
+import mujoco
+import numpy as np
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     ImportString,
-    model_validator,
+    field_serializer,
     field_validator,
+    model_validator,
 )
+
 from auto_atom.basis.mjc.tactile.tactile_sensor import TactileSensorManager
-import time
-import numpy as np
-import mujoco
-import logging
 
 
 class DataType(str, Enum):
@@ -68,6 +71,20 @@ class CameraSpec(BaseModel, frozen=True):
     """Whether this camera's GS background is rendered once and cached (static)
     or re-rendered every frame (dynamic).  Set to ``False`` for moving cameras
     such as hand-mounted cameras whose viewpoint changes each timestep."""
+
+    @property
+    def has_native_output(self) -> bool:
+        """Whether any native MuJoCo render output is requested for this camera.
+
+        When False (e.g. every channel has been reassigned to GS rendering) the
+        env can skip allocating a ``mujoco.Renderer`` for this camera entirely.
+        """
+        return (
+            self.enable_color
+            or self.enable_depth
+            or self.enable_mask
+            or self.enable_heat_map
+        )
 
 
 class ViewerConfig(BaseModel, frozen=True):
@@ -149,6 +166,28 @@ class OperatorBinding(BaseModel, frozen=True):
     freejoint: str = ""
     """Freejoint name for mocap operators."""
 
+    eef_mapper: Optional[Any] = None
+    """Optional mapper that remaps EEF observation and control values.
+
+    Instantiate via Hydra ``_target_``.  Must provide:
+
+    - ``bind(model, data)`` — called once after model load to resolve
+      geom/joint indices, build lookup tables, etc.
+    - ``obs_map(model, data, raw: np.ndarray) -> np.ndarray`` — forward
+      map from raw joint qpos / ctrl to user space (e.g. finger distance).
+    - ``ctrl_map(model, data, user: np.ndarray) -> np.ndarray`` — inverse
+      map from user space back to actuator ctrl values.
+
+    When ``None`` (default), raw qpos / ctrl values are used as-is.
+    """
+
+    @field_serializer("eef_mapper")
+    @classmethod
+    def _serialize_eef_mapper(cls, v: Any, _info: Any) -> Optional[str]:
+        if v is None:
+            return None
+        return f"{type(v).__module__}.{type(v).__qualname__}"
+
     ik_factory: Optional[ImportString] = None
     """Import path to IK solver class/callable.  Called as
     ``ik_factory(model=model, arm_joint_names=names, **ik_params)``."""
@@ -163,7 +202,12 @@ class EnvConfig(BaseModel, frozen=True):
     name: str = ""
     """Optional registry name. When set, the constructed batched env self-registers under this name."""
     model_path: Path
-    """The path to the Mujoco XML model file used to create the environment."""
+    """Path to the scene XML. If ``robot_paths`` is non-empty, the scene is
+    composed by injecting each robot XML as an ``<include>`` sibling under
+    ``<mujoco>`` at load time; otherwise the scene file is loaded as-is."""
+    robot_paths: List[Path] = Field(default_factory=list)
+    """Optional robot XMLs to compose with ``model_path``. Leave empty when
+    ``model_path`` already embeds its robot (legacy monolithic scenes)."""
     operators: Dict[str, OperatorBinding] = Field(default_factory=dict)
     """Operator definitions keyed by logical name, mapping to XML actuators and sensors."""
     enabled_sensors: Set[DataType] = Field(default_factory=set)
@@ -184,8 +228,15 @@ class EnvConfig(BaseModel, frozen=True):
     """Control update frequency in Hz. Must be <= sim_freq. If None, defaults to sim_freq (n_substeps=1)."""
     ctrl_interpolation: bool = False
     """Linearly interpolate ctrl across substeps when n_substeps > 1 to prevent PD overshoot."""
-    initial_joint_positions: Dict[str, float] = Field(default_factory=dict)
-    """Joint name → qpos value overrides applied after every reset (after the keyframe)."""
+    initial_joint_positions: Dict[str, float | List[float]] = Field(
+        default_factory=dict
+    )
+    """Joint name → qpos value overrides applied after every reset (after the
+    keyframe). Use a scalar for 1-DOF joints (slide/hinge); use a list for
+    multi-DOF joints — 4 values for ball joints (quat wxyz), 7 values for free
+    joints (pos xyz + quat wxyz). Multi-DOF entries are written *after* the
+    parallel-linkage settle loop so the weld/equality drift does not
+    override them."""
     viewer: ViewerConfig | None = None
     """Viewer configuration. If None, the passive viewer is not launched."""
     structured: bool = False
@@ -294,7 +345,7 @@ class MujocoBasis:
             config = EnvConfig.model_validate(kwargs)
         self.config = config
         self._info = None
-        self.model, self.data = self._load_model(config.model_path)
+        self.model, self.data = self._load_model(config.model_path, config.robot_paths)
         if config.sim_freq is not None:
             self.model.opt.timestep = 1.0 / config.sim_freq
         self.get_logger().info(
@@ -332,6 +383,7 @@ class MujocoBasis:
         self._op_arm_vidx: dict[str, np.ndarray] = {}
         self._op_eef_vidx: dict[str, np.ndarray] = {}
         self._op_output_names: dict[str, tuple[str, str]] = {}
+        self._op_eef_mapper: dict[str, Any] = {}
         for op in self._operators.values():
             arm_aidx = self._resolve_actuator_indices(op.arm_actuators)
             eef_aidx = self._resolve_actuator_indices(op.eef_actuators)
@@ -347,6 +399,10 @@ class MujocoBasis:
                 op.arm_output_name or op.name,
                 op.eef_output_name,
             )
+            mapper = copy.deepcopy(op.eef_mapper) if op.eef_mapper is not None else None
+            if mapper is not None and hasattr(mapper, "bind"):
+                mapper.bind(self.model, self.data)
+            self._op_eef_mapper[op.name] = mapper
 
         self._camera_specs = {c.name: c for c in config.cameras}
         self._renderers: Dict[str, mujoco.Renderer] = {}
@@ -374,11 +430,12 @@ class MujocoBasis:
                         f"Camera '{name}' not found in the Mujoco model. Available cameras: {[mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_CAMERA, i) for i in range(self.model.ncam)]}"
                     )
                 self._camera_ids[name] = cam_id
-                self._renderers[name] = mujoco.Renderer(
-                    self.model,
-                    height=spec.height,
-                    width=spec.width,
-                )
+                if spec.has_native_output:
+                    self._renderers[name] = mujoco.Renderer(
+                        self.model,
+                        height=spec.height,
+                        width=spec.width,
+                    )
 
         # _camera_parent_frame: cam_name -> ("site"|"body", obj_id, frame_name)
         self._camera_parent_frame: dict[str, tuple[str, int, str]] = {}
@@ -456,6 +513,12 @@ class MujocoBasis:
         ):
             self._init_tactile_manager()
         self._last_time = None
+
+        # Apply initial_joint_positions now that operator indices (needed by
+        # the constraint-settle loop inside reset()) are bound. Without this,
+        # the env's observable state stays at qpos0 until the caller invokes
+        # reset() explicitly, so freejoint-based home poses wouldn't be seen.
+        self.reset()
 
         self._viewer = None
         if config.viewer is not None:
@@ -609,9 +672,12 @@ class MujocoBasis:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _load_model(model_path: Path) -> tuple[Any, Any]:
-        xml_path = Path(model_path).resolve()
-        model = mujoco.MjModel.from_xml_path(str(xml_path))
+    def _load_model(
+        model_path: Path, robot_paths: List[Path] | None = None
+    ) -> tuple[Any, Any]:
+        from auto_atom.utils.scene_loader import load_scene
+
+        model = load_scene(model_path, robot_paths or [])
         data = mujoco.MjData(model)
         return model, data
 
@@ -820,10 +886,67 @@ class MujocoBasis:
             mujoco.mj_resetDataKeyframe(self.model, self.data, 0)
         else:
             mujoco.mj_resetData(self.model, self.data)
-        for joint_name, qpos_val in self.config.initial_joint_positions.items():
+        qpos_widths = {0: 7, 1: 4, 2: 1, 3: 1}  # free, ball, slide, hinge
+        multi_dof_entries: list[tuple[int, np.ndarray]] = []
+        pin_addrs: list[int] = []
+        for joint_name, value in self.config.initial_joint_positions.items():
             jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
-            if jid >= 0:
-                self.data.qpos[int(self.model.jnt_qposadr[jid])] = qpos_val
+            if jid < 0:
+                continue
+            addr = int(self.model.jnt_qposadr[jid])
+            width = qpos_widths[int(self.model.jnt_type[jid])]
+            if isinstance(value, (list, tuple)):
+                arr = np.asarray(value, dtype=float)
+                if arr.size != width:
+                    raise ValueError(
+                        f"initial_joint_positions['{joint_name}'] has {arr.size} "
+                        f"values but joint has {width} qpos slots"
+                    )
+                multi_dof_entries.append((addr, arr))
+            else:
+                if width != 1:
+                    raise ValueError(
+                        f"initial_joint_positions['{joint_name}'] is scalar but joint "
+                        f"has {width} qpos slots; use a list to set all slots"
+                    )
+                self.data.qpos[addr] = value
+                pin_addrs.append(addr)
+        if pin_addrs and self.model.neq > 0:
+            # Equality constraints (parallel linkage grippers, etc.) are only
+            # resolved during mj_step.  Pin the configured joints and step so
+            # passive joints settle to a constraint-consistent state.
+            for op in self._operators.values():
+                for aidx in [
+                    self._op_arm_aidx[op.name],
+                    self._op_eef_aidx[op.name],
+                ]:
+                    for ai in aidx:
+                        ji = self.model.actuator_trnid[ai, 0]
+                        if ji >= 0:
+                            self.data.ctrl[ai] = self.data.qpos[
+                                self.model.jnt_qposadr[ji]
+                            ]
+            saved_gravity = self.model.opt.gravity.copy()
+            self.model.opt.gravity[:] = 0
+            target = self.data.qpos[pin_addrs].copy()
+            # Pin all free-joint qpos during settle so bodies with a freejoint
+            # (objects on the table, mocap-driven arm bases) do not drift from
+            # contact-solver repulsion or residual constraint forces.
+            free_addrs: list[int] = []
+            for j in range(self.model.njnt):
+                if int(self.model.jnt_type[j]) == 0:  # mjJNT_FREE
+                    a = int(self.model.jnt_qposadr[j])
+                    free_addrs.extend(range(a, a + 7))
+            free_snapshot = self.data.qpos[free_addrs].copy() if free_addrs else None
+            for _ in range(500):
+                mujoco.mj_step(self.model, self.data)
+                self.data.qpos[pin_addrs] = target
+                if free_snapshot is not None:
+                    self.data.qpos[free_addrs] = free_snapshot
+            self.data.qvel[:] = 0.0
+            self.model.opt.gravity[:] = saved_gravity
+        for addr, arr in multi_dof_entries:
+            self.data.qpos[addr : addr + arr.size] = arr
         mujoco.mj_forward(self.model, self.data)
         self._sync_mocap_to_freejoint()
         self._prev_ctrl = None

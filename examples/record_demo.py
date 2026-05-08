@@ -20,11 +20,14 @@ Extra Hydra overrides:
     python examples/record_demo.py +recorder.fps=15
     python examples/record_demo.py +recorder.gif_width=480
     python examples/record_demo.py +recorder.max_updates=200
+    python examples/record_demo.py +recorder.frame_downsample=2
+    python examples/record_demo.py +recorder.frame_downsample=3 +recorder.downsample_sync_fps=false
 """
 
 import json
 import os
 from dataclasses import asdict
+
 import hydra
 import imageio.v3 as iio
 import numpy as np
@@ -32,6 +35,7 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 from PIL import Image
 from pydantic import BaseModel, Field
+
 from auto_atom.backend.mjc.mujoco_backend import MujocoTaskBackend
 from auto_atom.runner.common import get_config_dir, prepare_task_file
 from auto_atom.runtime import TaskRunner
@@ -42,6 +46,8 @@ class RecorderConfig(BaseModel):
     fps: int = Field(default=25)
     gif_width: int = Field(default=320)
     max_updates: int | None = Field(default=None, ge=0)
+    frame_downsample: int = Field(default=1, ge=1)
+    downsample_sync_fps: bool = Field(default=True)
     save_gif: bool = Field(default=False)
     save_mp4: bool = Field(default=False)
     save_demo: bool = Field(default=True)
@@ -94,6 +100,29 @@ def _extract_low_dim_observation(obs: dict[str, dict]) -> dict[str, dict]:
             "t": _to_jsonable(payload.get("t")),
         }
     return low_dim
+
+
+def _inject_operator_base_pose_actions(
+    obs: dict[str, dict],
+    backend: MujocoTaskBackend,
+) -> None:
+    """Add replayable operator-base pose commands to an observation snapshot."""
+
+    t = None
+    for payload in obs.values():
+        t = payload.get("t")
+        if t is not None:
+            break
+    for op_name in backend.operator_handlers:
+        pos_w, quat_w = backend.env.get_operator_base_pose(op_name)
+        obs[f"action/{op_name}/base_pose/position"] = {
+            "data": np.asarray(pos_w, dtype=np.float32),
+            "t": t,
+        }
+        obs[f"action/{op_name}/base_pose/orientation"] = {
+            "data": np.asarray(quat_w, dtype=np.float32),
+            "t": t,
+        }
 
 
 def _iter_low_dim_leaf_items(
@@ -204,6 +233,7 @@ def main(cfg: DictConfig) -> None:
         if not isinstance(backend, MujocoTaskBackend):
             return
         obs = backend.env.capture_observation()
+        _inject_operator_base_pose_actions(obs, backend)
         low_dim_observations.append(_extract_low_dim_observation(obs))
         nonlocal resolved_camera, resolved_camera_key
         if resolved_camera_key is None:
@@ -276,31 +306,38 @@ def main(cfg: DictConfig) -> None:
         suffix = "" if batch_size == 1 else f"_env{env_index}"
         return os.path.join(video_dir, f"{config_name}{suffix}.{ext}")
 
+    ds = rec_cfg.frame_downsample
+    video_fps = (
+        rec_cfg.fps / ds if ds > 1 and rec_cfg.downsample_sync_fps else rec_cfg.fps
+    )
+
     if rec_cfg.save_mp4:
         for env_index, env_frames in enumerate(frames_by_env):
+            out_frames = env_frames[::ds]
             mp4_path = build_video_path("mp4", env_index)
-            iio.imwrite(
-                mp4_path, env_frames, fps=rec_cfg.fps, codec="libx264", quality=8
-            )
+            iio.imwrite(mp4_path, out_frames, fps=video_fps, codec="libx264", quality=8)
             print(
                 f"\nSaved MP4 for env {env_index} "
-                f"({len(env_frames)} frames @ {rec_cfg.fps} fps): {mp4_path}"
+                f"({len(out_frames)} frames @ {video_fps} fps, "
+                f"downsample={ds}): {mp4_path}"
             )
 
     if rec_cfg.save_gif:
-        gif_fps = min(rec_cfg.fps, 15)
+        gif_fps = min(video_fps, 15)
         for env_index, env_frames in enumerate(frames_by_env):
-            h, w = env_frames[0].shape[:2]
+            sampled = env_frames[::ds]
+            h, w = sampled[0].shape[:2]
             gif_height = int(rec_cfg.gif_width * h / w)
             gif_frames = [
                 np.array(Image.fromarray(f).resize((rec_cfg.gif_width, gif_height)))
-                for f in env_frames
+                for f in sampled
             ]
             gif_path = build_video_path("gif", env_index)
             iio.imwrite(gif_path, gif_frames, fps=gif_fps, loop=0)
             print(
                 f"Saved GIF for env {env_index} "
-                f"({len(gif_frames)} frames @ {gif_fps} fps): {gif_path}"
+                f"({len(gif_frames)} frames @ {gif_fps} fps, "
+                f"downsample={ds}): {gif_path}"
             )
 
     if rec_cfg.save_demo:

@@ -15,6 +15,14 @@ from .framework import (
 )
 from .mock import MockOperatorHandler, MockSceneBackend
 from .policy_eval import ConfigDrivenDemoPolicy, PolicyEvaluator
+
+# Runner imports last – runner subpackage depends on the modules above.
+from .runner.base import RunnerBase
+from .runner.data_replay import (
+    DataReplayConfig,
+    DataReplayRunner,
+    DataReplayTaskFileConfig,
+)
 from .runtime import (
     ComponentRegistry,
     ControlResult,
@@ -43,6 +51,9 @@ __all__ = [
     "ControlResult",
     "ControlSignal",
     "ConfigDrivenDemoPolicy",
+    "DataReplayConfig",
+    "DataReplayRunner",
+    "DataReplayTaskFileConfig",
     "ExecutionContext",
     "ExecutionRecord",
     "ExecutionSummary",
@@ -62,6 +73,7 @@ __all__ = [
     "PoseState",
     "RandomizationReference",
     "PrimitiveAction",
+    "RunnerBase",
     "StageConfig",
     "StageControlConfig",
     "StageExecutionStatus",

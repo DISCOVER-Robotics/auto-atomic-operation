@@ -5,8 +5,10 @@ from __future__ import annotations
 import contextlib
 import io
 from typing import Any, Dict, List, Optional
+
 import mujoco
 import numpy as np
+
 from auto_atom.backend.mjc.ik.third_party_ik.p7_arm_analytical_ik import KDL_7DOF
 from auto_atom.utils.pose import PoseState, quaternion_to_rotation_matrix
 
@@ -122,7 +124,7 @@ def build_p7_xf9600_backend(
 ) -> Any:
     from auto_atom.backend.mjc.mujoco_backend import build_mujoco_backend
     from auto_atom.basis.mjc.mujoco_env import BatchedUnifiedMujocoEnv
-    from auto_atom.framework import AutoAtomConfig, OperatorConfig
+    from auto_atom.framework import AutoAtomConfig
     from auto_atom.runtime import ComponentRegistry
 
     config = (
@@ -130,12 +132,7 @@ def build_p7_xf9600_backend(
         if isinstance(task, AutoAtomConfig)
         else AutoAtomConfig.model_validate(task)
     )
-    operator_configs = [
-        item
-        if isinstance(item, OperatorConfig)
-        else OperatorConfig.model_validate(item)
-        for item in operators
-    ]
+    operator_configs = list(operators.values())
     env = ComponentRegistry.get_env(config.env_name)
     if not isinstance(env, BatchedUnifiedMujocoEnv):
         raise TypeError(

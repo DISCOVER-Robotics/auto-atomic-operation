@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "auto-atomic-operation"
-version = "0.2.7"
+version = "0.3.2"
 description = "A YAML-driven atomic operation framework for robotic manipulation."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -32,6 +32,9 @@ gs = [
   "scipy",
   "plyfile",
   "ninja",
+  "natsort",
+  "einops",
+  "e3nn",
   "gaussian_renderer @ git+https://github.com/OpenGHz/GaussianRenderer.git",
 ]
 

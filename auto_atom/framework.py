@@ -1,7 +1,14 @@
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
-from pydantic import BaseModel, ConfigDict, ImportString, Field, field_validator
 
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ImportString,
+    field_validator,
+    model_validator,
+)
 
 Position = Tuple[float, float, float]
 """A 3D position represented as a tuple of three floats (x, y, z)."""
@@ -133,12 +140,14 @@ class PoseReference(str, Enum):
     """The pose reference is automatically determined based on the context of the operation. For example, if an object is specified in the stage configuration, the reference will be set to OBJECT_WORLD; if no object is specified, the reference will be set to BASE."""
 
 
-class ArcControlConfig(BaseModel, extra="forbid"):
+class ArcControlConfig(BaseModel):
     """Configuration for arc (revolute) movement around a pivot axis.
 
     When attached to a ``PoseControlConfig``, the end-effector traces an arc
     around ``pivot`` instead of moving in a straight line.  The ``position``,
     ``orientation``, and ``rotation`` fields of the parent config are ignored."""
+
+    model_config = ConfigDict(extra="forbid")
 
     pivot: Union[Position, str]
     """Pivot point for the arc.  Either explicit ``(x, y, z)`` coordinates in the
@@ -158,14 +167,35 @@ class ArcControlConfig(BaseModel, extra="forbid"):
     max_step: float = 0.2
     """Maximum arc sub-step in radians (~11.5 deg).  Smaller values produce smoother
     arcs at the cost of more waypoints."""
+    reverse: bool = False
+    """When True, the arc is traced in the opposite direction around the axis.
+
+    Implemented as ``axis → -axis`` (rather than ``angle → -angle``) so the
+    behaviour is correct in both relative and absolute modes:
+
+    - Relative: negating the axis is mathematically equivalent to negating
+      the angle, so the rotation direction flips as expected.
+    - Absolute: ``angle`` is the target joint value, not a rotation amount.
+      Negating ``angle`` would change the goal (e.g. +0.45 → -0.45) and the
+      runtime would chase an unreachable target. Flipping the axis preserves
+      the goal while reversing the world-frame rotation direction."""
+
+    @model_validator(mode="after")
+    def validate_reverse(self):
+        """If reverse is True, negate the axis to reverse the rotation direction."""
+        if self.reverse:
+            self.axis = tuple(-v for v in self.axis)
+        return self
 
 
-class WaypointToleranceConfig(BaseModel, extra="forbid"):
+class WaypointToleranceConfig(BaseModel):
     """Per-waypoint tolerance override. When set on a waypoint, these values
     take precedence over the operator-level tolerance for that waypoint only.
 
     Position tolerance can be a single float (L2 norm) or a list of three
     floats ``[x, y, z]`` for per-axis tolerance checking."""
+
+    model_config = ConfigDict(extra="forbid")
 
     position: Optional[Union[float, List[float]]] = None
     """Position tolerance. A scalar applies as an L2-norm threshold;
@@ -174,9 +204,11 @@ class WaypointToleranceConfig(BaseModel, extra="forbid"):
     """Orientation tolerance in radians (quaternion angular distance)."""
 
 
-class PlacedToleranceConfig(BaseModel, extra="forbid"):
+class PlacedToleranceConfig(BaseModel):
     """Tolerance for the PLACED post-condition. Each dimension can be null
     to skip checking that dimension."""
+
+    model_config = ConfigDict(extra="forbid")
 
     position: Optional[Union[float, List[Optional[float]]]] = [None, None, None]
     """Position tolerance. Scalar = L2-norm threshold. List ``[x, y, z]`` =
@@ -208,7 +240,14 @@ class PoseRandomRange(BaseModel):
       computed (``delta = sampled * default⁻¹``) and applied to this
       entity's default pose so they move together. Then the per-axis
       ranges are applied as additive offsets on top, just like
-      ``relative`` mode.
+      ``relative`` mode. For an **operator** name, the plain form
+      tracks the operator's **base** pose (equivalent to the
+      ``"<operator>.base"`` form below).
+    - **Operator attribute** (e.g. ``"arm.base"`` or ``"arm.eef"``):
+      same delta-carry semantics as the entity-name form, but
+      explicitly anchored to the operator's **base** or
+      **end-effector** pose. Only ``.base`` / ``.eef`` suffixes are
+      recognized, and only for operator names.
 
     A ``None`` value on an axis (the default) means "do not randomize
     this axis" — it keeps its value from the default pose (in the
@@ -243,6 +282,17 @@ class PoseRandomRange(BaseModel):
             reference: vase1
             x: [-0.005, 0.005]
             y: [-0.005, 0.005]
+
+        # Operator-base reference: carry vase with the arm's base
+        randomization:
+          arm:
+            base:
+              x: [-0.05, 0.05]
+              y: [-0.05, 0.05]
+          vase:
+            reference: arm.base
+            x: [-0.005, 0.005]
+            y: [-0.005, 0.005]
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -267,10 +317,12 @@ class PoseRandomRange(BaseModel):
     leave this axis at the default-pose value."""
     reference: Union[RandomizationReference, str] = RandomizationReference.RELATIVE
     """One of the :class:`RandomizationReference` modes (``"relative"``,
-    ``"absolute_world"``, ``"absolute_base"``) or the **name of another
-    entity**. An entity name causes this entry to track the referenced
-    entity's displacement (delta-carry) and then apply the per-axis
-    ranges as relative offsets on top."""
+    ``"absolute_world"``, ``"absolute_base"``), the **name of another
+    entity**, or an **operator attribute** (``"<operator>.base"`` /
+    ``"<operator>.eef"``). An entity/attribute reference causes this
+    entry to track the referenced pose's displacement (delta-carry) and
+    then apply the per-axis ranges as relative offsets on top. A plain
+    operator name is equivalent to ``"<operator>.base"``."""
     collision_radius: float = 0.05
     """Approximate bounding radius used for pairwise collision rejection (metres)."""
 
@@ -290,14 +342,27 @@ class PoseControlConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    position: Position = Field(default_factory=tuple)
+    position: Optional[Position] = None
     """The target position for the pose control. The position is represented as a tuple of three floats (x, y, z)."""
-    orientation: Orientation = Field(default_factory=tuple)
+    orientation: Optional[Orientation] = None
     """The target orientation for the pose control. The orientation is represented as a quaternion in `xyzw` order."""
-    rotation: Rotation = Field(default_factory=tuple)
+    rotation: Optional[Rotation] = None
     """The target rotation for the pose control. The rotation is represented as Euler angles in `rpy` order."""
     reference: PoseReference = PoseReference.AUTO
     """The reference frame for the pose control."""
+    static: bool = False
+    """Whether the reference frame should be snapshotted at action start.
+
+    By default, ``OBJECT`` / ``OBJECT_WORLD`` references are re-evaluated
+    on every control tick, so the target tracks the object as it moves.
+    That is the correct behavior when the object moves independently of
+    the gripper. However, when the gripper is *rigidly gripping* the
+    object, a tracking target is unreachable — the reference frame moves
+    with the gripper, so the residual never closes.
+
+    Set ``static: true`` to freeze the reference pose at the first tick
+    of this waypoint, giving a fixed world-frame target. ``EEF`` /
+    ``EEF_WORLD`` are always snapshotted and ignore this flag."""
     relative: bool = False
     """Whether the pose control is relative to the current pose. The current pose is determined by the reference frame. """
     use_slerp: bool = False
@@ -322,8 +387,10 @@ class PoseControlConfig(BaseModel):
     at the start of each episode."""
 
 
-class EefControlConfig(BaseModel, extra="forbid"):
+class EefControlConfig(BaseModel):
     """Configuration for the end-effector control"""
+
+    model_config = ConfigDict(extra="forbid")
 
     close: bool
     """Whether to close the end-effector. True for closing the end-effector, False for opening the end-effector. This will set the end-effector joint positions to the lower limit or upper limit defined in the environment model."""
@@ -363,6 +430,15 @@ class StageConfig(BaseModel):
     """The optional human-readable name of this stage."""
     object: str
     """The name of the object to be manipulated in this stage. The object should be defined in the environment and should have a unique name. An empty name means that the corresponding operation does not involve the target object; the target pose is obtained from the corresponding param."""
+    site: Optional[str] = None
+    """Optional site/body/geom/joint name used as the reference frame for
+    ``reference: object_world`` / ``reference: object`` waypoints in this
+    stage. When set, its world pose replaces ``object``'s pose as the
+    reference origin (and, for ``reference: object``, also as the
+    reference orientation). When ``None``, the ``object`` body's pose is
+    used as before. This field only affects pose reference resolution —
+    ``object`` is still used for contact detection, GS rendering mask,
+    ``set_pose``/randomization, and arc pivot fallback."""
     operation: Operation
     """The operation that the AutoAtom operator performs in this stage."""
     param: StageControlConfig
@@ -390,6 +466,31 @@ class OperatorRandomizationConfig(BaseModel):
     eef: Optional[PoseRandomRange] = None
 
 
+class InitialPoseConfig(BaseModel):
+    """Per-object initial pose override applied after keyframe reset, before randomization.
+
+    When ``position`` or ``orientation`` is omitted the keyframe default is kept
+    for that component.  Orientation accepts either 4 floats (quaternion xyzw)
+    or 3 floats (Euler roll, pitch, yaw in radians).
+
+    Example YAML::
+
+        initial_pose:
+          source_block:
+            position: [0.1, 0.0, 0.078]
+            orientation: [0, 0, 0, 1]
+          cup:
+            position: [0.3, 0.1, 0.085]
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    position: Optional[List[float]] = None
+    """[x, y, z] world-frame position override."""
+    orientation: Optional[List[float]] = None
+    """Quaternion (4 floats, xyzw) or Euler angles (3 floats, roll/pitch/yaw in radians)."""
+
+
 class AutoAtomConfig(BaseModel):
     """Configuration for the AutoAtom operator."""
 
@@ -401,9 +502,11 @@ class AutoAtomConfig(BaseModel):
     """The registered environment name used to resolve the basis environment instance for the selected scene."""
     seed: int = 0
     """The random seed for the AutoAtom operator. This is used to ensure reproducibility of the operator's behavior."""
-    randomization: Dict[str, Union[PoseRandomRange, OperatorRandomizationConfig]] = (
-        Field(default_factory=dict)
-    )
+    initial_pose: Dict[str, InitialPoseConfig] = Field(default_factory=dict)
+    """Per-object initial pose overrides applied after keyframe reset, before
+    randomization.  Keys are object names matching the MuJoCo body (or stage
+    ``object`` field).  Supports both freejoint and static bodies."""
+    randomization: Dict[str, Union[PoseRandomRange, OperatorRandomizationConfig]] = {}
     """Per-entity pose randomization applied at each reset.
 
     Objects accept a direct ``PoseRandomRange``.
@@ -414,17 +517,63 @@ class AutoAtomConfig(BaseModel):
     - ``OperatorRandomizationConfig`` with independent ``base`` and ``eef``
       randomization ranges.
     """
+    camera_initial_pose: Dict[str, InitialPoseConfig] = Field(default_factory=dict)
+    """Per-camera initial pose overrides applied at each reset, before
+    camera randomization records its defaults.
+
+    Keys are camera names as defined in the MuJoCo XML. Each entry may
+    set ``position`` and/or ``orientation`` (4-float quaternion xyzw or
+    3-float Euler roll/pitch/yaw in radians). Components omitted fall
+    back to the XML value.
+
+    Example YAML::
+
+        camera_initial_pose:
+          env1_cam:
+            position: [2.4, 0.6, -0.1]
+            orientation: [-0.5, 0.5, 0.5, 0.5]   # xyzw
+    """
+    camera_randomization: Dict[str, PoseRandomRange] = Field(default_factory=dict)
+    """Per-camera pose randomization applied at each reset.
+
+    Keys are camera names as defined in the MuJoCo XML model.  Each entry
+    is a ``PoseRandomRange`` controlling which axes are randomized and how.
+
+    Only ``relative`` (default) and ``absolute_world`` reference modes are
+    supported.  ``absolute_base`` and entity-name references are rejected
+    because cameras have no operator base frame and do not participate in
+    entity dependency ordering.
+
+    Example YAML::
+
+        camera_randomization:
+          env1_cam:
+            x: [-0.05, 0.05]
+            y: [-0.05, 0.05]
+            pitch: [-0.1, 0.1]
+          env0_cam:
+            reference: absolute_world
+            x: [0.8, 1.0]
+            y: [-0.1, 0.1]
+            z: [0.4, 0.6]
+    """
     randomization_debug: bool = False
 
-    @field_validator("randomization", mode="before")
+    @field_validator(
+        "initial_pose",
+        "randomization",
+        "camera_initial_pose",
+        "camera_randomization",
+        mode="before",
+    )
     @classmethod
-    def _strip_none_randomization_keys(cls, v: object) -> object:
-        """Remove ``None``-valued keys from each randomization entry.
+    def _strip_none_keys(cls, v: object) -> object:
+        """Remove ``None``-valued keys from each entry.
 
         Hydra/OmegaConf merges override ``key: null`` as ``key: None``
         rather than deleting the key.  Stripping them here lets child
-        configs cleanly switch between direct and nested operator forms
-        without triggering Pydantic ``extra="forbid"`` errors.
+        configs cleanly switch between forms without triggering Pydantic
+        ``extra="forbid"`` errors.
         """
         if not isinstance(v, dict):
             return v
@@ -486,8 +635,10 @@ class OperatorConfig(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    name: str
-    """The unique operator name referenced by task stages."""
+    name: str = ""
+    """The unique operator name referenced by task stages.
+    Defaults to empty; populated from the dict key in ``TaskFileConfig.task_operators``
+    during validation, so YAML entries do not need to repeat the name."""
 
     initial_state: Optional[OperatorInitialState] = None
     """Optional initial control state applied to this operator on every reset.
@@ -503,6 +654,23 @@ class TaskFileConfig(BaseModel):
     """The backend to execute this task file. The backend should be registered in the ComponentRegistry and should be compatible with the selected scene."""
     task: AutoAtomConfig
     """The task-level configuration describing stages, scene, and environment selection."""
-    task_operators: List[OperatorConfig] = []
-    """The operator definitions available to the selected backend for this task file.
+    task_operators: Dict[str, OperatorConfig] = {}
+    """The operator definitions available to the selected backend for this task file,
+    keyed by operator name. Using a mapping (rather than a list) lets Hydra overrides
+    target individual operators by key, e.g. ``task_operators.arm.control.tolerance.position=0.01``.
     Use ``task_operators`` in YAML; ``env.operators`` is reserved for environment-level operator bindings."""
+
+    @field_validator("task_operators", mode="after")
+    @classmethod
+    def _populate_operator_names(
+        cls, value: Dict[str, OperatorConfig]
+    ) -> Dict[str, OperatorConfig]:
+        for key, op in value.items():
+            if not op.name:
+                op.name = key
+            elif op.name != key:
+                raise ValueError(
+                    f"task_operators key '{key}' does not match operator name '{op.name}'. "
+                    "Either omit the name field or make it match the key."
+                )
+        return value

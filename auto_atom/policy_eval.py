@@ -19,6 +19,7 @@ from .framework import (
 )
 from .runtime import (
     ControlSignal,
+    EnvProtocol,
     ExecutionContext,
     ExecutionRecord,
     ExecutionSummary,
@@ -31,10 +32,10 @@ from .runtime import (
     TaskFlowBuilder,
     TaskRunner,
     TaskUpdate,
-    _EnvRuntimeState,
     _build_execution_summary,
     _check_stage_condition,
     _collect_reset_details,
+    _EnvRuntimeState,
     load_task_file,
 )
 from .utils.pose import PoseState
@@ -325,6 +326,10 @@ class PolicyEvaluator:
             "capture_observation()."
         )
 
+    def get_env(self) -> EnvProtocol:
+        """Return the underlying environment object managed by this evaluator."""
+        return self._require_context().backend.env
+
     def update(self, action: Any, env_mask: Optional[np.ndarray] = None) -> TaskUpdate:
         context = self._require_context()
         mask = self._normalize_mask(env_mask)
@@ -558,7 +563,7 @@ class PolicyEvaluator:
                 state.done = True
                 state.success = True
             else:
-                state.success = None
+                state.success = False
             return
 
         if (
@@ -609,6 +614,7 @@ class PolicyEvaluator:
                 target=target,
                 backend=context.backend,
                 action=completion_action,
+                reference_site=plan.stage.site,
             )
         return _PolicyStageState(
             plan=plan,
@@ -727,6 +733,7 @@ def _resolve_policy_completion_pose(
     target: Optional[ObjectHandler],
     backend: SceneBackend,
     action: Any,
+    reference_site: Optional[str] = None,
 ) -> Optional[PoseControlConfig]:
     if action.pose is None:
         return None
@@ -740,4 +747,5 @@ def _resolve_policy_completion_pose(
         target=target,
         backend=backend,
         action=completion_action,
+        reference_site=reference_site,
     )
