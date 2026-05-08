@@ -80,12 +80,33 @@ env.apply_pose_action("arm", positions, orientations, grippers, env_mask=mask)
 - Used by `pick_and_place_xf9600` and any other task that pairs mocap-style EEF control with the XF9600 gripper.
 - `apply_joint_action` / `apply_pose_action` behave the same as the Robotiq mocap variant; only the gripper actuator name and ctrl range differ.
 
-### Joint-Mode Robot (basis_p7_xf9600 / Panda + XFG-9600)
+### Joint-Mode Robot (basis_p7_xf9600 / P7 + XFG-9600)
 
 `arm_actuators: [joint1..joint7]`, `eef_actuators: [eef_claw_joint]`
 
 - `apply_joint_action`: action = `[j1..j7, gripper]` (8 dims)
 - `apply_pose_action`: arm via IK, gripper via `gripper` param
+
+### Airbot Play (basis_airbot_play_xf9600 / basis_airbot_play_g2p)
+
+`arm_actuators: [joint1..joint6]`, `eef_actuators: [eef_claw_joint]`
+
+- Robot XML: `airbot_play_with_xf9600.xml` (XF9600 gripper) or
+  `airbot_play_with_g2p.xml` (G2P gripper). Both gripper variants expose the
+  same `eef_*` joint / pad geom names, so the operator block and `eef_mapper`
+  config are identical.
+- `apply_joint_action`: action = `[j1..j6, gripper]` (7 dims)
+- `apply_pose_action`: arm via `AirbotKdlIKSolver`, gripper via `gripper` param
+
+### Joint-Mode Robot (basis_p7_g2p / P7 + G2P)
+
+`arm_actuators: [joint1..joint7]`, `eef_actuators: [eef_claw_joint]`
+
+- Robot XML: `p7_arm_with_g2p.xml`. Same actuator layout as
+  `basis_p7_xf9600`; only the gripper assembly (and a few mesh / pad geom
+  paths) differ.
+- `apply_joint_action`: action = `[j1..j7, gripper]` (8 dims)
+- `apply_pose_action`: arm via `P7AnalyticalIKSolver`, gripper via `gripper` param
 
 ## Recorded Demo Data
 
