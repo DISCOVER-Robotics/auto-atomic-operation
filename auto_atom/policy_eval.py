@@ -165,6 +165,7 @@ class ConfigDrivenDemoPolicy:
                 target=target,
                 backend=context.backend,
                 env_mask=self._single_env_mask(context.backend.batch_size, env_index),
+                reference_site=plan.stage.site,
             )
             if result.signals[env_index] == ControlSignal.REACHED:
                 actions = self._cached_actions[env_index]
@@ -194,12 +195,15 @@ class ConfigDrivenDemoPolicy:
     ) -> List[PrimitiveAction]:
         if self._cached_stage_indices[env_index] != stage_index:
             plan = evaluator.stage_plans[stage_index]
-            self._cached_actions[env_index] = deepcopy(
+            actions = deepcopy(
                 self.builder.build_actions(
                     plan.stage,
                     plan.last_orientation_before,
                 )[0]
             )
+            context = evaluator._require_context()
+            TaskRunner._apply_waypoint_randomization(actions, context)
+            self._cached_actions[env_index] = actions
             self._cached_stage_indices[env_index] = stage_index
             self._action_indices[env_index] = 0
         return self._cached_actions[env_index]
