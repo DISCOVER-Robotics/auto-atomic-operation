@@ -721,14 +721,12 @@ class TaskRunner:
         active = state.active
         action = active.actions[active.action_index]
         mask = self._mask_for_env(env_index)
-        result = self._run_action(
+        result = TaskRunner._run_stage_action(
             env_index=env_index,
-            operator=active.operator,
+            plan=active.plan,
             action=action,
-            target=active.target,
             backend=context.backend,
             env_mask=mask,
-            reference_site=active.plan.stage.site,
         )
         signal = result.signals[env_index]
         details = {
@@ -940,10 +938,7 @@ class TaskRunner:
             held_object_name = self._find_grasped_object(
                 context.backend, plan.operator_name, env_index
             )
-        actions = deepcopy(
-            self.builder.build_actions(plan.stage, plan.last_orientation_before)[0]
-        )
-        self._apply_waypoint_randomization(actions, context)
+        actions = TaskRunner._build_stage_actions(plan, self.builder, context)
         return ActiveStageState(
             plan=plan,
             operator=operator,
@@ -1141,6 +1136,51 @@ class TaskRunner:
             orientation=np.asarray(last_pose.orientation, dtype=np.float64).reshape(
                 1, 4
             ),
+        )
+
+    @staticmethod
+    def _build_stage_actions(
+        plan: StageExecutionPlan,
+        builder: "TaskFlowBuilder",
+        context: ExecutionContext,
+    ) -> List[PrimitiveAction]:
+        """Build the primitive-action list for a stage.
+
+        Single source of truth shared by ``TaskRunner._start_stage`` and
+        ``ConfigDrivenDemoPolicy._get_stage_actions`` so the two execution
+        paths cannot drift on what gets handed to the controller (deepcopy +
+        per-waypoint randomization).
+        """
+        actions = deepcopy(
+            builder.build_actions(plan.stage, plan.last_orientation_before)[0]
+        )
+        TaskRunner._apply_waypoint_randomization(actions, context)
+        return actions
+
+    @staticmethod
+    def _run_stage_action(
+        env_index: int,
+        plan: StageExecutionPlan,
+        action: PrimitiveAction,
+        backend: SceneBackend,
+        env_mask: np.ndarray,
+    ) -> ControlResult:
+        """Run one primitive action with operator/target/site resolved from the plan.
+
+        Single source of truth for invoking ``_run_action``. Used by
+        ``TaskRunner._update_env`` and ``ConfigDrivenDemoPolicy.action_applier``
+        so callers cannot forget to forward fields like ``reference_site``.
+        """
+        operator = backend.get_operator_handler(plan.operator_name)
+        target = backend.get_object_handler(plan.stage.object)
+        return TaskRunner._run_action(
+            env_index=env_index,
+            operator=operator,
+            action=action,
+            target=target,
+            backend=backend,
+            env_mask=env_mask,
+            reference_site=plan.stage.site,
         )
 
     @staticmethod

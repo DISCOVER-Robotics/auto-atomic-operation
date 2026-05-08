@@ -53,7 +53,7 @@ def test_task_runner_update_accepts_env_mask() -> None:
 
         second_update = runner.update(np.asarray([True, False], dtype=bool))
         assert second_update.done.tolist() == [True, False]
-        assert second_update.success.tolist() == [True, None]
+        assert second_update.success.tolist() == [True, False]
         assert second_update.status.tolist() == ["succeeded", "pending"]
 
         third_update = runner.update(np.asarray([False, True], dtype=bool))
