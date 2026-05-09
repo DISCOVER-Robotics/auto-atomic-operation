@@ -72,7 +72,7 @@ task:
             reference: object_world
             max_linear_step: 0.04
             max_angular_step: 0.35
-          - position: [0.0, 0.0, 0.04]
+          - position: [0.0, 0.0, 0.03]
             reference: object_world
             max_linear_step: 0.04
             max_angular_step: 0.2
