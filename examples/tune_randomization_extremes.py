@@ -300,20 +300,21 @@ def _apply_operator_initial_states(
                 pose.orientation,
             )
 
-        if initial_state.arm is not None:
-            arm_config = initial_state.arm
+        if initial_state.eef_pose is not None:
+            eef_pose_config = initial_state.eef_pose
             pose = _resolve_arm_pose(
-                arm_config,
+                eef_pose_config,
                 handler.get_end_effector_pose().select(0),
             )
             if (
-                not isinstance(arm_config, list)
-                and arm_config.reference == PoseReference.BASE
+                not isinstance(eef_pose_config, list)
+                and eef_pose_config.reference == PoseReference.BASE
             ):
+                pose_b = pose.broadcast_to(backend.batch_size)
                 pos_w, quat_w = handler.env.base_to_world(
                     handler.operator_name,
-                    np.asarray(pose.position, dtype=np.float32),
-                    np.asarray(pose.orientation, dtype=np.float32),
+                    np.asarray(pose_b.position, dtype=np.float32),
+                    np.asarray(pose_b.orientation, dtype=np.float32),
                 )
                 pose = PoseState(position=pos_w, orientation=quat_w)
             handler.set_home_end_effector_pose(pose)
@@ -602,7 +603,7 @@ class RandomizationInspector:
                 )
                 existing_keys.add(f"operator-base:{name}")
             if (
-                initial_state.arm is not None or initial_state.eef is not None
+                initial_state.eef_pose is not None or initial_state.eef is not None
             ) and f"operator-eef:{name}" not in existing_keys:
                 targets.append(
                     RandomizationTarget(

@@ -12,8 +12,8 @@
         <geom contype="0" conaffinity="1" group="3" />
       </default>
       <default class="claw_joint">
-        <joint type="slide" axis="0 0 1" range="0 0.01075" damping="0.5" frictionloss="0.5" armature="0.02" actuatorfrcrange="-100 100"/>
-        <position kp="10000" kv="5" ctrlrange="0 0.01075" forcerange="-100 100" />
+        <joint type="slide" axis="0 0 1" range="-0.003 0.01075" damping="0.5" frictionloss="0.5" armature="0.02" actuatorfrcrange="-100 100"/>
+        <position kp="10000" kv="5" ctrlrange="-0.003 0.01075" forcerange="-100 100" />
       </default>
     </default>
   </default>

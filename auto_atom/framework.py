@@ -608,8 +608,8 @@ class ArmPoseConfig(BaseModel):
 class OperatorInitialState(BaseModel):
     """Optional override for an operator's home control state applied at reset."""
 
-    arm: Optional[Union[List[float], ArmPoseConfig]] = None
-    """Override values for the arm actuator controls.
+    eef_pose: Optional[Union[List[float], ArmPoseConfig]] = None
+    """Override for the operator's home end-effector pose.
 
     Supports two formats:
     1. Flat list: [x, y, z, yaw, pitch, roll] (backward compatible)
@@ -620,7 +620,7 @@ class OperatorInitialState(BaseModel):
     When omitted the keyframe value is kept."""
 
     eef: Optional[float] = None
-    """Override value for the end-effector/gripper control (0.0 = open, 0.82 = closed).
+    """Override value for the end-effector/gripper control.
     When omitted the keyframe value is kept."""
 
     base_pose: Optional[ArmPoseConfig] = None

@@ -2021,19 +2021,20 @@ def build_mujoco_backend(
                 base_ps.broadcast_to(env.batch_size).orientation,
             )
 
-        if operator.initial_state.arm is not None:
-            arm_config = operator.initial_state.arm
+        if operator.initial_state.eef_pose is not None:
+            eef_pose_config = operator.initial_state.eef_pose
             pose = _resolve_arm_pose(
-                arm_config, handler.get_end_effector_pose().select(0)
+                eef_pose_config, handler.get_end_effector_pose().select(0)
             )
             if (
-                isinstance(arm_config, ArmPoseConfig)
-                and arm_config.reference == PoseReference.BASE
+                isinstance(eef_pose_config, ArmPoseConfig)
+                and eef_pose_config.reference == PoseReference.BASE
             ):
+                pose_b = pose.broadcast_to(env.batch_size)
                 pos_w, quat_w = handler.env.base_to_world(
                     operator.name,
-                    np.asarray(pose.position, dtype=np.float32),
-                    np.asarray(pose.orientation, dtype=np.float32),
+                    np.asarray(pose_b.position, dtype=np.float32),
+                    np.asarray(pose_b.orientation, dtype=np.float32),
                 )
                 pose = PoseState(position=pos_w, orientation=quat_w)
             handler.set_home_end_effector_pose(pose)

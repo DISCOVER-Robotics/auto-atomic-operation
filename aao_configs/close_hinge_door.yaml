@@ -53,6 +53,6 @@ task:
 task_operators:
   arm:
     initial_state:
-      arm:
+      eef_pose:
         position: [-0.7324714064598083, 0.16528670489788055, 0.5574991106987]
         orientation: [0.70683769, 0.01941596, 0.01940928, 0.70684282]

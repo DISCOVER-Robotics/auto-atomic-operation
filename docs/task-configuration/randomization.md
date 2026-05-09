@@ -100,7 +100,7 @@ defaults are recorded, so:
 
 - `task.randomization.arm.base` uses `initial_state.base_pose` as its baseline.
 - Direct `task.randomization.arm` and nested `task.randomization.arm.eef`
-  use `initial_state.arm` as their home EEF baseline.
+  use `initial_state.eef_pose` as their home EEF baseline.
 - `initial_state.eef` only sets the gripper/open-close control value; it does
   not change the pose randomization baseline.
 - If an operator `initial_state` field is omitted, the baseline falls back to
