@@ -419,6 +419,11 @@ class StageControlConfig(BaseModel):
     to the operator-level placed tolerance. If neither level configures a
     non-null position or orientation tolerance, placement degrades to
     released-only."""
+    displacement_threshold: Optional[float] = None
+    """Per-stage threshold (meters) for the DISPLACED post-condition. When set,
+    overrides the backend default of 0.01 m used by ``is_object_displaced``.
+    Only meaningful for operations whose success constraint is DISPLACED
+    (e.g., ``push``)."""
 
 
 class StageConfig(BaseModel):

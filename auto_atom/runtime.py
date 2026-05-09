@@ -1612,8 +1612,14 @@ def _check_stage_condition(
             backend.is_operator_contacting(operator_name, object_name)[env_index]
         )
     elif constraint == OperationConstraint.DISPLACED:
+        threshold = getattr(plan.stage.param, "displacement_threshold", None)
+        kwargs = {"threshold": float(threshold)} if threshold is not None else {}
         satisfied = (
-            bool(backend.is_object_displaced(object_name, initial_pose)[env_index])
+            bool(
+                backend.is_object_displaced(object_name, initial_pose, **kwargs)[
+                    env_index
+                ]
+            )
             if initial_pose is not None and object_name
             else True
         )
