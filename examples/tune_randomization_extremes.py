@@ -14,8 +14,10 @@ Usage::
 
 from __future__ import annotations
 
+import os
 import sys
 import tkinter as tk
+import tkinter.font as tkfont
 from dataclasses import dataclass
 from tkinter import ttk
 from typing import Callable, Dict, List, Optional
@@ -50,6 +52,144 @@ from auto_atom.utils.pose import (
 
 AXES = ("x", "y", "z", "roll", "pitch", "yaw")
 POSITION_AXES = ("x", "y", "z")
+
+
+def _enable_high_dpi_awareness() -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+    except Exception:
+        return
+    try:
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except Exception:
+        pass
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        return
+    except Exception:
+        pass
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+
+def _env_float(name: str) -> Optional[float]:
+    raw_value = os.environ.get(name)
+    if raw_value is None or raw_value == "":
+        return None
+    try:
+        return float(raw_value)
+    except ValueError:
+        print(f"[ui] ignore invalid {name}={raw_value!r}")
+        return None
+
+
+def _env_int(name: str, default: int) -> int:
+    raw_value = os.environ.get(name)
+    if raw_value is None or raw_value == "":
+        return default
+    try:
+        return int(raw_value)
+    except ValueError:
+        print(f"[ui] ignore invalid {name}={raw_value!r}")
+        return default
+
+
+def _clamped(value: float, minimum: float, maximum: float) -> float:
+    return min(max(value, minimum), maximum)
+
+
+def _detected_tk_scaling(root: tk.Tk) -> Optional[float]:
+    dpi_values = []
+    try:
+        width_mm = float(root.winfo_screenmmwidth())
+        height_mm = float(root.winfo_screenmmheight())
+        if width_mm > 0:
+            dpi_values.append(root.winfo_screenwidth() / (width_mm / 25.4))
+        if height_mm > 0:
+            dpi_values.append(root.winfo_screenheight() / (height_mm / 25.4))
+    except tk.TclError:
+        dpi_values = []
+    dpi_values = [dpi for dpi in dpi_values if 60.0 <= dpi <= 360.0]
+    if dpi_values:
+        return sum(dpi_values) / len(dpi_values) / 72.0
+    try:
+        return float(root.winfo_fpixels("1i")) / 72.0
+    except tk.TclError:
+        return None
+
+
+def _preferred_font_family(
+    root: tk.Tk,
+    candidates: tuple[str, ...],
+    fallback: str,
+) -> str:
+    try:
+        available_families = set(tkfont.families(root))
+    except tk.TclError:
+        return fallback
+    for family in candidates:
+        if family in available_families:
+            return family
+    return fallback
+
+
+def _configure_font(font_name: str, family: str, size: int) -> None:
+    try:
+        font = tkfont.nametofont(font_name)
+    except tk.TclError:
+        return
+    font.configure(family=family, size=size)
+
+
+def _configure_tk_dpi_and_fonts(root: tk.Tk) -> None:
+    root.update_idletasks()
+    scaling = _env_float("AAO_TK_SCALING")
+    if scaling is None:
+        scaling = _detected_tk_scaling(root)
+    if scaling is not None:
+        root.tk.call("tk", "scaling", _clamped(scaling, 1.0, 3.0))
+
+    default_font = tkfont.nametofont("TkDefaultFont")
+    fixed_font = tkfont.nametofont("TkFixedFont")
+    default_family = _preferred_font_family(
+        root,
+        ("Noto Sans", "Source Sans 3", "DejaVu Sans", "Liberation Sans", "Arial"),
+        str(default_font.cget("family")),
+    )
+    fixed_family = _preferred_font_family(
+        root,
+        (
+            "Noto Sans Mono",
+            "Source Code Pro",
+            "DejaVu Sans Mono",
+            "Liberation Mono",
+            "Consolas",
+        ),
+        str(fixed_font.cget("family")),
+    )
+    default_size = _env_int("AAO_TK_FONT_SIZE", 10)
+    text_size = _env_int("AAO_TK_TEXT_FONT_SIZE", default_size)
+
+    for font_name in (
+        "TkDefaultFont",
+        "TkTextFont",
+        "TkMenuFont",
+        "TkCaptionFont",
+        "TkSmallCaptionFont",
+        "TkIconFont",
+    ):
+        _configure_font(font_name, default_family, default_size)
+    _configure_font("TkHeadingFont", default_family, default_size + 1)
+    _configure_font("TkFixedFont", fixed_family, text_size)
+
+    style = ttk.Style(root)
+    style.configure(".", font="TkDefaultFont")
+    style.configure("TLabelFrame.Label", font="TkDefaultFont")
 
 
 @dataclass(frozen=True)
@@ -251,7 +391,12 @@ class RandomizationInspector:
 
         summary = ttk.LabelFrame(outer, text="Randomization Summary")
         summary.pack(fill="x", pady=(0, 8))
-        self.summary_text = tk.Text(summary, height=12, wrap="word")
+        self.summary_text = tk.Text(
+            summary,
+            height=12,
+            wrap="word",
+            font="TkFixedFont",
+        )
         self.summary_text.pack(fill="x", padx=6, pady=6)
         self.summary_text.insert("1.0", self._summary_text())
         self.summary_text.config(state="disabled")
@@ -306,7 +451,7 @@ class RandomizationInspector:
 
         state = ttk.LabelFrame(outer, text="Current Poses")
         state.pack(fill="both", expand=True)
-        self.state_text = tk.Text(state, height=20, wrap="word")
+        self.state_text = tk.Text(state, height=20, wrap="word", font="TkFixedFont")
         self.state_text.pack(fill="both", expand=True, padx=6, pady=6)
 
         self.reset_default()
@@ -822,7 +967,9 @@ class RandomizationInspectorApp:
     version_base=None,
 )
 def main(cfg: DictConfig) -> None:
+    _enable_high_dpi_awareness()
     root = tk.Tk()
+    _configure_tk_dpi_and_fonts(root)
     hydra_cfg = HydraConfig.get()
     config_name = hydra_cfg.job.config_name or "pick_and_place"
     overrides = _collect_cli_overrides(sys.argv[1:])
