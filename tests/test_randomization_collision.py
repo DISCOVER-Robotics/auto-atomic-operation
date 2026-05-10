@@ -6,9 +6,15 @@ from typing import Dict, Iterable, Optional
 
 import numpy as np
 
+import pytest
+
 import auto_atom.backend.mjc.mujoco_backend as mujoco_backend_module
 from auto_atom.backend.mjc.mujoco_backend import MujocoTaskBackend
-from auto_atom.framework import PoseRandomRange, RandomizationReference
+from auto_atom.framework import (
+    OperatorRandomizationConfig,
+    PoseRandomRange,
+    RandomizationReference,
+)
 from auto_atom.utils.pose import PoseState
 
 
@@ -199,10 +205,12 @@ def test_child_collision_resamples_reference_component() -> None:
     )
     backend = _make_backend(
         randomization={
-            "arm": PoseRandomRange(
-                x=(0.0, 0.0),
-                y=(0.0, 0.0),
-                collision_radius=0.10,
+            "arm": OperatorRandomizationConfig(
+                eef=PoseRandomRange(
+                    x=(0.0, 0.0),
+                    y=(0.0, 0.0),
+                    collision_radius=0.10,
+                ),
             ),
             "vase": PoseRandomRange(
                 reference=RandomizationReference.ABSOLUTE_WORLD,
@@ -248,7 +256,7 @@ def test_child_collision_resamples_reference_component() -> None:
     assert np.allclose(flower_pos[:2], [0.3, 0.0])
 
 
-def test_direct_operator_randomization_updates_home_eef_pose() -> None:
+def test_direct_operator_randomization_raises_type_error() -> None:
     handler = DummyOperatorHandler(
         operator_name="arm",
         base_pose=PoseState(
@@ -276,10 +284,8 @@ def test_direct_operator_randomization_updates_home_eef_pose() -> None:
     backend._default_operator_eef_poses = {"arm": handler.get_end_effector_pose()}
     backend._rng = SequenceRNG([0.1, 0.0])
 
-    backend._apply_randomization(np.asarray([True], dtype=bool))
-
-    eef_pos = handler.get_end_effector_pose().position[0]
-    assert np.allclose(eef_pos, [0.3, 0.0, 0.3])
+    with pytest.raises(TypeError, match="nested form"):
+        backend._apply_randomization(np.asarray([True], dtype=bool))
 
 
 def test_collision_rejection_warns_after_attempts_exhausted(

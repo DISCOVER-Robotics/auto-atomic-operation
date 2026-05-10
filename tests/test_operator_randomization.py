@@ -7,6 +7,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import pytest
+
 from auto_atom.framework import OperatorRandomizationConfig, PoseRandomRange
 from auto_atom.runner.common import prepare_task_file
 from auto_atom.runtime import ComponentRegistry, TaskRunner
@@ -65,7 +67,7 @@ def main() -> None:
         runner.close()
 
 
-def test_direct_operator_randomization_details() -> None:
+def test_direct_operator_randomization_rejected() -> None:
     task_file = _load_task_file()
     task_file.task.randomization["arm"] = PoseRandomRange.model_validate(
         {
@@ -76,10 +78,8 @@ def test_direct_operator_randomization_details() -> None:
     runner = TaskRunner().from_config(task_file)
 
     try:
-        update = runner.reset()
-        details = update.details[0]["initial_poses"]["arm"]
-        assert "base_pose" in details
-        assert "eef_pose" in details
+        with pytest.raises(TypeError, match="nested form"):
+            runner.reset()
     finally:
         runner.close()
 
@@ -103,5 +103,5 @@ def test_initial_poses_without_randomization() -> None:
 
 if __name__ == "__main__":
     main()
-    test_direct_operator_randomization_details()
+    test_direct_operator_randomization_rejected()
     test_initial_poses_without_randomization()

@@ -1387,26 +1387,12 @@ class MujocoTaskBackend(SceneBackend):
                 )
             return sampled_poses, actions
 
-        sampled_eef = self._sample_operator_eef_pose_for_env(
-            name,
-            handler,
-            rand_range,
-            env_index,
-            working_poses,
+        raise TypeError(
+            f"Operator '{name}' randomization must use the nested form with "
+            "explicit `base:` and/or `eef:` sub-entries (i.e. an "
+            "OperatorRandomizationConfig). The direct PoseRandomRange shorthand "
+            "is no longer supported."
         )
-        return {name: sampled_eef, f"{name}.eef": sampled_eef}, [
-            _PendingRandomizationAction(
-                kind="operator_eef",
-                owner=name,
-                label=f"{name}.eef",
-                pose=sampled_eef,
-                radius=float(rand_range.collision_radius),
-                ancestors=self._reference_ancestors(
-                    rand_range.reference,
-                    dependency_map,
-                ),
-            )
-        ]
 
     def _sample_object_pose_for_env(
         self,
@@ -1533,7 +1519,7 @@ class MujocoTaskBackend(SceneBackend):
                 return handler.get_end_effector_pose()
             if rand_range.base is not None:
                 return handler.get_base_pose()
-        return handler.get_end_effector_pose()
+        return handler.get_base_pose()
 
     def _current_pose_for_action(self, kind: str, owner: str) -> PoseState:
         if kind == "object":

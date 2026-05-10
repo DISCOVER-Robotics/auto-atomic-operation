@@ -516,11 +516,9 @@ class AutoAtomConfig(BaseModel):
 
     Objects accept a direct ``PoseRandomRange``.
 
-    Operators accept either:
-    - a direct ``PoseRandomRange`` (backward-compatible shorthand for
-      base/virtual-base randomization), or
-    - ``OperatorRandomizationConfig`` with independent ``base`` and ``eef``
-      randomization ranges.
+    Operators must use ``OperatorRandomizationConfig`` with explicit
+    ``base`` and/or ``eef`` sub-entries. The direct ``PoseRandomRange``
+    shorthand is rejected at sample time for operator entries.
     """
     camera_initial_pose: Dict[str, InitialPoseConfig] = Field(default_factory=dict)
     """Per-camera initial pose overrides applied at each reset, before
