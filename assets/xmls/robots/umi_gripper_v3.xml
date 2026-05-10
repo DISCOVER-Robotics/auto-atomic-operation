@@ -150,6 +150,19 @@
           </body>
         </body>
       </body>
+      <!-- Wrist camera, mirroring the airbot_g2p ``wrist_cam`` setup but
+           re-oriented for umi_gripper_v3's geometry: the gripper extends
+           along base_link +x (fingers at x ≈ 0.09–0.13 m), so the camera
+           sits slightly behind / above the body and points along +x with
+           image-up = +z (gripper closing axis). The body quat
+           ``0.5 0.5 -0.5 -0.5`` rotates the camera frame so its -z (look
+           direction) is aligned with gripper +x and its +y (image up) is
+           aligned with gripper +z. The inner camera euler matches the
+           airbot_g2p ~3° downward pitch tweak. -->
+      <body name="wrist_cam" pos="0.04 0 0.04" quat="0.5 0.5 -0.5 -0.5" gravcomp="1">
+        <camera name="wrist_cam" mode="fixed" fovy="102.89" resolution="640 480" pos="0 0 0" euler="-0.052359876 0 0"/>
+        <site name="wrist_cam_site" size="0.005" rgba="1 0 0 1" pos="0 0 0" euler="-0.052359876 0 0"/>
+      </body>
     </body>
   </worldbody>
   <actuator>
