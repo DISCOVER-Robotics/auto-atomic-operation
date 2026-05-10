@@ -172,6 +172,12 @@ class _OperatorState:
     # Per-joint warned side: -1 = warned for lower, +1 = upper, 0 = not warned.
     arm_joint_limit_warned: Optional[np.ndarray] = None  # int8, shape (n,)
 
+    # Streak of consecutive IK failures since the last success. Used by
+    # ``_solve_ik`` to log on the first failure and again at exponentially
+    # spaced milestones, so a stuck arm gets reported without spamming
+    # per_step_ik loops where the same target may keep failing every frame.
+    ik_failure_streak: int = 0
+
 
 class KeyCreator:
     """Build fully-qualified observation keys in a single call.
@@ -249,6 +255,14 @@ class UnifiedMujocoEnv(MujocoBasis):
         ``_JOINT_LIMIT_WARN_MARGIN_RAD`` of a limit.
         """
         self._joint_limit_warning_enabled = bool(enabled)
+
+    def get_operator_ik_failure_streak(self, op_name: str) -> int:
+        """Return the current consecutive IK-failure count for ``op_name``.
+
+        Used by upstream handlers to escalate persistent IK failures into
+        task-level failure rather than waiting for the stage timeout.
+        """
+        return int(self._get_op(op_name).ik_failure_streak)
 
     # ==================================================================
     # Operator registration
@@ -636,13 +650,52 @@ class UnifiedMujocoEnv(MujocoBasis):
     ) -> Optional[np.ndarray]:
         """Single entry point for IK calls inside this env.
 
-        Wraps ``s.ik_solver.solve(target, seed)`` so the joint-limit
-        proximity check runs in exactly one place. ``context`` is forwarded
-        into the warning text to identify which call site (e.g.
-        ``per_step_ik``, ``teleport_operator``) triggered the alert.
+        Wraps ``s.ik_solver.solve(target, seed)`` so two cross-cutting
+        concerns live in exactly one place:
+
+        * **Failure logging** — IK failures are always logged (silently
+          dropping them is what makes a stuck arm impossible to diagnose
+          from the terminal). Throttled by streak count so a per-step IK
+          loop hitting an unreachable target reports at 1, then on every
+          10th failure inside each decade (10, 20, …, 100, 200, …, 1000,
+          2000, …) — dense enough early on for fast feedback, sparse later
+          on so a long-running stuck loop doesn't flood the log.
+        * **Joint-limit proximity warning** — opt-in via
+          ``set_joint_limit_warning_enabled``; runs only on successful solves.
+
+        ``context`` identifies which call site (e.g. ``per_step_ik``,
+        ``teleport_operator``) triggered the event so the log is actionable.
         """
         sol = s.ik_solver.solve(target, seed)
-        if sol is not None and self._joint_limit_warning_enabled:
+        if sol is None:
+            s.ik_failure_streak += 1
+            streak = s.ik_failure_streak
+            if streak == 1 or (
+                streak >= 10 and streak % (10 ** int(np.log10(streak))) == 0
+            ):
+                logging.getLogger(__name__).warning(
+                    "[%s] IK failed for operator '%s' (consecutive failures=%d). "
+                    "Target in base frame: pos=%s, quat=%s. Seed qpos=%s. "
+                    "The pose is likely outside the arm's reachable workspace; "
+                    "the operator will hold its current ctrl until a solvable "
+                    "target arrives.",
+                    context,
+                    op_name,
+                    streak,
+                    np.array2string(np.asarray(target.position[0]), precision=4),
+                    np.array2string(np.asarray(target.orientation[0]), precision=4),
+                    np.array2string(np.asarray(seed), precision=4),
+                )
+            return None
+        if s.ik_failure_streak > 0:
+            logging.getLogger(__name__).info(
+                "[%s] IK recovered for operator '%s' after %d consecutive failures.",
+                context,
+                op_name,
+                s.ik_failure_streak,
+            )
+            s.ik_failure_streak = 0
+        if self._joint_limit_warning_enabled:
             self._warn_if_near_joint_limit(op_name, s, sol, context)
         return sol
 
@@ -993,20 +1046,9 @@ class UnifiedMujocoEnv(MujocoBasis):
                 s.planned_joint_target_qpos = joint_targets.copy()
                 s.planned_joint_progress = 1
                 s.planned_joint_steps_total = 1
-                # print(f"ik succeeded: {eef_in_base.position[0]}, {eef_in_base.orientation[0]}")
             else:
-                logging.getLogger(__name__).warning(
-                    "IK failed for operator '%s' home EEF pose "
-                    "(base-frame target: pos=%s, quat=%s); keeping previous "
-                    "home pose. The target may be outside the arm's reachable "
-                    "workspace — check the EEF randomization range in your "
-                    "config.",
-                    op_name,
-                    np.array2string(np.asarray(eef_in_base.position[0]), precision=4),
-                    np.array2string(
-                        np.asarray(eef_in_base.orientation[0]), precision=4
-                    ),
-                )
+                # ``_solve_ik`` already logged the failure with full target /
+                # seed context. Keep the previous home pose and bail out.
                 return
         else:
             base_body_pos, base_body_quat_xyzw = self._eef_in_base_to_base_body_world(
@@ -1696,6 +1738,13 @@ class BatchedUnifiedMujocoEnv:
         """Propagate the IK joint-limit-proximity warning toggle to every replica."""
         for env in self.envs:
             env.set_joint_limit_warning_enabled(enabled)
+
+    def get_operator_ik_failure_streak(self, op_name: str) -> np.ndarray:
+        """Per-replica consecutive IK-failure counts for ``op_name``."""
+        return np.asarray(
+            [env.get_operator_ik_failure_streak(op_name) for env in self.envs],
+            dtype=np.int64,
+        )
 
     def world_to_base(
         self, op_name: str, pos_w: np.ndarray, quat_w: np.ndarray

@@ -80,6 +80,11 @@ class MujocoControlConfig(BaseModel):
     """When True, automatically reduce step scale on stall and recover on progress.
     Set to False for contact-heavy tasks (e.g. door pushing) where stall detection
     causes unnecessary slowdown."""
+    ik_unreachable_threshold: int = 30
+    """Number of consecutive IK failures after which ``move_to_pose`` declares the
+    waypoint unreachable and fails the stage immediately, rather than waiting for
+    ``timeout_steps`` to elapse with the arm frozen. At ``update_freq=50`` the
+    default ≈0.6 s of trying-and-failing is plenty to rule out a transient miss."""
 
 
 _MAX_COLLISION_REJECTION_ATTEMPTS = 100
@@ -490,8 +495,27 @@ class MujocoOperatorHandler(OperatorHandler):
                 "orientation_error": ori_err_after,
                 "steps": int(self._move_steps[env_index]),
             }
+            ik_streak = int(
+                self.env.envs[env_index].get_operator_ik_failure_streak(
+                    self.operator_name
+                )
+            )
             if pos_ok and ori_ok:
                 signals[env_index] = ControlSignal.REACHED
+                self._move_steps[env_index] = 0
+            elif ik_streak >= int(self.control.ik_unreachable_threshold):
+                # Persistent IK failure: don't burn the rest of the stage
+                # timeout watching a frozen arm. Fail the stage now with a
+                # specific category so the user can tell unreachable targets
+                # from genuine motion timeouts.
+                details[env_index]["event"] = "ik_unreachable"
+                details[env_index]["failure_category"] = "ik_unreachable"
+                details[env_index]["failure_reason"] = (
+                    f"IK failed for {ik_streak} consecutive control steps; "
+                    f"target pose is outside the arm's reachable workspace"
+                )
+                details[env_index]["ik_failure_streak"] = ik_streak
+                signals[env_index] = ControlSignal.FAILED
                 self._move_steps[env_index] = 0
             elif self._move_steps[env_index] >= self.control.timeout_steps:
                 details[env_index]["event"] = "move_timeout"
