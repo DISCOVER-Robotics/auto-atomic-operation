@@ -550,9 +550,8 @@ class RandomizationInspector:
                             key=f"operator-eef:{name}",
                             label=f"operator {name} eef",
                             rand_range=rand.eef,
-                            get_default_pose=lambda n=name,
-                            h=handler: self.backend._default_operator_eef_poses.get(  # type: ignore[attr-defined]
-                                n, h.get_end_effector_pose()
+                            get_default_pose=self._make_eef_default_getter(
+                                name, handler
                             ),
                             apply_pose=lambda pose,
                             h=handler: h.set_home_end_effector_pose(pose),
@@ -566,10 +565,7 @@ class RandomizationInspector:
                         key=f"operator-eef:{name}",
                         label=f"operator {name} eef",
                         rand_range=rand,
-                        get_default_pose=lambda n=name,
-                        h=handler: self.backend._default_operator_eef_poses.get(  # type: ignore[attr-defined]
-                            n, h.get_end_effector_pose()
-                        ),
+                        get_default_pose=self._make_eef_default_getter(name, handler),
                         apply_pose=lambda pose, h=handler: h.set_home_end_effector_pose(
                             pose
                         ),
@@ -610,10 +606,7 @@ class RandomizationInspector:
                         key=f"operator-eef:{name}",
                         label=f"operator {name} eef",
                         rand_range=zero_range,
-                        get_default_pose=lambda n=name,
-                        h=handler: self.backend._default_operator_eef_poses.get(  # type: ignore[attr-defined]
-                            n, h.get_end_effector_pose()
-                        ),
+                        get_default_pose=self._make_eef_default_getter(name, handler),
                         apply_pose=lambda pose, h=handler: h.set_home_end_effector_pose(
                             pose
                         ),
@@ -623,6 +616,34 @@ class RandomizationInspector:
                 )
                 existing_keys.add(f"operator-eef:{name}")
         return targets
+
+    def _make_eef_default_getter(
+        self,
+        name: str,
+        handler,
+    ) -> Callable[[], PoseState]:
+        """Return a closure that yields the operator's default EEF pose
+        re-anchored to the operator's **current** base, by delegating to
+        ``MujocoTaskBackend._operator_default_eef_following_base`` so the
+        runtime sampler and this tool agree on the same semantics.
+        """
+        backend = self.backend
+
+        def _getter() -> PoseState:
+            poses = []
+            for env_index in range(backend.batch_size):
+                follow_default, _ = backend._operator_default_eef_following_base(  # type: ignore[attr-defined]
+                    name, handler, env_index, sampled_poses=None
+                )
+                poses.append(follow_default)
+            return PoseState(
+                position=np.stack([np.asarray(p.position[0]) for p in poses], axis=0),
+                orientation=np.stack(
+                    [np.asarray(p.orientation[0]) for p in poses], axis=0
+                ),
+            )
+
+        return _getter
 
     def _build_cases(self) -> List[ExtremeCase]:
         cases: List[ExtremeCase] = [
@@ -782,7 +803,16 @@ class RandomizationInspector:
         return sorted(self.targets, key=sort_key)
 
     def _apply_case(self, case: ExtremeCase) -> None:
-        for target in self.targets:
+        # Reset every target to its default in the same dependency order we
+        # later use to apply offsets (base before eef, etc.). For
+        # operator-eef targets the "default" is computed against the
+        # operator's *current* base via ``_make_eef_default_getter``, so
+        # the base must already have been reset to its own default before
+        # the eef default is queried — otherwise the eef would re-anchor
+        # to whatever base happened to be left over from the previous
+        # case and we'd see the very bug this ordering is meant to avoid.
+        sorted_targets = self._sorted_targets_for_apply()
+        for target in sorted_targets:
             target.apply_pose(target.get_default_pose())
         sampled_poses: Dict[str, PoseState] = {}
         for target in self._sorted_targets_for_apply():

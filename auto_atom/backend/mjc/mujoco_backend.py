@@ -1472,6 +1472,57 @@ class MujocoTaskBackend(SceneBackend):
         )
         return self._sample_random_pose_single(base_pose, rand_range, 0)
 
+    def _operator_default_eef_following_base(
+        self,
+        name: str,
+        handler: MujocoOperatorHandler,
+        env_index: int,
+        sampled_poses: Optional[Dict[str, PoseState]] = None,
+    ) -> tuple[PoseState, PoseState]:
+        """Return the operator's default EEF pose **rigidly tracking the
+        operator's current base**, plus the resolved current base pose.
+
+        ``_record_default_poses`` snapshots the EEF in **world** frame at
+        backend init. If the operator's base is later randomized (by this
+        sampler or by external tooling), naïvely reusing that world-frame
+        default leaves the EEF target sitting at its old absolute position,
+        and the IK chain has to bridge a base-induced offset that grows
+        with the base randomization range — quickly becoming unreachable
+        and surfacing as ``ik_unreachable`` failures even when the EEF
+        offset itself is small.
+
+        Re-anchoring to the current base preserves the original eef-in-base
+        relative pose, so randomizing the base does not implicitly enlarge
+        the EEF reach budget. Sampling logic on top of this helper then
+        operates on a default that is already sensible for the current
+        base placement.
+
+        ``sampled_poses`` (if given) is consulted for an in-flight base
+        sample so eef sampling sees the base that was just decided in the
+        same iteration; otherwise the helper falls back to the handler's
+        live base pose.
+        """
+        default_eef_world = self._default_operator_eef_poses.get(
+            name,
+            handler.get_end_effector_pose(),
+        ).select(env_index)
+        default_base_world = self._default_operator_base_poses.get(
+            name,
+            handler.get_base_pose(),
+        ).select(env_index)
+        current_base_world: Optional[PoseState] = None
+        if sampled_poses is not None:
+            current_base_world = sampled_poses.get(name)
+        if current_base_world is None:
+            current_base_world = handler.get_base_pose().select(env_index)
+        eef_in_default_base = compose_pose(
+            inverse_pose(default_base_world), default_eef_world
+        )
+        return (
+            compose_pose(current_base_world, eef_in_default_base),
+            current_base_world,
+        )
+
     def _sample_operator_eef_pose_for_env(
         self,
         name: str,
@@ -1480,21 +1531,35 @@ class MujocoTaskBackend(SceneBackend):
         env_index: int,
         sampled_poses: Dict[str, PoseState],
     ) -> PoseState:
-        default_eef_world = self._default_operator_eef_poses.get(
-            name,
-            handler.get_end_effector_pose(),
-        ).select(env_index)
+        # ``RandomizationReference`` enums (relative / absolute_world /
+        # absolute_base) leave the default untouched in the resolver, so we
+        # re-anchor here to make the EEF default rigidly track the operator's
+        # current base. Entity-name references ("arm.base", "vase", ...) ARE
+        # handled by the resolver, which carries the referenced entity's
+        # sample-vs-default delta on top of ``default_pose``; if we also
+        # re-anchored here, an "<own_op>.base" reference would double-count
+        # the base delta.
+        if isinstance(rand_range.reference, RandomizationReference):
+            default_for_resolver, base_world = (
+                self._operator_default_eef_following_base(
+                    name, handler, env_index, sampled_poses
+                )
+            )
+        else:
+            default_for_resolver = self._default_operator_eef_poses.get(
+                name, handler.get_end_effector_pose()
+            ).select(env_index)
+            base_world = sampled_poses.get(name)
+            if base_world is None:
+                base_world = handler.get_base_pose().select(env_index)
         base_pose_for_sampler = self._resolve_reference_base_pose_for_env(
             rand_range.reference,
             sampled_poses,
-            default_eef_world,
+            default_for_resolver,
             env_index,
         )
         if rand_range.reference != RandomizationReference.ABSOLUTE_BASE:
             return self._sample_random_pose_single(base_pose_for_sampler, rand_range, 0)
-        base_world = sampled_poses.get(name)
-        if base_world is None:
-            base_world = handler.get_base_pose().select(env_index)
         default_in_base = compose_pose(inverse_pose(base_world), base_pose_for_sampler)
         sampled_in_base = self._sample_random_pose_single(
             default_in_base, rand_range, 0
