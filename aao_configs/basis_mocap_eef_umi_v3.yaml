@@ -15,9 +15,19 @@ env:
     umi_freejoint: [0.0, 0.0, 0.4, 1.0, 0.0, 0.0, 0.0]
     # Single driven gripper joint (range 0..0.0165, 0 = fully open).
     eef_claw_joint: 0.0
-  # umi_gripper_v3 has no wrist camera, so the basis camera list referencing
-  # ``wrist_cam`` has to be overridden.
+  # umi_gripper_v3 exposes its wrist camera as ``eef_wrist_cam`` (attach
+  # prefix); the basis camera list references ``wrist_cam`` and has to be
+  # overridden.
   cameras:
+    - name: eef_wrist_cam
+      width: ${cam_width}
+      height: ${cam_height}
+      enable_color: ${enable_color}
+      enable_depth: ${enable_depth}
+      enable_mask: ${enable_mask}
+      enable_heat_map: ${enable_heat_map}
+      parent_frame: eef_pose
+      is_static: false
     - name: env1_cam
       width: ${cam_width}
       height: ${cam_height}
@@ -34,12 +44,6 @@ env:
       enable_mask: ${enable_mask}
       enable_heat_map: ${enable_heat_map}
       is_static: true
-  enabled_sensors:
-    - camera
-    - pose
-    - joint_position
-    - joint_velocity
-    - joint_effort
   operators:
     arm:
       arm_actuators: []

@@ -36,6 +36,10 @@
     <material name="pin_bronze" rgba="0.647058823529 0.619607843137 0.588235294118 1" />
     <material name="link_blue" rgba="0.63137254902 0.686274509804 0.749019607843 1" />
     <material name="collision_material" rgba="1 0.28 0.1 0.18" />
+    <!-- Tactile sensor sub-model (5×5 force/torque cell grid). Same model
+         airbot_g2p uses for its xf9600 fingertips; reused here for
+         consistency. -->
+    <model name="tactile_sensor" file="../sensors/xf9600_tactile_sensor.xml"/>
     <mesh name="base_link" file="base_link.STL" />
     <mesh name="claw" file="claw.STL" />
     <mesh name="L11" file="L11.STL" />
@@ -103,6 +107,13 @@
             <joint name="J23" class="hinge_joint" axis="0 0 1" />
             <geom name="L23_visual" class="visual" mesh="L23" material="metal_light" />
             <geom name="right_finger_collision" class="finger_collision" mesh="L23" material="collision_material" />
+            <!-- Tactile sensor body. Quat orients the sensor +z axis along
+                 the closing direction (L23 -y) so the cell grid faces the
+                 grasp surface, mirroring airbot_g2p's right_tactile. -->
+            <body name="right_tactile" pos="-0.022 -0.0113 0" quat="0.4999981633974483 0.49999999999662686 -0.49999999999662686 0.5000018366025516" gravcomp="1">
+              <inertial pos="7.44670002401661E-05 0.00784747372261869 0.00195692056024735" quat="1 0 0 0" mass="0.000814180541801484" diaginertia="1.77999294668352e-08 8.5777623786915e-09 2.12505762180111e-08"/>
+              <attach model="tactile_sensor" prefix="finger1_"/>
+            </body>
             <body name="right_pad_measure" pos="-0.0218894349456298 -0.0176455221906752 1.34921709684398e-05" />
           </body>
         </body>
@@ -146,6 +157,13 @@
             <joint name="J53" class="hinge_joint" axis="0 0 1" />
             <geom name="L53_visual" class="visual" mesh="L53" material="metal_light" />
             <geom name="left_finger_collision" class="finger_collision" mesh="L53" material="collision_material" />
+            <!-- Tactile sensor body. Quat orients the sensor +z axis along
+                 the closing direction (L53 -x) so the cell grid faces the
+                 grasp surface. -->
+            <body name="left_tactile" pos="-0.0113 -0.022 0" quat="0.7071067811865476 0 -0.7071067811865476 0" gravcomp="1">
+              <inertial pos="7.44670002401705E-05 0.00784747372261869 0.00195692056024735" quat="1 0 0 0" mass="0.000814180541801481" diaginertia="1.77999294668351e-08 8.57776237869146e-09 2.1250576218011e-08"/>
+              <attach model="tactile_sensor" prefix="finger0_"/>
+            </body>
             <body name="left_pad_measure" pos="-0.0176464642718538 -0.0218882105618664 -1.34921709532115e-05" />
           </body>
         </body>
