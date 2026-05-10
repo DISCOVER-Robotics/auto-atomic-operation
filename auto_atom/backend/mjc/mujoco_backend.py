@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
@@ -79,6 +80,11 @@ class MujocoControlConfig(BaseModel):
     """When True, automatically reduce step scale on stall and recover on progress.
     Set to False for contact-heavy tasks (e.g. door pushing) where stall detection
     causes unnecessary slowdown."""
+    ik_unreachable_threshold: int = 30
+    """Number of consecutive IK failures after which ``move_to_pose`` declares the
+    waypoint unreachable and fails the stage immediately, rather than waiting for
+    ``timeout_steps`` to elapse with the arm frozen. At ``update_freq=50`` the
+    default ≈0.6 s of trying-and-failing is plenty to rule out a transient miss."""
 
 
 _MAX_COLLISION_REJECTION_ATTEMPTS = 100
@@ -350,6 +356,13 @@ class MujocoOperatorHandler(OperatorHandler):
             [ControlSignal.RUNNING] * self.env.batch_size, dtype=object
         )
         details = [{} for _ in range(self.env.batch_size)]
+        # In ``solve_once_interpolate`` mode the env solves IK once for the
+        # final waypoint pose and then interpolates joint targets, so the
+        # handler must hand the unmodified target down — running cartesian
+        # step clamping (or adaptive step scaling) here would shift
+        # ``target_pos_in_base`` every frame and force the env to replan
+        # every step, defeating the single-shot semantics.
+        interp_mode = self.joint_control_mode == "solve_once_interpolate"
         for env_index in range(self.env.batch_size):
             if not mask[env_index]:
                 continue
@@ -370,60 +383,67 @@ class MujocoOperatorHandler(OperatorHandler):
             ori_err = quaternion_angular_distance(
                 current_eef.orientation[env_index], desired_ori[env_index]
             )
-            if self.control.adaptive_step_scaling:
-                improved = pos_err < (
-                    self._move_best_pos_error[env_index] - 1e-4
-                ) or ori_err < (self._move_best_ori_error[env_index] - 1e-3)
-                if improved:
-                    self._move_best_pos_error[env_index] = min(
-                        self._move_best_pos_error[env_index], pos_err
-                    )
-                    self._move_best_ori_error[env_index] = min(
-                        self._move_best_ori_error[env_index], ori_err
-                    )
-                    self._move_stall_count[env_index] = 0
-                    self._move_step_scale[env_index] = min(
-                        1.0, self._move_step_scale[env_index] * 1.1
-                    )
-                else:
-                    self._move_stall_count[env_index] += 1
-                    if self._move_stall_count[env_index] >= 8:
-                        self._move_step_scale[env_index] = max(
-                            0.1, self._move_step_scale[env_index] * 0.5
+
+            if interp_mode:
+                # Pass the final waypoint pose straight through; the env
+                # owns motion shaping via joint-space interpolation.
+                pos_goal = desired_pos[env_index].copy()
+                ori_goal = desired_ori[env_index].copy()
+            else:
+                if self.control.adaptive_step_scaling:
+                    improved = pos_err < (
+                        self._move_best_pos_error[env_index] - 1e-4
+                    ) or ori_err < (self._move_best_ori_error[env_index] - 1e-3)
+                    if improved:
+                        self._move_best_pos_error[env_index] = min(
+                            self._move_best_pos_error[env_index], pos_err
+                        )
+                        self._move_best_ori_error[env_index] = min(
+                            self._move_best_ori_error[env_index], ori_err
                         )
                         self._move_stall_count[env_index] = 0
+                        self._move_step_scale[env_index] = min(
+                            1.0, self._move_step_scale[env_index] * 1.1
+                        )
+                    else:
+                        self._move_stall_count[env_index] += 1
+                        if self._move_stall_count[env_index] >= 8:
+                            self._move_step_scale[env_index] = max(
+                                0.1, self._move_step_scale[env_index] * 0.5
+                            )
+                            self._move_stall_count[env_index] = 0
 
-            max_linear_step = (
-                float(
-                    pose.max_linear_step
-                    if pose.max_linear_step > 0.0
-                    else self.control.cartesian_max_linear_step
-                )
-                * self._move_step_scale[env_index]
-            )
-            max_angular_step = (
-                float(
-                    pose.max_angular_step
-                    if pose.max_angular_step > 0.0
-                    else self.control.cartesian_max_angular_step
-                )
-                * self._move_step_scale[env_index]
-            )
-            pos_goal = desired_pos[env_index].copy()
-            ori_goal = desired_ori[env_index].copy()
-            if max_linear_step > 0.0:
-                pos_delta = pos_goal - current_eef.position[env_index]
-                pos_dist = float(np.linalg.norm(pos_delta))
-                if pos_dist > max_linear_step:
-                    pos_goal = current_eef.position[env_index] + pos_delta * (
-                        max_linear_step / pos_dist
+                max_linear_step = (
+                    float(
+                        pose.max_linear_step
+                        if pose.max_linear_step > 0.0
+                        else self.control.cartesian_max_linear_step
                     )
-            if max_angular_step > 0.0 and ori_err > max_angular_step:
-                ori_goal = quaternion_slerp(
-                    current_eef.orientation[env_index],
-                    ori_goal,
-                    fraction=max_angular_step / ori_err,
+                    * self._move_step_scale[env_index]
                 )
+                max_angular_step = (
+                    float(
+                        pose.max_angular_step
+                        if pose.max_angular_step > 0.0
+                        else self.control.cartesian_max_angular_step
+                    )
+                    * self._move_step_scale[env_index]
+                )
+                pos_goal = desired_pos[env_index].copy()
+                ori_goal = desired_ori[env_index].copy()
+                if max_linear_step > 0.0:
+                    pos_delta = pos_goal - current_eef.position[env_index]
+                    pos_dist = float(np.linalg.norm(pos_delta))
+                    if pos_dist > max_linear_step:
+                        pos_goal = current_eef.position[env_index] + pos_delta * (
+                            max_linear_step / pos_dist
+                        )
+                if max_angular_step > 0.0 and ori_err > max_angular_step:
+                    ori_goal = quaternion_slerp(
+                        current_eef.orientation[env_index],
+                        ori_goal,
+                        fraction=max_angular_step / ori_err,
+                    )
 
             target_pos_b, target_quat_b = self.env.world_to_base(
                 self.operator_name, pos_goal, ori_goal
@@ -475,8 +495,27 @@ class MujocoOperatorHandler(OperatorHandler):
                 "orientation_error": ori_err_after,
                 "steps": int(self._move_steps[env_index]),
             }
+            ik_streak = int(
+                self.env.envs[env_index].get_operator_ik_failure_streak(
+                    self.operator_name
+                )
+            )
             if pos_ok and ori_ok:
                 signals[env_index] = ControlSignal.REACHED
+                self._move_steps[env_index] = 0
+            elif ik_streak >= int(self.control.ik_unreachable_threshold):
+                # Persistent IK failure: don't burn the rest of the stage
+                # timeout watching a frozen arm. Fail the stage now with a
+                # specific category so the user can tell unreachable targets
+                # from genuine motion timeouts.
+                details[env_index]["event"] = "ik_unreachable"
+                details[env_index]["failure_category"] = "ik_unreachable"
+                details[env_index]["failure_reason"] = (
+                    f"IK failed for {ik_streak} consecutive control steps; "
+                    f"target pose is outside the arm's reachable workspace"
+                )
+                details[env_index]["ik_failure_streak"] = ik_streak
+                signals[env_index] = ControlSignal.FAILED
                 self._move_steps[env_index] = 0
             elif self._move_steps[env_index] >= self.control.timeout_steps:
                 details[env_index]["event"] = "move_timeout"
@@ -1387,26 +1426,12 @@ class MujocoTaskBackend(SceneBackend):
                 )
             return sampled_poses, actions
 
-        sampled_eef = self._sample_operator_eef_pose_for_env(
-            name,
-            handler,
-            rand_range,
-            env_index,
-            working_poses,
+        raise TypeError(
+            f"Operator '{name}' randomization must use the nested form with "
+            "explicit `base:` and/or `eef:` sub-entries (i.e. an "
+            "OperatorRandomizationConfig). The direct PoseRandomRange shorthand "
+            "is no longer supported."
         )
-        return {name: sampled_eef, f"{name}.eef": sampled_eef}, [
-            _PendingRandomizationAction(
-                kind="operator_eef",
-                owner=name,
-                label=f"{name}.eef",
-                pose=sampled_eef,
-                radius=float(rand_range.collision_radius),
-                ancestors=self._reference_ancestors(
-                    rand_range.reference,
-                    dependency_map,
-                ),
-            )
-        ]
 
     def _sample_object_pose_for_env(
         self,
@@ -1447,6 +1472,57 @@ class MujocoTaskBackend(SceneBackend):
         )
         return self._sample_random_pose_single(base_pose, rand_range, 0)
 
+    def _operator_default_eef_following_base(
+        self,
+        name: str,
+        handler: MujocoOperatorHandler,
+        env_index: int,
+        sampled_poses: Optional[Dict[str, PoseState]] = None,
+    ) -> tuple[PoseState, PoseState]:
+        """Return the operator's default EEF pose **rigidly tracking the
+        operator's current base**, plus the resolved current base pose.
+
+        ``_record_default_poses`` snapshots the EEF in **world** frame at
+        backend init. If the operator's base is later randomized (by this
+        sampler or by external tooling), naïvely reusing that world-frame
+        default leaves the EEF target sitting at its old absolute position,
+        and the IK chain has to bridge a base-induced offset that grows
+        with the base randomization range — quickly becoming unreachable
+        and surfacing as ``ik_unreachable`` failures even when the EEF
+        offset itself is small.
+
+        Re-anchoring to the current base preserves the original eef-in-base
+        relative pose, so randomizing the base does not implicitly enlarge
+        the EEF reach budget. Sampling logic on top of this helper then
+        operates on a default that is already sensible for the current
+        base placement.
+
+        ``sampled_poses`` (if given) is consulted for an in-flight base
+        sample so eef sampling sees the base that was just decided in the
+        same iteration; otherwise the helper falls back to the handler's
+        live base pose.
+        """
+        default_eef_world = self._default_operator_eef_poses.get(
+            name,
+            handler.get_end_effector_pose(),
+        ).select(env_index)
+        default_base_world = self._default_operator_base_poses.get(
+            name,
+            handler.get_base_pose(),
+        ).select(env_index)
+        current_base_world: Optional[PoseState] = None
+        if sampled_poses is not None:
+            current_base_world = sampled_poses.get(name)
+        if current_base_world is None:
+            current_base_world = handler.get_base_pose().select(env_index)
+        eef_in_default_base = compose_pose(
+            inverse_pose(default_base_world), default_eef_world
+        )
+        return (
+            compose_pose(current_base_world, eef_in_default_base),
+            current_base_world,
+        )
+
     def _sample_operator_eef_pose_for_env(
         self,
         name: str,
@@ -1455,21 +1531,35 @@ class MujocoTaskBackend(SceneBackend):
         env_index: int,
         sampled_poses: Dict[str, PoseState],
     ) -> PoseState:
-        default_eef_world = self._default_operator_eef_poses.get(
-            name,
-            handler.get_end_effector_pose(),
-        ).select(env_index)
+        # ``RandomizationReference`` enums (relative / absolute_world /
+        # absolute_base) leave the default untouched in the resolver, so we
+        # re-anchor here to make the EEF default rigidly track the operator's
+        # current base. Entity-name references ("arm.base", "vase", ...) ARE
+        # handled by the resolver, which carries the referenced entity's
+        # sample-vs-default delta on top of ``default_pose``; if we also
+        # re-anchored here, an "<own_op>.base" reference would double-count
+        # the base delta.
+        if isinstance(rand_range.reference, RandomizationReference):
+            default_for_resolver, base_world = (
+                self._operator_default_eef_following_base(
+                    name, handler, env_index, sampled_poses
+                )
+            )
+        else:
+            default_for_resolver = self._default_operator_eef_poses.get(
+                name, handler.get_end_effector_pose()
+            ).select(env_index)
+            base_world = sampled_poses.get(name)
+            if base_world is None:
+                base_world = handler.get_base_pose().select(env_index)
         base_pose_for_sampler = self._resolve_reference_base_pose_for_env(
             rand_range.reference,
             sampled_poses,
-            default_eef_world,
+            default_for_resolver,
             env_index,
         )
         if rand_range.reference != RandomizationReference.ABSOLUTE_BASE:
             return self._sample_random_pose_single(base_pose_for_sampler, rand_range, 0)
-        base_world = sampled_poses.get(name)
-        if base_world is None:
-            base_world = handler.get_base_pose().select(env_index)
         default_in_base = compose_pose(inverse_pose(base_world), base_pose_for_sampler)
         sampled_in_base = self._sample_random_pose_single(
             default_in_base, rand_range, 0
@@ -1533,7 +1623,7 @@ class MujocoTaskBackend(SceneBackend):
                 return handler.get_end_effector_pose()
             if rand_range.base is not None:
                 return handler.get_base_pose()
-        return handler.get_end_effector_pose()
+        return handler.get_base_pose()
 
     def _current_pose_for_action(self, kind: str, owner: str) -> PoseState:
         if kind == "object":
@@ -1922,14 +2012,8 @@ def build_mujoco_backend(
     env_op_bindings = getattr(env.envs[0], "_operators", {}) if env.envs else {}
     for operator in operator_configs:
         op_extra = operator.model_extra or {}
-        ik_extra = (
-            op_extra.get("ik", {}) if isinstance(op_extra.get("ik"), dict) else {}
-        )
-        control_extra = (
-            op_extra.get("control", {})
-            if isinstance(op_extra.get("control"), dict)
-            else {}
-        )
+        ik_extra = op_extra.get("ik") or {}
+        control_extra = op_extra.get("control") or {}
         control_cfg = MujocoControlConfig.model_validate(control_extra)
         # Inherit per-operator body/site/actuator names from the env's
         # OperatorBinding. This keeps the handler in sync with the env
@@ -1964,8 +2048,10 @@ def build_mujoco_backend(
             if ctrl_span > 0:
                 control_extra = dict(control_extra)
                 tol_block = control_extra.setdefault("tolerance", {})
-                if isinstance(tol_block, dict) and "eef" not in tol_block:
+                if isinstance(tol_block, Mapping) and "eef" not in tol_block:
+                    tol_block = dict(tol_block)
                     tol_block["eef"] = min(0.03, max(1e-4, ctrl_span * 0.2))
+                    control_extra["tolerance"] = tol_block
                     control_cfg = MujocoControlConfig.model_validate(control_extra)
         operator_handlers[operator.name] = MujocoOperatorHandler(
             operator_name=operator.name,
@@ -2021,19 +2107,20 @@ def build_mujoco_backend(
                 base_ps.broadcast_to(env.batch_size).orientation,
             )
 
-        if operator.initial_state.arm is not None:
-            arm_config = operator.initial_state.arm
+        if operator.initial_state.eef_pose is not None:
+            eef_pose_config = operator.initial_state.eef_pose
             pose = _resolve_arm_pose(
-                arm_config, handler.get_end_effector_pose().select(0)
+                eef_pose_config, handler.get_end_effector_pose().select(0)
             )
             if (
-                isinstance(arm_config, ArmPoseConfig)
-                and arm_config.reference == PoseReference.BASE
+                isinstance(eef_pose_config, ArmPoseConfig)
+                and eef_pose_config.reference == PoseReference.BASE
             ):
+                pose_b = pose.broadcast_to(env.batch_size)
                 pos_w, quat_w = handler.env.base_to_world(
                     operator.name,
-                    np.asarray(pose.position, dtype=np.float32),
-                    np.asarray(pose.orientation, dtype=np.float32),
+                    np.asarray(pose_b.position, dtype=np.float32),
+                    np.asarray(pose_b.orientation, dtype=np.float32),
                 )
                 pose = PoseState(position=pos_w, orientation=quat_w)
             handler.set_home_end_effector_pose(pose)

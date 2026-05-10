@@ -11,8 +11,6 @@ from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional, Protocol, runtime_checkable
 
 import numpy as np
-from hydra.utils import instantiate
-from omegaconf import DictConfig, OmegaConf
 
 from .framework import (
     OPERATION_CONDITIONS,
@@ -620,6 +618,8 @@ class TaskRunner:
         )
 
     def from_yaml(self, path: str | Path) -> "TaskRunner":
+        from .config_loader import load_task_file
+
         return self.from_config(load_task_file(path))
 
     def from_config(self, config: TaskFileConfig) -> "TaskRunner":
@@ -721,14 +721,12 @@ class TaskRunner:
         active = state.active
         action = active.actions[active.action_index]
         mask = self._mask_for_env(env_index)
-        result = self._run_action(
+        result = TaskRunner._run_stage_action(
             env_index=env_index,
-            operator=active.operator,
+            plan=active.plan,
             action=action,
-            target=active.target,
             backend=context.backend,
             env_mask=mask,
-            reference_site=active.plan.stage.site,
         )
         signal = result.signals[env_index]
         details = {
@@ -940,10 +938,7 @@ class TaskRunner:
             held_object_name = self._find_grasped_object(
                 context.backend, plan.operator_name, env_index
             )
-        actions = deepcopy(
-            self.builder.build_actions(plan.stage, plan.last_orientation_before)[0]
-        )
-        self._apply_waypoint_randomization(actions, context)
+        actions = TaskRunner._build_stage_actions(plan, self.builder, context)
         return ActiveStageState(
             plan=plan,
             operator=operator,
@@ -1141,6 +1136,51 @@ class TaskRunner:
             orientation=np.asarray(last_pose.orientation, dtype=np.float64).reshape(
                 1, 4
             ),
+        )
+
+    @staticmethod
+    def _build_stage_actions(
+        plan: StageExecutionPlan,
+        builder: "TaskFlowBuilder",
+        context: ExecutionContext,
+    ) -> List[PrimitiveAction]:
+        """Build the primitive-action list for a stage.
+
+        Single source of truth shared by ``TaskRunner._start_stage`` and
+        ``ConfigDrivenDemoPolicy._get_stage_actions`` so the two execution
+        paths cannot drift on what gets handed to the controller (deepcopy +
+        per-waypoint randomization).
+        """
+        actions = deepcopy(
+            builder.build_actions(plan.stage, plan.last_orientation_before)[0]
+        )
+        TaskRunner._apply_waypoint_randomization(actions, context)
+        return actions
+
+    @staticmethod
+    def _run_stage_action(
+        env_index: int,
+        plan: StageExecutionPlan,
+        action: PrimitiveAction,
+        backend: SceneBackend,
+        env_mask: np.ndarray,
+    ) -> ControlResult:
+        """Run one primitive action with operator/target/site resolved from the plan.
+
+        Single source of truth for invoking ``_run_action``. Used by
+        ``TaskRunner._update_env`` and ``ConfigDrivenDemoPolicy.action_applier``
+        so callers cannot forget to forward fields like ``reference_site``.
+        """
+        operator = backend.get_operator_handler(plan.operator_name)
+        target = backend.get_object_handler(plan.stage.object)
+        return TaskRunner._run_action(
+            env_index=env_index,
+            operator=operator,
+            action=action,
+            target=target,
+            backend=backend,
+            env_mask=env_mask,
+            reference_site=plan.stage.site,
         )
 
     @staticmethod
@@ -1572,8 +1612,14 @@ def _check_stage_condition(
             backend.is_operator_contacting(operator_name, object_name)[env_index]
         )
     elif constraint == OperationConstraint.DISPLACED:
+        threshold = getattr(plan.stage.param, "displacement_threshold", None)
+        kwargs = {"threshold": float(threshold)} if threshold is not None else {}
         satisfied = (
-            bool(backend.is_object_displaced(object_name, initial_pose)[env_index])
+            bool(
+                backend.is_object_displaced(object_name, initial_pose, **kwargs)[
+                    env_index
+                ]
+            )
             if initial_pose is not None and object_name
             else True
         )
@@ -1870,63 +1916,3 @@ def _resolve_policy_completion_pose(
         action=completion_action,
         reference_site=reference_site,
     )
-
-
-def load_yaml(path: str | Path) -> Dict[str, Any]:
-    config = OmegaConf.load(Path(path))
-    data = OmegaConf.to_container(config, resolve=True)
-    if not isinstance(data, dict):
-        raise TypeError(f"YAML root must be a mapping: {path}")
-    return data
-
-
-def load_config(path: str | Path) -> AutoAtomConfig:
-    return load_task_file(path).task
-
-
-def load_task_file(path: str | Path) -> TaskFileConfig:
-    config_path = Path(path)
-    config = OmegaConf.load(config_path)
-    if not isinstance(config, DictConfig):
-        raise TypeError(f"YAML root must be a mapping: {config_path}")
-
-    instantiate(config)
-    raw = OmegaConf.to_container(config, resolve=True)
-    if not isinstance(raw, dict):
-        raise TypeError(f"YAML root must be a mapping: {config_path}")
-    return TaskFileConfig.model_validate(raw)
-
-
-def load_task_file_hydra(
-    config_name: str,
-    config_dir: str | Path | None = None,
-    overrides: list[str] | None = None,
-) -> TaskFileConfig:
-    """Load a task file using Hydra compose API (supports ``defaults`` merging).
-
-    Unlike :func:`load_task_file` which only reads a single YAML file,
-    this function uses Hydra's compose API so that ``defaults`` lists are
-    properly resolved and merged.
-
-    Parameters
-    ----------
-    config_name:
-        Name of the config (without ``.yaml`` suffix), e.g. ``"pick_and_place"``.
-    config_dir:
-        Absolute or relative path to the config directory.
-        Defaults to ``<cwd>/aao_configs``.
-    overrides:
-        Optional Hydra override strings, e.g. ``["task.seed=123"]``.
-    """
-    from hydra import compose, initialize_config_dir
-    from hydra.utils import instantiate as hydra_instantiate
-
-    resolved_dir = str(Path(config_dir or (Path.cwd() / "aao_configs")).resolve())
-    with initialize_config_dir(config_dir=resolved_dir, version_base=None):
-        cfg = compose(config_name=config_name, overrides=overrides or [])
-
-    hydra_instantiate(cfg)
-    raw = OmegaConf.to_container(cfg, resolve=True)
-    if not isinstance(raw, dict):
-        raise TypeError("Config root must be a mapping.")
-    return TaskFileConfig.model_validate(raw)

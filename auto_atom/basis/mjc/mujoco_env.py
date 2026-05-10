@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
@@ -55,6 +56,15 @@ def _create_header(time_sec: float, frame_id: str = "") -> dict[str, Any]:
         "stamp": {"sec": int(time_sec), "nanosec": int((time_sec % 1) * 1e9)},
         "frame_id": frame_id,
     }
+
+
+# Margin (rad) below which an IK-solved joint angle is considered "near"
+# its hard limit and a warning is emitted. Roughly 2.9°.
+_JOINT_LIMIT_WARN_MARGIN_RAD: float = 0.05
+# Hysteresis margin (rad) — once a joint has been warned, the warned flag is
+# only cleared after the joint moves at least this far back from the limit.
+# Prevents flapping warnings when the IK solution sits right at the boundary.
+_JOINT_LIMIT_WARN_CLEAR_MARGIN_RAD: float = 0.10
 
 
 _ENCODINGS: dict[tuple[type, int], str] = {
@@ -152,6 +162,22 @@ class _OperatorState:
     planned_target_pos_in_base: Optional[np.ndarray] = None
     planned_target_quat_in_base: Optional[np.ndarray] = None
 
+    # Cached arm-joint metadata used to warn when an IK solution lands too
+    # close to a hard joint limit. Populated in ``register_operator`` for
+    # joint-mode operators; otherwise left empty.
+    arm_joint_names: list[str] = field(default_factory=list)
+    arm_joint_lower: Optional[np.ndarray] = None  # float64, shape (n,)
+    arm_joint_upper: Optional[np.ndarray] = None  # float64, shape (n,)
+    arm_joint_limited: Optional[np.ndarray] = None  # bool, shape (n,)
+    # Per-joint warned side: -1 = warned for lower, +1 = upper, 0 = not warned.
+    arm_joint_limit_warned: Optional[np.ndarray] = None  # int8, shape (n,)
+
+    # Streak of consecutive IK failures since the last success. Used by
+    # ``_solve_ik`` to log on the first failure and again at exponentially
+    # spaced milestones, so a stuck arm gets reported without spamming
+    # per_step_ik loops where the same target may keep failing every frame.
+    ik_failure_streak: int = 0
+
 
 class KeyCreator:
     """Build fully-qualified observation keys in a single call.
@@ -212,7 +238,31 @@ class UnifiedMujocoEnv(MujocoBasis):
         super().__init__(config, **kwargs)
         self._operator_states: dict[str, _OperatorState] = {}
         self._key_creator = KeyCreator(self.config.structured)
+        # Off by default — IK runs in the hot path of every control step in
+        # ``per_step_ik`` mode and the proximity check, while cheap, is still
+        # noise unless the caller opted in (e.g. randomization tooling that
+        # wants to surface borderline poses). Toggle via
+        # ``set_joint_limit_warning_enabled``.
+        self._joint_limit_warning_enabled: bool = False
         self._auto_register_operators()
+
+    def set_joint_limit_warning_enabled(self, enabled: bool) -> None:
+        """Enable/disable the IK joint-limit-proximity warning (default off).
+
+        When enabled, every successful IK solve is checked against each
+        joint's hard limits and a one-shot warning per (joint, side) is
+        logged when the solution lands within
+        ``_JOINT_LIMIT_WARN_MARGIN_RAD`` of a limit.
+        """
+        self._joint_limit_warning_enabled = bool(enabled)
+
+    def get_operator_ik_failure_streak(self, op_name: str) -> int:
+        """Return the current consecutive IK-failure count for ``op_name``.
+
+        Used by upstream handlers to escalate persistent IK failures into
+        task-level failure rather than waiting for the stage timeout.
+        """
+        return int(self._get_op(op_name).ik_failure_streak)
 
     # ==================================================================
     # Operator registration
@@ -334,6 +384,34 @@ class UnifiedMujocoEnv(MujocoBasis):
                 f"joint_interp_speed must be > 0 for operator '{op_name}', got {joint_interp_speed}."
             )
 
+        # Snapshot arm-joint metadata for the limit-proximity warning. Done
+        # here so the env owns the model lookup and the warning code stays
+        # agnostic to the IK solver implementation.
+        arm_joint_names: list[str] = []
+        arm_joint_lower: Optional[np.ndarray] = None
+        arm_joint_upper: Optional[np.ndarray] = None
+        arm_joint_limited: Optional[np.ndarray] = None
+        arm_joint_limit_warned: Optional[np.ndarray] = None
+        if joint_mode:
+            arm_aidx_for_meta = self._op_arm_aidx[op_name]
+            n_joints = int(len(arm_aidx_for_meta))
+            lower = np.zeros(n_joints, dtype=np.float64)
+            upper = np.zeros(n_joints, dtype=np.float64)
+            limited = np.zeros(n_joints, dtype=bool)
+            for i, aidx in enumerate(arm_aidx_for_meta):
+                jid = int(self.model.actuator_trnid[int(aidx), 0])
+                arm_joint_names.append(
+                    mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, jid)
+                    or f"<joint_{jid}>"
+                )
+                lower[i] = float(self.model.jnt_range[jid, 0])
+                upper[i] = float(self.model.jnt_range[jid, 1])
+                limited[i] = bool(self.model.jnt_limited[jid])
+            arm_joint_lower = lower
+            arm_joint_upper = upper
+            arm_joint_limited = limited
+            arm_joint_limit_warned = np.zeros(n_joints, dtype=np.int8)
+
         state = _OperatorState(
             joint_mode=joint_mode,
             ik_solver=ik_solver,
@@ -364,6 +442,11 @@ class UnifiedMujocoEnv(MujocoBasis):
             planned_joint_steps_total=1,
             planned_target_pos_in_base=tool_pos.copy(),
             planned_target_quat_in_base=tool_quat.copy(),
+            arm_joint_names=arm_joint_names,
+            arm_joint_lower=arm_joint_lower,
+            arm_joint_upper=arm_joint_upper,
+            arm_joint_limited=arm_joint_limited,
+            arm_joint_limit_warned=arm_joint_limit_warned,
         )
         self._operator_states[op_name] = state
 
@@ -557,14 +640,163 @@ class UnifiedMujocoEnv(MujocoBasis):
             return seed + delta * (max_delta / max_abs)
         return solved
 
+    def _solve_ik(
+        self,
+        op_name: str,
+        s: "_OperatorState",
+        target: PoseState,
+        seed: np.ndarray,
+        context: str,
+    ) -> Optional[np.ndarray]:
+        """Single entry point for IK calls inside this env.
+
+        Wraps ``s.ik_solver.solve(target, seed)`` so two cross-cutting
+        concerns live in exactly one place:
+
+        * **Failure logging** — IK failures are always logged (silently
+          dropping them is what makes a stuck arm impossible to diagnose
+          from the terminal). Throttled by streak count so a per-step IK
+          loop hitting an unreachable target reports at 1, then on every
+          10th failure inside each decade (10, 20, …, 100, 200, …, 1000,
+          2000, …) — dense enough early on for fast feedback, sparse later
+          on so a long-running stuck loop doesn't flood the log.
+        * **Joint-limit proximity warning** — opt-in via
+          ``set_joint_limit_warning_enabled``; runs only on successful solves.
+
+        ``context`` identifies which call site (e.g. ``per_step_ik``,
+        ``teleport_operator``) triggered the event so the log is actionable.
+        """
+        sol = s.ik_solver.solve(target, seed)
+        if sol is None:
+            s.ik_failure_streak += 1
+            streak = s.ik_failure_streak
+            if streak == 1 or (
+                streak >= 10 and streak % (10 ** int(np.log10(streak))) == 0
+            ):
+                logging.getLogger(__name__).warning(
+                    "[%s] IK failed for operator '%s' (consecutive failures=%d). "
+                    "Target in base frame: pos=%s, quat=%s. Seed qpos=%s. "
+                    "The pose is likely outside the arm's reachable workspace; "
+                    "the operator will hold its current ctrl until a solvable "
+                    "target arrives.",
+                    context,
+                    op_name,
+                    streak,
+                    np.array2string(np.asarray(target.position[0]), precision=4),
+                    np.array2string(np.asarray(target.orientation[0]), precision=4),
+                    np.array2string(np.asarray(seed), precision=4),
+                )
+            return None
+        if s.ik_failure_streak > 0:
+            logging.getLogger(__name__).info(
+                "[%s] IK recovered for operator '%s' after %d consecutive failures.",
+                context,
+                op_name,
+                s.ik_failure_streak,
+            )
+            s.ik_failure_streak = 0
+        if self._joint_limit_warning_enabled:
+            self._warn_if_near_joint_limit(op_name, s, sol, context)
+        return sol
+
+    def _warn_if_near_joint_limit(
+        self,
+        op_name: str,
+        s: "_OperatorState",
+        joint_targets: np.ndarray,
+        context: str,
+    ) -> None:
+        """Emit a warning when an IK-solved joint angle nears a hard limit.
+
+        Per-joint, per-side flag prevents spamming: a side fires once on
+        entry into the danger band and re-arms only after the joint moves
+        back past ``_JOINT_LIMIT_WARN_CLEAR_MARGIN_RAD``.
+        """
+        if (
+            s.arm_joint_limited is None
+            or s.arm_joint_lower is None
+            or s.arm_joint_upper is None
+            or s.arm_joint_limit_warned is None
+        ):
+            return
+        targets = np.asarray(joint_targets, dtype=np.float64).reshape(-1)
+        n = min(len(targets), len(s.arm_joint_lower))
+        if n == 0:
+            return
+        logger = logging.getLogger(__name__)
+        for i in range(n):
+            if not bool(s.arm_joint_limited[i]):
+                continue
+            lower = float(s.arm_joint_lower[i])
+            upper = float(s.arm_joint_upper[i])
+            angle = float(targets[i])
+            dist_lower = angle - lower
+            dist_upper = upper - angle
+            warned = int(s.arm_joint_limit_warned[i])
+            jname = s.arm_joint_names[i] if i < len(s.arm_joint_names) else f"joint_{i}"
+            if dist_lower < _JOINT_LIMIT_WARN_MARGIN_RAD:
+                if warned != -1:
+                    logger.warning(
+                        "[%s] IK solution for operator '%s' joint '%s' is %.4f rad "
+                        "(%.2f deg) — only %.4f rad (%.2f deg) above its lower limit %.4f. "
+                        "Robot may be near a singularity or about to clip the limit.",
+                        context,
+                        op_name,
+                        jname,
+                        angle,
+                        np.degrees(angle),
+                        dist_lower,
+                        np.degrees(dist_lower),
+                        lower,
+                    )
+                    s.arm_joint_limit_warned[i] = -1
+            elif dist_upper < _JOINT_LIMIT_WARN_MARGIN_RAD:
+                if warned != 1:
+                    logger.warning(
+                        "[%s] IK solution for operator '%s' joint '%s' is %.4f rad "
+                        "(%.2f deg) — only %.4f rad (%.2f deg) below its upper limit %.4f. "
+                        "Robot may be near a singularity or about to clip the limit.",
+                        context,
+                        op_name,
+                        jname,
+                        angle,
+                        np.degrees(angle),
+                        dist_upper,
+                        np.degrees(dist_upper),
+                        upper,
+                    )
+                    s.arm_joint_limit_warned[i] = 1
+            else:
+                if (
+                    warned != 0
+                    and dist_lower > _JOINT_LIMIT_WARN_CLEAR_MARGIN_RAD
+                    and dist_upper > _JOINT_LIMIT_WARN_CLEAR_MARGIN_RAD
+                ):
+                    s.arm_joint_limit_warned[i] = 0
+
     def step_operator_toward_target(
         self, op_name: str, target_pos_b: np.ndarray, target_quat_b: np.ndarray
     ) -> None:
         """Advance one control step toward the target EEF pose (base frame).
 
-        Joint mode: solve IK every step from current qpos. The solver's
-        ``max_joint_delta`` clamp limits per-step joint displacement, so
-        the arm smoothly converges without branch jumps.
+        Joint mode dispatches on ``joint_control_mode``:
+
+        ``per_step_ik``
+            Solve IK every step from the current qpos. ``max_joint_delta``
+            clamps per-step joint displacement to suppress branch jumps.
+            Designed for callers that feed a sliding cartesian sub-target.
+
+        ``solve_once_interpolate``
+            Treat ``target_pos_b/target_quat_b`` as the **final** waypoint
+            pose. IK is solved once at the moment the target changes; the
+            resulting joint solution is reached over
+            ``ceil(max|Δq| / joint_interp_speed)`` control steps via linear
+            joint-space interpolation. Subsequent calls with the same target
+            simply advance the precomputed plan, so no per-step IK and no
+            ``max_joint_delta`` clamp run inside a waypoint. Once progress
+            saturates, the final qpos is held until the caller supplies a
+            new target.
+
         Mocap mode: convert to world base-body pose → write mocap → update.
         """
         s = self._get_op(op_name)
@@ -584,13 +816,15 @@ class UnifiedMujocoEnv(MujocoBasis):
             if s.joint_control_mode == "solve_once_interpolate":
                 target_changed = (
                     s.planned_target_pos_in_base is None
+                    or s.planned_target_quat_in_base is None
+                    or s.planned_joint_target_qpos is None
+                    or s.planned_joint_start_qpos is None
                     or not np.allclose(
                         new_pos,
                         s.planned_target_pos_in_base,
                         atol=1e-6,
                         rtol=0.0,
                     )
-                    or s.planned_target_quat_in_base is None
                     or abs(
                         float(
                             np.dot(
@@ -601,21 +835,25 @@ class UnifiedMujocoEnv(MujocoBasis):
                     )
                     < (1.0 - 1e-6)
                 )
-                need_plan = (
-                    target_changed
-                    or s.planned_joint_target_qpos is None
-                    or s.planned_joint_start_qpos is None
-                    or s.planned_joint_progress >= s.planned_joint_steps_total
-                )
 
-                if need_plan:
-                    joint_targets = s.ik_solver.solve(eef_in_base, current_arm_qpos)
+                if target_changed:
+                    # Plan once for the new final target. The interpolation
+                    # below bounds per-step joint motion via
+                    # ``joint_interp_speed``; the per-step branch-jump clamp
+                    # would conflict with that bound and is intentionally
+                    # skipped here.
+                    joint_targets = self._solve_ik(
+                        op_name,
+                        s,
+                        eef_in_base,
+                        current_arm_qpos,
+                        "solve_once_interpolate",
+                    )
                     if joint_targets is None:
+                        # Solver gave up on this target; hold and wait for
+                        # the caller to supply a different pose.
                         self.update()
                         return
-                    joint_targets = self._clamp_joint_delta(
-                        joint_targets, current_arm_qpos, s.max_joint_delta
-                    )
                     s.planned_joint_start_qpos = current_arm_qpos.copy()
                     s.planned_joint_target_qpos = np.asarray(
                         joint_targets, dtype=np.float64
@@ -634,6 +872,9 @@ class UnifiedMujocoEnv(MujocoBasis):
                     s.planned_target_pos_in_base = new_pos.copy()
                     s.planned_target_quat_in_base = new_quat.copy()
 
+                # Advance the precomputed plan by exactly one control step.
+                # ``progress`` saturates at ``steps_total``, so ``alpha``
+                # caps at 1.0 and the final solved qpos is held thereafter.
                 start_qpos = np.asarray(s.planned_joint_start_qpos, dtype=np.float64)
                 final_qpos = np.asarray(s.planned_joint_target_qpos, dtype=np.float64)
                 s.planned_joint_progress = min(
@@ -644,7 +885,9 @@ class UnifiedMujocoEnv(MujocoBasis):
                 )
                 joint_targets = (1.0 - alpha) * start_qpos + alpha * final_qpos
             else:
-                joint_targets = s.ik_solver.solve(eef_in_base, current_arm_qpos)
+                joint_targets = self._solve_ik(
+                    op_name, s, eef_in_base, current_arm_qpos, "per_step_ik"
+                )
                 if joint_targets is None:
                     self.update()
                     return
@@ -687,7 +930,9 @@ class UnifiedMujocoEnv(MujocoBasis):
             arm_qidx = self._op_arm_qidx[op_name]
             arm_vidx = self._op_arm_vidx[op_name]
             current_arm_qpos = self.data.qpos[arm_qidx].copy()
-            joint_targets = s.ik_solver.solve(eef_in_base, current_arm_qpos)
+            joint_targets = self._solve_ik(
+                op_name, s, eef_in_base, current_arm_qpos, "teleport_operator"
+            )
             if joint_targets is not None:
                 self.data.qpos[arm_qidx] = joint_targets
                 s.planned_joint_start_qpos = np.asarray(
@@ -788,7 +1033,13 @@ class UnifiedMujocoEnv(MujocoBasis):
             )
             arm_qidx = self._op_arm_qidx[op_name]
             current_arm_qpos = self.data.qpos[arm_qidx].copy()
-            joint_targets = s.ik_solver.solve(eef_in_base, current_arm_qpos)
+            joint_targets = self._solve_ik(
+                op_name,
+                s,
+                eef_in_base,
+                current_arm_qpos,
+                "set_operator_home_eef_pose",
+            )
             if joint_targets is not None:
                 s.home_arm_qpos = joint_targets.copy()
                 s.planned_joint_start_qpos = joint_targets.copy()
@@ -796,13 +1047,9 @@ class UnifiedMujocoEnv(MujocoBasis):
                 s.planned_joint_progress = 1
                 s.planned_joint_steps_total = 1
             else:
-                raise RuntimeError(
-                    f"IK failed for operator '{op_name}' home EEF pose "
-                    f"(base-frame target: pos={np.array2string(np.asarray(eef_in_base.position[0]), precision=4)}, "
-                    f"quat={np.array2string(np.asarray(eef_in_base.orientation[0]), precision=4)}). "
-                    f"The target may be outside the arm's reachable workspace. "
-                    f"Check the EEF randomization range in your config."
-                )
+                # ``_solve_ik`` already logged the failure with full target /
+                # seed context. Keep the previous home pose and bail out.
+                return
         else:
             base_body_pos, base_body_quat_xyzw = self._eef_in_base_to_base_body_world(
                 s, *self._world_to_base(pos_w, quat_w, s.base_pos, s.base_quat)
@@ -1000,7 +1247,13 @@ class UnifiedMujocoEnv(MujocoBasis):
             arm_qidx = self._op_arm_qidx[op_name]
             arm_vidx = self._op_arm_vidx[op_name]
             current_arm_qpos = self.data.qpos[arm_qidx].copy()
-            joint_targets = s.ik_solver.solve(eef_in_base, current_arm_qpos)
+            joint_targets = self._solve_ik(
+                op_name,
+                s,
+                eef_in_base,
+                current_arm_qpos,
+                "teleport_operator_in_base",
+            )
             if joint_targets is not None:
                 self.data.qpos[arm_qidx] = joint_targets
                 s.planned_joint_start_qpos = np.asarray(
@@ -1480,6 +1733,18 @@ class BatchedUnifiedMujocoEnv:
     def register_operator(self, *args, **kwargs) -> None:
         for env in self.envs:
             env.register_operator(*args, **kwargs)
+
+    def set_joint_limit_warning_enabled(self, enabled: bool) -> None:
+        """Propagate the IK joint-limit-proximity warning toggle to every replica."""
+        for env in self.envs:
+            env.set_joint_limit_warning_enabled(enabled)
+
+    def get_operator_ik_failure_streak(self, op_name: str) -> np.ndarray:
+        """Per-replica consecutive IK-failure counts for ``op_name``."""
+        return np.asarray(
+            [env.get_operator_ik_failure_streak(op_name) for env in self.envs],
+            dtype=np.int64,
+        )
 
     def world_to_base(
         self, op_name: str, pos_w: np.ndarray, quat_w: np.ndarray

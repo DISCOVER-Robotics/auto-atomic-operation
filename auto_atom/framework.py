@@ -419,6 +419,11 @@ class StageControlConfig(BaseModel):
     to the operator-level placed tolerance. If neither level configures a
     non-null position or orientation tolerance, placement degrades to
     released-only."""
+    displacement_threshold: Optional[float] = None
+    """Per-stage threshold (meters) for the DISPLACED post-condition. When set,
+    overrides the backend default of 0.01 m used by ``is_object_displaced``.
+    Only meaningful for operations whose success constraint is DISPLACED
+    (e.g., ``push``)."""
 
 
 class StageConfig(BaseModel):
@@ -511,11 +516,9 @@ class AutoAtomConfig(BaseModel):
 
     Objects accept a direct ``PoseRandomRange``.
 
-    Operators accept either:
-    - a direct ``PoseRandomRange`` (backward-compatible shorthand for
-      base/virtual-base randomization), or
-    - ``OperatorRandomizationConfig`` with independent ``base`` and ``eef``
-      randomization ranges.
+    Operators must use ``OperatorRandomizationConfig`` with explicit
+    ``base`` and/or ``eef`` sub-entries. The direct ``PoseRandomRange``
+    shorthand is rejected at sample time for operator entries.
     """
     camera_initial_pose: Dict[str, InitialPoseConfig] = Field(default_factory=dict)
     """Per-camera initial pose overrides applied at each reset, before
@@ -608,8 +611,8 @@ class ArmPoseConfig(BaseModel):
 class OperatorInitialState(BaseModel):
     """Optional override for an operator's home control state applied at reset."""
 
-    arm: Optional[Union[List[float], ArmPoseConfig]] = None
-    """Override values for the arm actuator controls.
+    eef_pose: Optional[Union[List[float], ArmPoseConfig]] = None
+    """Override for the operator's home end-effector pose.
 
     Supports two formats:
     1. Flat list: [x, y, z, yaw, pitch, roll] (backward compatible)
@@ -620,7 +623,7 @@ class OperatorInitialState(BaseModel):
     When omitted the keyframe value is kept."""
 
     eef: Optional[float] = None
-    """Override value for the end-effector/gripper control (0.0 = open, 0.82 = closed).
+    """Override value for the end-effector/gripper control.
     When omitted the keyframe value is kept."""
 
     base_pose: Optional[ArmPoseConfig] = None

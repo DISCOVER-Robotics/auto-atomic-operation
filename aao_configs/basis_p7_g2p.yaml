@@ -18,8 +18,8 @@ env:
     joint5:  1.59943
     joint6: -0.107997
     joint7: -0.00103546
-    # G2P gripper drive joint (0 = open, range 0..0.0115)
-    eef_umi_clawj: 0.0
+    # G2P gripper drive joint (range -0.003..0.01075; lower bound = max open)
+    eef_umi_clawj: -0.003
   operators:
     arm:
       arm_actuators:

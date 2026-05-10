@@ -1,0 +1,195 @@
+<mujoco model="UMI Gripper v3">
+  <compiler angle="radian" meshdir="../../meshes/umi_gripper_v3" />
+  <default>
+    <default class="robot">
+      <joint damping="0.02" frictionloss="0.005" armature="0.0005" />
+      <default class="hinge_joint">
+        <joint type="hinge" limited="false" damping="0.02" frictionloss="0.005" armature="0.0001" />
+      </default>
+      <default class="claw_joint">
+        <joint type="slide" limited="true" axis="0 0 1" range="0 0.0165" damping="0.1" frictionloss="0.02" armature="0.005" />
+        <position ctrllimited="true" ctrlrange="0 0.0165" kp="40000" kv="160" forcerange="-660 660" />
+      </default>
+      <default class="visual">
+        <geom type="mesh" group="2" contype="0" conaffinity="0" />
+      </default>
+      <!-- Body-internal collision geoms keep contype=4 / conaffinity=0 so
+           they neither self-collide nor interfere with scene objects (the
+           original third-party design intent). Only the finger pads need
+           to grip the workpiece. -->
+      <default class="collision">
+        <geom type="mesh" group="0" contype="4" conaffinity="0" condim="3" priority="1" solref="0.001 1" solimp="0.99 0.99 0.001" friction="1.0 0.1 0.005" margin="0" gap="0.0005" />
+      </default>
+      <!-- finger_collision keeps contype=2 (so it can be referenced by
+           explicit excludes if needed) and conaffinity=1 so it interacts
+           with default-affinity scene objects (e.g. the source_block at
+           contype=1). Non-finger gripper parts (contype=4) still don't
+           collide with the fingers because their conaffinity is 0. -->
+      <default class="finger_collision">
+        <geom type="mesh" group="0" contype="2" conaffinity="1" condim="4" priority="2" solref="0.001 1" solimp="0.99 0.99 0.001" friction="1.0 0.1 0.005" margin="0" gap="0.0005" />
+      </default>
+    </default>
+  </default>
+  <asset>
+    <material name="base_gray" rgba="0.752941176471 0.752941176471 0.752941176471 1" />
+    <material name="metal_light" rgba="0.898039215686 0.917647058824 0.929411764706 1" />
+    <material name="pin_bronze" rgba="0.647058823529 0.619607843137 0.588235294118 1" />
+    <material name="link_blue" rgba="0.63137254902 0.686274509804 0.749019607843 1" />
+    <material name="collision_material" rgba="1 0.28 0.1 0.18" />
+    <!-- Tactile sensor sub-model (5×5 force/torque cell grid). Same model
+         airbot_g2p uses for its xf9600 fingertips; reused here for
+         consistency. -->
+    <model name="tactile_sensor" file="../sensors/xf9600_tactile_sensor.xml"/>
+    <mesh name="base_link" file="base_link.STL" />
+    <mesh name="claw" file="claw.STL" />
+    <mesh name="L11" file="L11.STL" />
+    <mesh name="L12" file="L12.STL" />
+    <mesh name="L21" file="L21.STL" />
+    <mesh name="L22" file="L22.STL" />
+    <mesh name="L23" file="L23.STL" />
+    <mesh name="L31" file="L31.STL" />
+    <mesh name="L32" file="L32.STL" />
+    <mesh name="L41" file="L41.STL" />
+    <mesh name="L42" file="L42.STL" />
+    <mesh name="L51" file="L51.STL" />
+    <mesh name="L52" file="L52.STL" />
+    <mesh name="L53" file="L53.STL" />
+    <mesh name="L61" file="L61.STL" />
+    <mesh name="L62" file="L62.STL" />
+  </asset>
+  <worldbody>
+    <body name="base_link" pos="0 0 0" quat="1 0 0 0" childclass="robot">
+      <inertial pos="0.0350821032875479 -1.48524382687598e-05 -0.000230033784513324" mass="0.101391632557358" fullinertia="3.14256026773612e-05 1.94713558465293e-05 2.02288670759876e-05 -1.68934909268776e-08 5.09475277219824e-08 -3.56025389634812e-08" />
+      <geom name="base_link_visual" class="visual" mesh="base_link" material="base_gray" />
+      <geom name="base_link_collision" class="collision" mesh="base_link" material="collision_material" />
+      <body name="claw" pos="0.051 0 -6.849e-05" quat="0.499998163397448 0.499999999996627 0.500001836602552 0.499999999996627">
+        <inertial pos="-2.8385851127055e-07 8.13070667338757e-11 -0.00156128599097642" mass="0.0158760211812033" fullinertia="5.0869931280287e-07 5.17054938050139e-06 4.90682255955071e-06 -7.9151437654382e-14 5.0562732994291e-11 2.41690819296868e-14" />
+        <joint name="claw_joint" class="claw_joint" />
+        <geom name="claw_visual" class="visual" mesh="claw" material="metal_light" />
+        <geom name="claw_collision" class="collision" mesh="claw" material="collision_material" />
+        <body name="L11" pos="-0.035 0 -0.013931" quat="0.220010650490606 0.220013118910904 0.672007609704199 -0.672008417862043">
+          <inertial pos="-0.00411686019662614 -0.00205462167577538 0.000777050363666031" mass="0.00525970079284492" fullinertia="1.04402537015084e-07 2.08330869597079e-07 2.19924730228339e-07 -6.90000713837262e-08 -9.97054761713995e-10 -4.97604942756831e-10" />
+          <joint name="J11" class="hinge_joint" axis="0 0 1" ref="-0.938" />
+          <geom name="L11_visual" class="visual" mesh="L11" material="metal_light" />
+          <geom name="L11_collision" class="collision" mesh="L11" material="collision_material" />
+          <body name="L12" pos="-0.014316 -0.0071448 0" quat="1 0 0 0">
+            <inertial pos="4.87137077637839e-13 -2.29261054585095e-13 -6.27865814895255e-14" mass="0.00254770597835518" fullinertia="3.38413679487892e-08 3.38413679487892e-08 6.38608063472555e-09 9.6473036778184e-25 -1.29301207772468e-21 3.93531176422193e-22" />
+            <joint name="J12" class="hinge_joint" axis="0 0 1" />
+            <geom name="L12_visual" class="visual" mesh="L12" material="pin_bronze" />
+            <geom name="L12_collision" class="collision" mesh="L12" material="collision_material" />
+          </body>
+        </body>
+        <body name="L61" pos="0.035 0 -0.013931" quat="0.672006801555421 0.672007609704199 0.220013118910904 -0.22001558733417">
+          <inertial pos="-0.0041168602005187 0.00205462166444562 0.000777050361853809" mass="0.00525970079163624" fullinertia="1.04696619009917e-07 2.08036787576569e-07 2.19924730220459e-07 6.89968267609897e-08 -9.9705468773241e-10 4.97605072866491e-10" />
+          <joint name="J61" class="hinge_joint" axis="0 0 1" ref="0.938" />
+          <geom name="L61_visual" class="visual" mesh="L61" material="metal_light" />
+          <geom name="L61_collision" class="collision" mesh="L61" material="collision_material" />
+          <body name="L62" pos="-0.014316 0.0071448 0" quat="1 0 0 0">
+            <inertial pos="1.2534405479693e-12 5.89188420274667e-13 6.21985102312043e-14" mass="0.00254770597835518" fullinertia="3.38413679487892e-08 3.38413679487892e-08 6.38608063472555e-09 -7.77528801735932e-25 1.20228883537696e-21 1.36960429923477e-21" />
+            <joint name="J62" class="hinge_joint" axis="0 0 1" />
+            <geom name="L62_visual" class="visual" mesh="L62" material="pin_bronze" />
+            <geom name="L62_collision" class="collision" mesh="L62" material="collision_material" />
+          </body>
+        </body>
+      </body>
+      <body name="L21" pos="0.0565 -0.017 -6.849e-05" quat="-3.67320510334657e-06 0 0 -0.999999999993254">
+        <inertial pos="0.00762332532888542 0.0180030600490627 0.0030326955732624" mass="0.0140600890704588" fullinertia="8.94775178910603e-07 4.8397343865992e-07 7.95427562568086e-07 -2.35897044495238e-07 -1.03538621527213e-09 -1.297233660082e-09" />
+        <joint name="J21" class="hinge_joint" axis="0 0 1" />
+        <geom name="L21_visual" class="visual" mesh="L21" material="metal_light" />
+        <geom name="L21_collision" class="collision" mesh="L21" material="collision_material" />
+        <body name="L22" pos="0.012788 0.027138 0" quat="1 0 0 0">
+          <inertial pos="-0.0133052609440579 0.0115878051584534 0.000358544368814038" mass="0.0095254119442433" fullinertia="5.57775699977504e-07 5.65501681175693e-07 7.7912223470953e-07 3.16682354617946e-07 -1.77576627749782e-09 1.9852790246381e-09" />
+          <joint name="J22" class="hinge_joint" axis="0 0 1" springref="0" stiffness="100" />
+          <geom name="L22_visual" class="visual" mesh="L22" material="metal_light" />
+          <geom name="L22_collision" class="collision" mesh="L22" material="collision_material" />
+          <body name="L23" pos="-0.02456 0.023512 0" quat="1 0 0 0">
+            <inertial pos="-0.0100098117693161 -0.00851050332782811 1.91958771019826e-09" mass="0.00530382203844404" fullinertia="1.04079536644664e-07 2.46691219593914e-07 2.70147264692838e-07 -3.19186264179905e-08 1.43962404702395e-14 1.87860641588947e-14" />
+            <joint name="J23" class="hinge_joint" axis="0 0 1" />
+            <geom name="L23_visual" class="visual" mesh="L23" material="metal_light" />
+            <geom name="right_finger_collision" class="finger_collision" mesh="L23" material="collision_material" />
+            <!-- Tactile sensor body. Quat orients the sensor +z axis along
+                 the closing direction (L23 -y) so the cell grid faces the
+                 grasp surface, mirroring airbot_g2p's right_tactile. -->
+            <body name="right_tactile" pos="-0.022 -0.0113 0" quat="0.4999981633974483 0.49999999999662686 -0.49999999999662686 0.5000018366025516" gravcomp="1">
+              <inertial pos="7.44670002401661E-05 0.00784747372261869 0.00195692056024735" quat="1 0 0 0" mass="0.000814180541801484" diaginertia="1.77999294668352e-08 8.5777623786915e-09 2.12505762180111e-08"/>
+              <attach model="tactile_sensor" prefix="finger1_"/>
+            </body>
+            <body name="right_pad_measure" pos="-0.0218894349456298 -0.0176455221906752 1.34921709684398e-05" />
+          </body>
+        </body>
+      </body>
+      <body name="L31" pos="0.0615 -0.007 -6.849e-05" quat="-3.67320510334657e-06 0 0 -0.999999999993254">
+        <inertial pos="-0.00159741740402453 0.0264724631985424 -7.26753345310895e-05" mass="0.0200205534567901" fullinertia="4.39135505415398e-06 1.1010908903205e-06 4.51901039219809e-06 9.92802471611361e-07 -1.4207753295127e-08 2.99577780317195e-08" />
+        <joint name="J31" class="hinge_joint" axis="0 0 1" />
+        <geom name="L31_visual" class="visual" mesh="L31" material="metal_light" />
+        <geom name="L31_collision" class="collision" mesh="L31" material="collision_material" />
+        <body name="L32" pos="-0.011773 0.05065 0" quat="0.707105482511236 0 0 -0.707108079859474">
+          <inertial pos="-1.64115919659702e-07 7.78744820299077e-07 -3.12250854907487e-15" mass="0.000966906820551252" fullinertia="4.70687618054365e-09 4.70687618054365e-09 8.73697425280164e-09 -1.03222309409647e-26 -1.1146258754152e-22 -1.344364385564e-23" />
+          <joint name="J32" class="hinge_joint" axis="0 0 1" />
+          <geom name="L32_visual" class="visual" mesh="L32" material="pin_bronze" />
+          <geom name="L32_collision" class="collision" mesh="L32" material="collision_material" />
+        </body>
+      </body>
+      <body name="L41" pos="0.0615 0.007 -6.849e-05" quat="-3.67320510334657e-06 0 0 0.999999999993254">
+        <inertial pos="-0.00162115537136832 -0.0265067136820258 0.000111647685968015" mass="0.0201008563924379" fullinertia="4.39393540909323e-06 1.10250254385473e-06 4.52196565799203e-06 -9.94314930880898e-07 1.36738946430291e-08 2.91395639544733e-08" />
+        <joint name="J41" class="hinge_joint" axis="0 0 1" />
+        <geom name="L41_visual" class="visual" mesh="L41" material="metal_light" />
+        <geom name="L41_collision" class="collision" mesh="L41" material="collision_material" />
+        <body name="L42" pos="-0.011772 -0.05065 0" quat="0.707105482511236 0 0 -0.707108079859474">
+          <inertial pos="1.80426191043193e-07 7.7631584696064e-07 5.37382949292072e-14" mass="0.000966906820551252" fullinertia="4.70687618054365e-09 4.70687618054365e-09 8.73697425280164e-09 5.79914661643484e-26 2.21684404164218e-22 -1.14896856951086e-22" />
+          <joint name="J42" class="hinge_joint" axis="0 0 1" />
+          <geom name="L42_visual" class="visual" mesh="L42" material="pin_bronze" />
+          <geom name="L42_collision" class="collision" mesh="L42" material="collision_material" />
+        </body>
+      </body>
+      <body name="L51" pos="0.0565 0.017 -6.849e-05" quat="-3.67320510334657e-06 0 0 0.999999999993254">
+        <inertial pos="0.00706991673956199 -0.0166579701362714 -0.00165507560737397" mass="0.0155104493012857" fullinertia="9.01773690586828e-07 4.91095555525325e-07 8.08533023947289e-07 2.35847686321348e-07 1.03538621540541e-09 -1.2972336597819e-09" />
+        <joint name="J51" class="hinge_joint" axis="0 0 1" />
+        <geom name="L51_visual" class="visual" mesh="L51" material="link_blue" />
+        <geom name="L51_collision" class="collision" mesh="L51" material="collision_material" />
+        <body name="L52" pos="0.012788 -0.027138 0" quat="1 0 0 0">
+          <inertial pos="-0.012078990677311 -0.0105201081793995 -0.000104074753644401" mass="0.0104923187647917" fullinertia="5.62489106258644e-07 5.70202026900735e-07 7.87859209317215e-07 -3.16682434395475e-07 1.77574567616472e-09 1.98529753054398e-09" />
+          <joint name="J52" class="hinge_joint" axis="0 0 1" springref="0" stiffness="100" />
+          <geom name="L52_visual" class="visual" mesh="L52" material="metal_light" />
+          <geom name="L52_collision" class="collision" mesh="L52" material="collision_material" />
+          <body name="L53" pos="-0.02456 -0.023512 0" quat="0.707105482511236 0 0 -0.707108079859474">
+            <inertial pos="-0.00851077926527934 -0.0100090996075058 -1.91954159819897e-09" mass="0.00530382203850477" fullinertia="2.46687639916702e-07 1.04083116327319e-07 2.70147264697453e-07 -3.19266221843596e-08 -1.87869189577042e-14 -1.43953755080285e-14" />
+            <joint name="J53" class="hinge_joint" axis="0 0 1" />
+            <geom name="L53_visual" class="visual" mesh="L53" material="metal_light" />
+            <geom name="left_finger_collision" class="finger_collision" mesh="L53" material="collision_material" />
+            <!-- Tactile sensor body. Quat orients the sensor +z axis along
+                 the closing direction (L53 -x) so the cell grid faces the
+                 grasp surface. -->
+            <body name="left_tactile" pos="-0.0113 -0.022 0" quat="0.7071067811865476 0 -0.7071067811865476 0" gravcomp="1">
+              <inertial pos="7.44670002401705E-05 0.00784747372261869 0.00195692056024735" quat="1 0 0 0" mass="0.000814180541801481" diaginertia="1.77999294668351e-08 8.57776237869146e-09 2.1250576218011e-08"/>
+              <attach model="tactile_sensor" prefix="finger0_"/>
+            </body>
+            <body name="left_pad_measure" pos="-0.0176464642718538 -0.0218882105618664 -1.34921709532115e-05" />
+          </body>
+        </body>
+      </body>
+      <!-- Wrist camera, mirroring the airbot_g2p ``wrist_cam`` setup but
+           re-oriented for umi_gripper_v3's geometry: the gripper extends
+           along base_link +x (fingers at x ≈ 0.09–0.13 m), so the camera
+           sits slightly behind / above the body and points along +x with
+           image-up = +z (gripper closing axis). The body quat
+           ``0.5 0.5 -0.5 -0.5`` rotates the camera frame so its -z (look
+           direction) is aligned with gripper +x and its +y (image up) is
+           aligned with gripper +z. The inner camera euler matches the
+           airbot_g2p ~3° downward pitch tweak. -->
+      <body name="wrist_cam" pos="0.04 0 0.04" quat="0.5 0.5 -0.5 -0.5" gravcomp="1">
+        <camera name="wrist_cam" mode="fixed" fovy="102.89" resolution="640 480" pos="0 0 0" euler="-0.052359876 0 0"/>
+        <site name="wrist_cam_site" size="0.005" rgba="1 0 0 1" pos="0 0 0" euler="-0.052359876 0 0"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="claw_joint" joint="claw_joint" class="claw_joint" />
+  </actuator>
+  <equality>
+    <connect name="L62_L51_loop" body1="L62" body2="L51" anchor="7.84267054346842e-05 0.000152843901683891 -6.27127791489582e-11" solref="0.0005 1.0" solimp="0.9999 0.99999 1e-05" />
+    <connect name="L12_L21_loop" body1="L12" body2="L21" anchor="7.69934570404959e-05 -0.000149301772309432 -3.71602501349736e-11" solref="0.0005 1.0" solimp="0.9999 0.99999 1e-05" />
+    <connect name="L32_L23_loop" body1="L32" body2="L23" anchor="6.97890969100563e-05 4.38783351066849e-05 -8.37366374156767e-12" solref="0.0005 1.0" solimp="0.9999 0.99999 1e-05" />
+    <connect name="L42_L53_loop" body1="L42" body2="L53" anchor="-6.98002245745544e-05 4.37142907648677e-05 2.20740866855923e-11" solref="0.0005 1.0" solimp="0.9999 0.99999 1e-05" />
+  </equality>
+</mujoco>

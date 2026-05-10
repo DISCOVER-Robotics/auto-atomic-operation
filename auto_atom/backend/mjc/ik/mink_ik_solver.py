@@ -263,8 +263,9 @@ def build_franka_backend(
     ik_params: Dict[str, Any] = {}
     for op in operator_configs:
         op_extra = op.model_extra or {}
-        if "ik" in op_extra and isinstance(op_extra["ik"], dict):
-            ik_params = op_extra["ik"]
+        ik_block = op_extra.get("ik") or {}
+        if ik_block:
+            ik_params = ik_block
             break
 
     ik_solver = MinkIKSolver(

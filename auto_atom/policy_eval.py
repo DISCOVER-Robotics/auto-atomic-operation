@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
+from .config_loader import load_task_file
 from .framework import (
     Operation,
     OperationConditionType,
@@ -36,7 +37,6 @@ from .runtime import (
     _check_stage_condition,
     _collect_reset_details,
     _EnvRuntimeState,
-    load_task_file,
 )
 from .utils.pose import PoseState
 
@@ -156,13 +156,10 @@ class ConfigDrivenDemoPolicy:
             if not mask[env_index] or env_action is None:
                 continue
             plan = context.plan[env_action.stage_index]
-            operator = context.backend.get_operator_handler(plan.operator_name)
-            target = context.backend.get_object_handler(plan.stage.object)
-            result = TaskRunner._run_action(
+            result = TaskRunner._run_stage_action(
                 env_index=env_index,
-                operator=operator,
+                plan=plan,
                 action=env_action.action,
-                target=target,
                 backend=context.backend,
                 env_mask=self._single_env_mask(context.backend.batch_size, env_index),
             )
@@ -194,11 +191,9 @@ class ConfigDrivenDemoPolicy:
     ) -> List[PrimitiveAction]:
         if self._cached_stage_indices[env_index] != stage_index:
             plan = evaluator.stage_plans[stage_index]
-            self._cached_actions[env_index] = deepcopy(
-                self.builder.build_actions(
-                    plan.stage,
-                    plan.last_orientation_before,
-                )[0]
+            context = evaluator._require_context()
+            self._cached_actions[env_index] = TaskRunner._build_stage_actions(
+                plan, self.builder, context
             )
             self._cached_stage_indices[env_index] = stage_index
             self._action_indices[env_index] = 0

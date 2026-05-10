@@ -14,8 +14,10 @@ Usage::
 
 from __future__ import annotations
 
+import os
 import sys
 import tkinter as tk
+import tkinter.font as tkfont
 from dataclasses import dataclass
 from tkinter import ttk
 from typing import Callable, Dict, List, Optional
@@ -50,6 +52,144 @@ from auto_atom.utils.pose import (
 
 AXES = ("x", "y", "z", "roll", "pitch", "yaw")
 POSITION_AXES = ("x", "y", "z")
+
+
+def _enable_high_dpi_awareness() -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+    except Exception:
+        return
+    try:
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except Exception:
+        pass
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        return
+    except Exception:
+        pass
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+
+def _env_float(name: str) -> Optional[float]:
+    raw_value = os.environ.get(name)
+    if raw_value is None or raw_value == "":
+        return None
+    try:
+        return float(raw_value)
+    except ValueError:
+        print(f"[ui] ignore invalid {name}={raw_value!r}")
+        return None
+
+
+def _env_int(name: str, default: int) -> int:
+    raw_value = os.environ.get(name)
+    if raw_value is None or raw_value == "":
+        return default
+    try:
+        return int(raw_value)
+    except ValueError:
+        print(f"[ui] ignore invalid {name}={raw_value!r}")
+        return default
+
+
+def _clamped(value: float, minimum: float, maximum: float) -> float:
+    return min(max(value, minimum), maximum)
+
+
+def _detected_tk_scaling(root: tk.Tk) -> Optional[float]:
+    dpi_values = []
+    try:
+        width_mm = float(root.winfo_screenmmwidth())
+        height_mm = float(root.winfo_screenmmheight())
+        if width_mm > 0:
+            dpi_values.append(root.winfo_screenwidth() / (width_mm / 25.4))
+        if height_mm > 0:
+            dpi_values.append(root.winfo_screenheight() / (height_mm / 25.4))
+    except tk.TclError:
+        dpi_values = []
+    dpi_values = [dpi for dpi in dpi_values if 60.0 <= dpi <= 360.0]
+    if dpi_values:
+        return sum(dpi_values) / len(dpi_values) / 72.0
+    try:
+        return float(root.winfo_fpixels("1i")) / 72.0
+    except tk.TclError:
+        return None
+
+
+def _preferred_font_family(
+    root: tk.Tk,
+    candidates: tuple[str, ...],
+    fallback: str,
+) -> str:
+    try:
+        available_families = set(tkfont.families(root))
+    except tk.TclError:
+        return fallback
+    for family in candidates:
+        if family in available_families:
+            return family
+    return fallback
+
+
+def _configure_font(font_name: str, family: str, size: int) -> None:
+    try:
+        font = tkfont.nametofont(font_name)
+    except tk.TclError:
+        return
+    font.configure(family=family, size=size)
+
+
+def _configure_tk_dpi_and_fonts(root: tk.Tk) -> None:
+    root.update_idletasks()
+    scaling = _env_float("AAO_TK_SCALING")
+    if scaling is None:
+        scaling = _detected_tk_scaling(root)
+    if scaling is not None:
+        root.tk.call("tk", "scaling", _clamped(scaling, 1.0, 3.0))
+
+    default_font = tkfont.nametofont("TkDefaultFont")
+    fixed_font = tkfont.nametofont("TkFixedFont")
+    default_family = _preferred_font_family(
+        root,
+        ("Noto Sans", "Source Sans 3", "DejaVu Sans", "Liberation Sans", "Arial"),
+        str(default_font.cget("family")),
+    )
+    fixed_family = _preferred_font_family(
+        root,
+        (
+            "Noto Sans Mono",
+            "Source Code Pro",
+            "DejaVu Sans Mono",
+            "Liberation Mono",
+            "Consolas",
+        ),
+        str(fixed_font.cget("family")),
+    )
+    default_size = _env_int("AAO_TK_FONT_SIZE", 10)
+    text_size = _env_int("AAO_TK_TEXT_FONT_SIZE", default_size)
+
+    for font_name in (
+        "TkDefaultFont",
+        "TkTextFont",
+        "TkMenuFont",
+        "TkCaptionFont",
+        "TkSmallCaptionFont",
+        "TkIconFont",
+    ):
+        _configure_font(font_name, default_family, default_size)
+    _configure_font("TkHeadingFont", default_family, default_size + 1)
+    _configure_font("TkFixedFont", fixed_family, text_size)
+
+    style = ttk.Style(root)
+    style.configure(".", font="TkDefaultFont")
+    style.configure("TLabelFrame.Label", font="TkDefaultFont")
 
 
 @dataclass(frozen=True)
@@ -160,20 +300,21 @@ def _apply_operator_initial_states(
                 pose.orientation,
             )
 
-        if initial_state.arm is not None:
-            arm_config = initial_state.arm
+        if initial_state.eef_pose is not None:
+            eef_pose_config = initial_state.eef_pose
             pose = _resolve_arm_pose(
-                arm_config,
+                eef_pose_config,
                 handler.get_end_effector_pose().select(0),
             )
             if (
-                not isinstance(arm_config, list)
-                and arm_config.reference == PoseReference.BASE
+                not isinstance(eef_pose_config, list)
+                and eef_pose_config.reference == PoseReference.BASE
             ):
+                pose_b = pose.broadcast_to(backend.batch_size)
                 pos_w, quat_w = handler.env.base_to_world(
                     handler.operator_name,
-                    np.asarray(pose.position, dtype=np.float32),
-                    np.asarray(pose.orientation, dtype=np.float32),
+                    np.asarray(pose_b.position, dtype=np.float32),
+                    np.asarray(pose_b.orientation, dtype=np.float32),
                 )
                 pose = PoseState(position=pos_w, orientation=quat_w)
             handler.set_home_end_effector_pose(pose)
@@ -251,7 +392,12 @@ class RandomizationInspector:
 
         summary = ttk.LabelFrame(outer, text="Randomization Summary")
         summary.pack(fill="x", pady=(0, 8))
-        self.summary_text = tk.Text(summary, height=12, wrap="word")
+        self.summary_text = tk.Text(
+            summary,
+            height=12,
+            wrap="word",
+            font="TkFixedFont",
+        )
         self.summary_text.pack(fill="x", padx=6, pady=6)
         self.summary_text.insert("1.0", self._summary_text())
         self.summary_text.config(state="disabled")
@@ -306,7 +452,7 @@ class RandomizationInspector:
 
         state = ttk.LabelFrame(outer, text="Current Poses")
         state.pack(fill="both", expand=True)
-        self.state_text = tk.Text(state, height=20, wrap="word")
+        self.state_text = tk.Text(state, height=20, wrap="word", font="TkFixedFont")
         self.state_text.pack(fill="both", expand=True, padx=6, pady=6)
 
         self.reset_default()
@@ -404,9 +550,8 @@ class RandomizationInspector:
                             key=f"operator-eef:{name}",
                             label=f"operator {name} eef",
                             rand_range=rand.eef,
-                            get_default_pose=lambda n=name,
-                            h=handler: self.backend._default_operator_eef_poses.get(  # type: ignore[attr-defined]
-                                n, h.get_end_effector_pose()
+                            get_default_pose=self._make_eef_default_getter(
+                                name, handler
                             ),
                             apply_pose=lambda pose,
                             h=handler: h.set_home_end_effector_pose(pose),
@@ -420,10 +565,7 @@ class RandomizationInspector:
                         key=f"operator-eef:{name}",
                         label=f"operator {name} eef",
                         rand_range=rand,
-                        get_default_pose=lambda n=name,
-                        h=handler: self.backend._default_operator_eef_poses.get(  # type: ignore[attr-defined]
-                            n, h.get_end_effector_pose()
-                        ),
+                        get_default_pose=self._make_eef_default_getter(name, handler),
                         apply_pose=lambda pose, h=handler: h.set_home_end_effector_pose(
                             pose
                         ),
@@ -457,17 +599,14 @@ class RandomizationInspector:
                 )
                 existing_keys.add(f"operator-base:{name}")
             if (
-                initial_state.arm is not None or initial_state.eef is not None
+                initial_state.eef_pose is not None or initial_state.eef is not None
             ) and f"operator-eef:{name}" not in existing_keys:
                 targets.append(
                     RandomizationTarget(
                         key=f"operator-eef:{name}",
                         label=f"operator {name} eef",
                         rand_range=zero_range,
-                        get_default_pose=lambda n=name,
-                        h=handler: self.backend._default_operator_eef_poses.get(  # type: ignore[attr-defined]
-                            n, h.get_end_effector_pose()
-                        ),
+                        get_default_pose=self._make_eef_default_getter(name, handler),
                         apply_pose=lambda pose, h=handler: h.set_home_end_effector_pose(
                             pose
                         ),
@@ -477,6 +616,34 @@ class RandomizationInspector:
                 )
                 existing_keys.add(f"operator-eef:{name}")
         return targets
+
+    def _make_eef_default_getter(
+        self,
+        name: str,
+        handler,
+    ) -> Callable[[], PoseState]:
+        """Return a closure that yields the operator's default EEF pose
+        re-anchored to the operator's **current** base, by delegating to
+        ``MujocoTaskBackend._operator_default_eef_following_base`` so the
+        runtime sampler and this tool agree on the same semantics.
+        """
+        backend = self.backend
+
+        def _getter() -> PoseState:
+            poses = []
+            for env_index in range(backend.batch_size):
+                follow_default, _ = backend._operator_default_eef_following_base(  # type: ignore[attr-defined]
+                    name, handler, env_index, sampled_poses=None
+                )
+                poses.append(follow_default)
+            return PoseState(
+                position=np.stack([np.asarray(p.position[0]) for p in poses], axis=0),
+                orientation=np.stack(
+                    [np.asarray(p.orientation[0]) for p in poses], axis=0
+                ),
+            )
+
+        return _getter
 
     def _build_cases(self) -> List[ExtremeCase]:
         cases: List[ExtremeCase] = [
@@ -636,7 +803,16 @@ class RandomizationInspector:
         return sorted(self.targets, key=sort_key)
 
     def _apply_case(self, case: ExtremeCase) -> None:
-        for target in self.targets:
+        # Reset every target to its default in the same dependency order we
+        # later use to apply offsets (base before eef, etc.). For
+        # operator-eef targets the "default" is computed against the
+        # operator's *current* base via ``_make_eef_default_getter``, so
+        # the base must already have been reset to its own default before
+        # the eef default is queried — otherwise the eef would re-anchor
+        # to whatever base happened to be left over from the previous
+        # case and we'd see the very bug this ordering is meant to avoid.
+        sorted_targets = self._sorted_targets_for_apply()
+        for target in sorted_targets:
             target.apply_pose(target.get_default_pose())
         sampled_poses: Dict[str, PoseState] = {}
         for target in self._sorted_targets_for_apply():
@@ -761,6 +937,10 @@ class RandomizationInspectorApp:
         if not isinstance(backend, MujocoTaskBackend):
             runner.close()
             raise TypeError("Only MujocoTaskBackend is supported.")
+        # Surfacing borderline IK solutions is the whole point of this tool —
+        # force the joint-limit-proximity warning on regardless of the env's
+        # default (which is off, since it's noise during normal demos).
+        backend.env.set_joint_limit_warning_enabled(True)
         backend.reset()
         backend.env.refresh_viewer()
         tuning_config = self._extract_tuning_config(cfg)
@@ -822,7 +1002,9 @@ class RandomizationInspectorApp:
     version_base=None,
 )
 def main(cfg: DictConfig) -> None:
+    _enable_high_dpi_awareness()
     root = tk.Tk()
+    _configure_tk_dpi_and_fonts(root)
     hydra_cfg = HydraConfig.get()
     config_name = hydra_cfg.job.config_name or "pick_and_place"
     overrides = _collect_cli_overrides(sys.argv[1:])

@@ -45,12 +45,23 @@ TaskRunner.update()
 | 每步重求 IK | `per_step_ik` | 每个控制周期都从当前 qpos 出发重新做一次 IK |
 | 一次求解 + 关节插值 | `solve_once_interpolate` | 目标改变时只解一次 IK，再按关节位移大小自适应计算插值步数 |
 
-此外，pose 控制现在还支持独立于 joint mode 的笛卡尔分段：
+此外，pose 控制还支持笛卡尔分段，但**只在 `per_step_ik` 模式下生效**：
 
 - 位置按 operator 默认的 `control.cartesian_max_linear_step`，或 waypoint 自己的 `max_linear_step` 做直线分段
 - 姿态按 operator 默认的 `control.cartesian_max_angular_step`，或 waypoint 自己的 `max_angular_step` 做 SLERP 分段
 
 这层分段发生在 IK 之前，目的是约束末端轨迹形状，而不是只约束关节轨迹形状。
+
+> **`solve_once_interpolate` 模式跳过笛卡尔分段。** 当
+> `joint_control_mode=solve_once_interpolate` 时，`MujocoOperatorHandler.move_to_pose`
+> 会把整段 waypoint 的最终目标位姿直接交给 env，由 env 在第一次目标变化时一次性求 IK，
+> 后续 control step 通过关节插值推进。在这种模式下：
+>
+> - `cartesian_max_linear_step` / `cartesian_max_angular_step` 不再生效
+> - waypoint 自带的 `max_linear_step` / `max_angular_step` 同样被忽略
+> - `adaptive_step_scaling`（停滞时自动缩小步长）也被绕过
+>
+> 想保留每帧重新跟踪笛卡尔子目标的语义，请改用 `per_step_ik` 模式。
 
 #### 一次求解 + 关节插值
 
@@ -247,6 +258,7 @@ task_operators:
 | `pose.max_angular_step` | `0.0` | 单个 waypoint 的笛卡尔姿态分段步长。若 > 0，则覆盖 operator 默认值 |
 | `joint_control_mode` | `solve_once_interpolate` | Joint 模式执行策略。可选 `solve_once_interpolate` 或 `per_step_ik` |
 | `joint_interp_speed` | `0.05` | 当 `joint_control_mode=solve_once_interpolate` 时，每个 control step 允许的最大单关节位移上限（rad/step），系统据此自适应计算插值步数 |
+| `control.ik_unreachable_threshold` | `30` | 连续 IK 求解失败次数阈值；超过即把当前 stage 判为 `ik_unreachable` 失败，而不是等到 `timeout_steps` 再报 `move_timeout` |
 | `n_iterations` | 300 | 每次 solve 的 mink 迭代步数。越大求解越精确，但越慢 |
 | `dt` | 0.1 | 每个 IK 迭代的虚拟时间步（秒）。`n_iterations × dt` = 总积分时长 |
 | `position_cost` | 1.0 | EEF 位置跟踪权重 |
@@ -326,6 +338,97 @@ task_operators:
         position: [-0.45, -0.06, 0.0]  # 与 XML 中 link0 位置一致
         orientation: [0, 0, 0, 1]
 ```
+
+### Home EEF 设置时的 IK 失败处理
+
+`set_operator_home_eef_pose`（由 `MujocoOperatorHandler.set_home_end_effector_pose`、
+`build_mujoco_backend` 中的 `initial_state.eef_pose`、以及 `task.randomization`
+的 `arm.eef` 采样间接调用）在 joint 模式下会做一次 IK 求解，把目标 EEF 转成
+arm `home_arm_qpos`。
+
+如果目标位姿超出工作空间，`ik_solver.solve` 返回 `None`。这种情况下：
+
+- 不再抛 `RuntimeError`，而是记录一条 `WARNING` 日志（logger
+  `auto_atom.basis.mjc.mujoco_env`），列出失败的目标 pos / quat。
+- `home_arm_qpos` 保持不变；后续 `home(env_mask)` 会回到上一次成功的
+  home 关节构型（或 keyframe 默认值）。
+- 调用方（包括 `tune_randomization_extremes.py` 等遍历极值的工具）继续执行，
+  不会因为单次不可达就退出。
+
+实际后果：YAML 中配置了不可达的 `initial_state.eef_pose` 不会再让程序崩溃，
+但日志里会出现该警告——看到这条 warning 时应当回到配置里收紧
+`task.randomization.arm.eef` 的范围或修正 `initial_state.eef_pose`，否则那一
+帧的 home 位姿与配置不一致。
+
+### 运行期 `move_to_pose` 中的 IK 失败处理
+
+`UnifiedMujocoEnv._solve_ik` 是 env 内所有 IK 调用的唯一入口（包括
+`per_step_ik` 的每帧求解、`solve_once_interpolate` 的目标变更求解、以及
+`teleport_operator` 等），它统一负责两件事：
+
+1. **失败日志节流**。`ik_solver.solve` 返回 `None` 时增加
+   `ik_failure_streak` 计数，并按 1 → 10 → 20 → ... → 100 → 200 → ...
+   的节奏打 `WARNING`，列出 base 系下的目标 pos / quat 与当前 seed qpos。
+   这样 `per_step_ik` 模式下连续撞同一个不可达目标也不会刷屏。
+2. **关节限位接近告警**（见下一节）。
+
+`MujocoOperatorHandler.move_to_pose` 在每个 control step 之后读取 env 暴露的
+`get_operator_ik_failure_streak(op_name)`：
+
+- 当连续失败次数 ≥ `control.ik_unreachable_threshold`（默认 30）时，**立刻**
+  把这一阶段判为失败，详情中会带上：
+  - `event: "ik_unreachable"`
+  - `failure_category: "ik_unreachable"`
+  - `failure_reason`：连续失败次数 + "target pose is outside the arm's reachable workspace"
+  - `ik_failure_streak`：触发时的连续失败计数
+- 不再傻等到 `timeout_steps` 才超时——前者明确指向"目标不可达"，后者只能说明"末端没收敛"。
+
+YAML 配置示例：
+
+```yaml
+task_operators:
+  arm:
+    control:
+      timeout_steps: 220
+      # 连续 30 次（约 0.6s @ update_freq=50）IK 解不出来即判失败
+      ik_unreachable_threshold: 30
+```
+
+调小 `ik_unreachable_threshold`（如 10）能更早终止跑飞的 stage；调大它对持续
+"边缘可达"的目标更宽容。把它设为一个非常大的数，行为会回退到原来的
+"等到 `timeout_steps` 再 `move_timeout`"。
+
+## 关节限位接近告警 (joint-limit proximity warning)
+
+每次 IK 求解成功后，env 还能可选地检查解出来的关节角是否贴近硬件限位
+（`mjModel.jnt_range`）：当某个关节距离上下限小于 `~0.05 rad`（约 2.9°）时，
+打一条 `WARNING`，提示该解可能位于奇异区或即将撞限位。
+
+### 启停
+
+默认**关闭**——demo 跑起来时这是噪声。开启方式：
+
+```python
+env.set_joint_limit_warning_enabled(True)
+```
+
+`examples/tune_randomization_extremes.py` 在打开时强制 enable，因为它的本职就是
+扫极端 pose 找出工作空间边界。
+
+### 行为
+
+- 单关节单侧（lower / upper）只告一次，进入危险带（< 0.05 rad）时触发，
+  **退出**危险带需要至少回退 `0.10 rad`（hysteresis），避免在边界处来回刷
+  warning。
+- 日志里会包含：context（`per_step_ik` / `solve_once_interpolate` / `teleport_operator` 等）、
+  operator 名、joint 名、当前角（rad + deg）、距限位的距离、以及限位本身。
+
+### 用途
+
+- 调 `task.randomization.arm.eef` 范围时，看哪些采样让 arm 顶到限位
+- 调 `initial_state.base_pose` / `initial_state.eef_pose` 时，看 home 位姿是否
+  靠近限位
+- 调 keyframe / `initial_joint_positions` 时，提前发现首步 IK 就贴近限位的情况
 
 ## 自定义 IK Solver
 

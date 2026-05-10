@@ -54,7 +54,8 @@ class P7AnalyticalIKSolver:
         )
         target_T[:3, 3] = pos_b
 
-        # The reference seed keeps the analytical solver on the nearest branch.
+        # The reference seed keeps the analytical solver on the nearest
+        # branch.
         with contextlib.redirect_stdout(io.StringIO()):
             solutions = self._solver.ik(
                 target_T,
@@ -144,8 +145,9 @@ def build_p7_xf9600_backend(
     ik_params: Dict[str, Any] = {}
     for op in operator_configs:
         op_extra = op.model_extra or {}
-        if "ik" in op_extra and isinstance(op_extra["ik"], dict):
-            ik_params = op_extra["ik"]
+        ik_block = op_extra.get("ik") or {}
+        if ik_block:
+            ik_params = ik_block
             break
 
     ik_solver = P7AnalyticalIKSolver(

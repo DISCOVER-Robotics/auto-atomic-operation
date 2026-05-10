@@ -95,9 +95,27 @@ An object is considered "displaced" when:
 
 | Parameter | Location | Default | Description |
 |-----------|----------|---------|-------------|
-| `displacement_threshold` | `MujocoObjectHandler.__init__` | `0.01` m | Minimum distance moved to count as displaced |
+| `displacement_threshold` | `StageControlConfig` (`task.stages[].param.displacement_threshold`) | `0.01` m | Minimum distance moved to count as displaced |
+| `displacement_threshold` | `MujocoObjectHandler.__init__` | `0.01` m | Constructor default used when no per-stage value is set |
 
-**Usage**: Pass when creating the object handler (not currently exposed in YAML configs).
+**Usage**: Set on the stage param to override the backend default for `displaced` checks (typical for `push` / `pull`):
+
+```yaml
+stages:
+  - name: open_door
+    operation: push
+    operator: arm
+    param:
+      # Without this the default 1 cm threshold can be satisfied by the
+      # lever rotation alone, even if the door body itself never opens.
+      displacement_threshold: 0.10
+      pre_move: ...
+      post_move: ...
+```
+
+The runtime forwards the configured value into `is_object_displaced(...)` in
+[`runtime.py`](../../auto_atom/runtime.py); when the field is omitted the
+backend default still applies.
 
 ---
 
@@ -287,13 +305,15 @@ task_operators:
 | `control.grasp.grasp_axis` | 2 | - | Grasp direction axis (0=X, 1=Y, 2=Z) |
 | `control.grasp.settle_steps` | 5 | steps | Min steps before checking grasp |
 | `control.timeout_steps` | 100 | steps | Max steps per action before timeout |
+| `control.ik_unreachable_threshold` | 30 | streak | Consecutive IK failures inside `move_to_pose` after which the stage fails fast with `failure_category: ik_unreachable` instead of waiting for `timeout_steps` |
 
-**Note**: Object-level parameters (`displacement_threshold`, `position_tolerance`) are not yet exposed in YAML.
+**Note**: `displacement_threshold` is now exposed per-stage as
+`task.stages[].param.displacement_threshold`. Object-level
+`position_tolerance` remains a constructor argument only.
 
 ---
 
 ## Future Improvements
 
-1. Expose backend parameters in YAML task configs
-2. Add per-stage timeout overrides
-3. Support custom post-condition predicates
+1. Add per-stage timeout overrides
+2. Support custom post-condition predicates

@@ -100,7 +100,7 @@ defaults are recorded, so:
 
 - `task.randomization.arm.base` uses `initial_state.base_pose` as its baseline.
 - Direct `task.randomization.arm` and nested `task.randomization.arm.eef`
-  use `initial_state.arm` as their home EEF baseline.
+  use `initial_state.eef_pose` as their home EEF baseline.
 - `initial_state.eef` only sets the gripper/open-close control value; it does
   not change the pose randomization baseline.
 - If an operator `initial_state` field is omitted, the baseline falls back to
@@ -150,8 +150,9 @@ Add a `randomization` block under `task` in your YAML config.
 Keys are object or operator names.
 
 - Objects take a direct per-axis range.
-- Operators may use the direct per-axis form (which now means end-effector
-  randomization) or a nested form to randomize `base` and `eef` independently.
+- Operators must use the **nested form** with explicit `base:` and/or `eef:`
+  sub-entries. The direct per-axis shorthand on an operator key is no longer
+  supported and raises `TypeError` at sample time.
 
 ```yaml
 task:
@@ -164,19 +165,14 @@ task:
       # yaw: [-0.524, 0.524]   # radians
       collision_radius: 0.04   # metres, for collision rejection
     arm:
-      # Direct form → randomizes the operator's home EEF pose
-      x: [-0.015, 0.015]
-      y: [-0.015, 0.015]
-      collision_radius: 0.15
-    # Nested form (same operator name) — randomizes base and eef independently:
-    # arm:
-    #   base:
-    #     x: [-0.015, 0.015]
-    #     y: [-0.015, 0.015]
-    #   eef:
-    #     x: [-0.01, 0.01]
-    #     y: [-0.01, 0.01]
-    #     z: [-0.005, 0.005]
+      base:                    # randomize the operator's base
+        x: [-0.015, 0.015]
+        y: [-0.015, 0.015]
+        collision_radius: 0.15
+      eef:                     # ...and/or the home end-effector pose
+        x: [-0.01, 0.01]
+        y: [-0.01, 0.01]
+        z: [-0.005, 0.005]
 ```
 
 ### Supported axes
@@ -204,7 +200,7 @@ interpreted:
 |-------------------|-----------------------------------------------------------------------------------------|
 | `relative` (default) | Sampled values are **added** to the entity's default pose (the existing behavior). |
 | `absolute_world`  | Sampled values are **absolute world-frame** coordinates (metres) / Euler angles (rad). |
-| `absolute_base`   | Sampled values are absolute coordinates in the **operator's base frame**, then transformed to world before being applied. **Only valid for operator EEF randomization** (direct operator form or the nested `eef:` sub-entry). |
+| `absolute_base`   | Sampled values are absolute coordinates in the **operator's base frame**, then transformed to world before being applied. **Only valid for the nested operator `eef:` sub-entry.** |
 | `<entity_name>`   | **Entity-reference mode.** The referenced entity is randomized first (dependency ordering via topological sort). Then a **delta-carry** is applied: `delta = ref_sampled * ref_default⁻¹` is computed and applied to this entity's default pose, preserving the original spatial relationship. After carrying, the per-axis ranges are applied as additive offsets (like `relative` mode). For an **object** name the referenced pose is the object pose; for an **operator** name (plain, no suffix) the referenced pose is the operator's **base** — equivalent to `<operator>.base` below. |
 | `<operator>.base` / `<operator>.eef` | **Operator-attribute reference.** Same delta-carry semantics as an entity name, but anchored to the operator's **base** (`get_base_pose()`) or **home end-effector** (`get_end_effector_pose()`) pose. Only `.base` / `.eef` are recognized, and only for operator names. A plain operator name (e.g. `arm`) is equivalent to `arm.base`. |
 
@@ -304,17 +300,17 @@ Restrictions on `absolute_base`:
 
 ### Operator semantics
 
-For operator entries:
+Operator entries must use the nested form with explicit `base:` and/or `eef:`
+sub-entries. Writing per-axis ranges directly under an operator key (the legacy
+"direct form") is rejected at sample time with a `TypeError`.
 
-- **Direct form** `arm: {x: ..., y: ...}` randomizes the operator's **home
-  end-effector pose** (previously it randomized the base).
-- **Nested form** lets you configure `base` and `eef` independently:
-  - `base` randomizes `get_base_pose()`
-    - for mocap operators this is the virtual base frame
-    - for joint-mode operators this is the base reference frame
-  - `eef` randomizes the operator home end-effector pose
-  - reset updates the stored home EEF pose and then homes the operator to it
-  - `base` and `eef` can be configured together
+- `base` randomizes `get_base_pose()`
+  - for mocap operators this is the virtual base frame
+  - for joint-mode operators this is the base reference frame
+- `eef` randomizes the operator home end-effector pose; reset updates the
+  stored home EEF pose and then homes the operator to it
+- `base` and `eef` can be configured together; each sub-entry has its own
+  `reference`, `collision_radius`, and per-axis ranges
 
 ### collision_radius
 
@@ -533,20 +529,22 @@ The randomization logic lives in `SceneBackend` (the mixin used by `MujocoTaskBa
    `TaskUpdate.details["initial_poses"]`. This allows the caller to log initial
    conditions without accessing backend internals.
    For operators, the returned value always contains both `base_pose` and
-   `eef_pose`, regardless of whether the randomization entry used the direct
-   shorthand or the nested `base`/`eef` form.
+   `eef_pose`, regardless of which sub-entries (`base`, `eef`, or both) were
+   configured under the operator key.
 
 ### Entity resolution
 
 Each randomization key is resolved in order:
 1. `object_handlers[name]` — uses `get_pose()` / `set_pose()`.
-2. `operator_handlers[name]`
-   - direct form uses `get_end_effector_pose()` /
+2. `operator_handlers[name]` — must use the nested
+   `OperatorRandomizationConfig` form:
+   - `base:` randomizes `get_base_pose()` and applies via `set_pose()`
+   - `eef:` randomizes the home end-effector pose and applies via
      `set_home_end_effector_pose()`
-   - nested form can additionally randomize the base via `get_base_pose()` /
-     `set_pose()`
-   - for `reference: absolute_base` the sampler also calls `get_base_pose()`
-     to transform between the base frame and world
+   - for `reference: absolute_base` (only valid on the `eef:` sub-entry) the
+     sampler also calls `get_base_pose()` to transform between the base
+     frame and world
+   - a plain ``PoseRandomRange`` directly under an operator key is rejected
 3. If neither matches, a warning is emitted and the key is skipped.
 
 References are resolved with the same fallback:

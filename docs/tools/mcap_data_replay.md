@@ -58,6 +58,7 @@ All replay settings live under the `replay` key in Hydra overrides
 | `reset_from_first_frame` | `bool`       | `true`                                 | Apply the first recorded action as the post-reset initial state |
 | `steps_per_action`    | `int`           | `1`                                    | Physics steps per recorded action (set >1 for sub-stepping) |
 | `kinematic`           | `bool`          | `false`                                | `true`: write qpos directly (exact positions); `false`: drive actuators through physics |
+| `load_on_initialize`  | `bool`          | `true`                                 | If `true`, the demo NPZ / MCAP is loaded inside `DataReplayRunner.from_config()`. Set `false` when constructing the runner before the demo source is known and you intend to call `set_demo_path(..., load=True)` later. |
 
 ### Video output (script-level only)
 
@@ -258,12 +259,37 @@ runner.close()
 ### Dynamic demo switching
 
 Use `set_demo_path()` to change the demo source between episodes without
-rebuilding the runner:
+rebuilding the runner. By default the new demo is loaded lazily on the next
+`reset()`; pass `load=True` to load it immediately so the runner is ready to
+step right away:
 
 ```python
+# Lazy: new demo loads on the next reset()
 runner.set_demo_path(mcap_path="data/recording_002.mcap")
-runner.reset()  # loads the new demo
+runner.reset()
+
+# Eager: load immediately, useful when you want to inspect demo length /
+# trajectory before the next reset.
+runner.set_demo_path(mcap_path="data/recording_003.mcap", load=True)
 ```
+
+Eager loading returns `False` and logs the exception if the demo fails to
+parse, leaving the runner's existing demo in place. The lazy path returns
+`True` after marking the policy stale; any load errors then surface from
+`reset()`.
+
+### Accessing the underlying environment
+
+`DataReplayRunner.get_env()` (inherited from `RunnerBase`) returns the
+`MujocoEnv` instance the runner is driving, e.g. for capturing observations
+without driving an action:
+
+```python
+obs = runner.get_env().capture_observation()
+```
+
+`TaskRunner` and `PolicyEvaluator` expose the same method, so any code that
+needs the env can stay agnostic to which runner type is in use.
 
 ### Kinematic vs physics replay
 

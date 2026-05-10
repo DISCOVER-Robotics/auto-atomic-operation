@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import numpy as np
 from hydra.utils import instantiate
-from omegaconf import DictConfig
+from omegaconf import DictConfig, ListConfig, OmegaConf
 from pydantic import BaseModel
 
 from auto_atom.framework import TaskFileConfig
@@ -52,8 +52,11 @@ def prepare_task_file(
 ) -> TaskFileConfig:
     ComponentRegistry.clear()
     raw = instantiate(cfg)
-    # if not isinstance(raw, dict):
-    #     raise TypeError("Config root must be a mapping.")
+    # Strip OmegaConf wrappers so downstream code (framework / runtime /
+    # backends) only ever sees plain Python types — no module outside this
+    # entry-point layer should need to import omegaconf.
+    if isinstance(raw, (DictConfig, ListConfig)):
+        raw = OmegaConf.to_container(raw, resolve=True)
     return config_cls.model_validate(raw)
 
 
