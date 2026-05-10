@@ -907,6 +907,10 @@ class RandomizationInspectorApp:
         if not isinstance(backend, MujocoTaskBackend):
             runner.close()
             raise TypeError("Only MujocoTaskBackend is supported.")
+        # Surfacing borderline IK solutions is the whole point of this tool —
+        # force the joint-limit-proximity warning on regardless of the env's
+        # default (which is off, since it's noise during normal demos).
+        backend.env.set_joint_limit_warning_enabled(True)
         backend.reset()
         backend.env.refresh_viewer()
         tuning_config = self._extract_tuning_config(cfg)
