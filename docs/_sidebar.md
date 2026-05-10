@@ -61,5 +61,7 @@
 
 - **Migration Notes**
   - [XML / Mesh / GS Migration](/migration-notes/xml_mesh_gs_migration_notes.md)
-  - [Docsify / Pages GIF Notes](/migration-notes/docsify_github_pages_media_notes.md)
-  - [Docsify Cover Color Notes](/migration-notes/docsify_cover_color_notes.md)
+
+- **Docs Site**
+  - [GitHub Pages Media Notes](/docs-site/github_pages_media_notes.md)
+  - [Cover Color Notes](/docs-site/cover_color_notes.md)
