@@ -100,6 +100,7 @@ class P7V3AnalyticalIKSolver:
         flange_T = self._site_transform(data, flange_sid)
         tcp_T = self._site_transform(data, tcp_sid)
         self._solver.T_tcp = np.linalg.inv(flange_T) @ tcp_T
+        # print(f"Configured P7V3AnalyticalIKSolver TCP transform:\n{self._solver.T_tcp}")
         self._solver.inv_tcp = np.linalg.inv(self._solver.T_tcp)
 
 
@@ -154,6 +155,8 @@ def build_p7_v3_umi_v3_backend(
         flange_site_name=_P7V3_FLANGE_SITE,
         tcp_site_name=_P7V3_TCP_SITE,
     )
+
+    print("fk_result:", ik_solver._solver.fk([0.0] * 7))
 
     eef_aidx = first_env._op_eef_aidx.get("arm", np.array([]))
     eef_ctrl_index = int(eef_aidx[0]) if len(eef_aidx) > 0 else 0

@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
@@ -813,14 +814,21 @@ class UnifiedMujocoEnv(MujocoBasis):
                 s.planned_joint_target_qpos = joint_targets.copy()
                 s.planned_joint_progress = 1
                 s.planned_joint_steps_total = 1
+                # print(f"ik succeeded: {eef_in_base.position[0]}, {eef_in_base.orientation[0]}")
             else:
-                raise RuntimeError(
-                    f"IK failed for operator '{op_name}' home EEF pose "
-                    f"(base-frame target: pos={np.array2string(np.asarray(eef_in_base.position[0]), precision=4)}, "
-                    f"quat={np.array2string(np.asarray(eef_in_base.orientation[0]), precision=4)}). "
-                    f"The target may be outside the arm's reachable workspace. "
-                    f"Check the EEF randomization range in your config."
+                logging.getLogger(__name__).warning(
+                    "IK failed for operator '%s' home EEF pose "
+                    "(base-frame target: pos=%s, quat=%s); keeping previous "
+                    "home pose. The target may be outside the arm's reachable "
+                    "workspace — check the EEF randomization range in your "
+                    "config.",
+                    op_name,
+                    np.array2string(np.asarray(eef_in_base.position[0]), precision=4),
+                    np.array2string(
+                        np.asarray(eef_in_base.orientation[0]), precision=4
+                    ),
                 )
+                return
         else:
             base_body_pos, base_body_quat_xyzw = self._eef_in_base_to_base_body_world(
                 s, *self._world_to_base(pos_w, quat_w, s.base_pos, s.base_quat)

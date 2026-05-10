@@ -327,6 +327,27 @@ task_operators:
         orientation: [0, 0, 0, 1]
 ```
 
+### Home EEF 设置时的 IK 失败处理
+
+`set_operator_home_eef_pose`（由 `MujocoOperatorHandler.set_home_end_effector_pose`、
+`build_mujoco_backend` 中的 `initial_state.eef_pose`、以及 `task.randomization`
+的 `arm.eef` 采样间接调用）在 joint 模式下会做一次 IK 求解，把目标 EEF 转成
+arm `home_arm_qpos`。
+
+如果目标位姿超出工作空间，`ik_solver.solve` 返回 `None`。这种情况下：
+
+- 不再抛 `RuntimeError`，而是记录一条 `WARNING` 日志（logger
+  `auto_atom.basis.mjc.mujoco_env`），列出失败的目标 pos / quat。
+- `home_arm_qpos` 保持不变；后续 `home(env_mask)` 会回到上一次成功的
+  home 关节构型（或 keyframe 默认值）。
+- 调用方（包括 `tune_randomization_extremes.py` 等遍历极值的工具）继续执行，
+  不会因为单次不可达就退出。
+
+实际后果：YAML 中配置了不可达的 `initial_state.eef_pose` 不会再让程序崩溃，
+但日志里会出现该警告——看到这条 warning 时应当回到配置里收紧
+`task.randomization.arm.eef` 的范围或修正 `initial_state.eef_pose`，否则那一
+帧的 home 位姿与配置不一致。
+
 ## 自定义 IK Solver
 
 实现 `IKSolver` 协议即可替换 mink：

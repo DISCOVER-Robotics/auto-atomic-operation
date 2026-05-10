@@ -39,7 +39,7 @@
 
   <worldbody>
     <body name="p7_mount" pos="1 0.4 -0.3" childclass="p7_arm_v3">
-      <geom name="table_robot" pos="0 0 -0.5" size="0.15 0.2 0.5" type="box" contype="1"/>
+      <!-- <geom name="table_robot" pos="0 0 -0.5" size="0.15 0.2 0.5" type="box" contype="1"/> -->
 
       <geom type="mesh" rgba="0.75294 0.75294 0.75294 1" mesh="base_link" contype="0" conaffinity="0"/>
 
@@ -84,7 +84,7 @@
                       <site name="umi_gripper_mount_site" pos="0 0 0" size="0.006" type="sphere" rgba="1 0 0 1"/>
 
                       <body name="tcp_frame" pos="0.1601 0 0" quat="1 0 0 0" gravcomp="1">
-                        <site name="tcp_site" pos="0 0 0" quat="1 0 0 0" size="0.001" type="sphere" rgba="0 1 0 1"/>
+                        <!-- <site name="tcp_site" pos="0 0 0" quat="1 0 0 0" size="0.001" type="sphere" rgba="0 1 0 1"/> -->
                         <!-- eef_pose is the IK / task target. Place it at the
                              actual finger-pad mid-line of the umi_gripper_v3
                              so task offsets follow the same TCP-relative
