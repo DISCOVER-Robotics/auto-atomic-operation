@@ -62,3 +62,28 @@ and gripper control.
 
 Use **Full Reload** when you add new object/operator names that were not
 registered when the scene was first opened.
+
+## Joint-limit proximity warnings
+
+The inspector force-enables `UnifiedMujocoEnv.set_joint_limit_warning_enabled(True)`
+on startup, even though the env's default is off. Surfacing borderline IK
+solutions is the entire point of this tool, so the env will log a `WARNING`
+whenever an IK-solved joint angle lands within ~0.05 rad (≈ 2.9°) of a hard
+joint limit. The log line includes the operator, joint name, current angle
+(rad + deg), distance to limit, and the limit value.
+
+Use these warnings as a signal that:
+
+- The randomization range is letting the arm reach poses that just barely
+  satisfy IK and would behave poorly in production — tighten the per-axis
+  range until the warnings stop, or
+- The default `initial_state.base_pose` / `initial_state.eef_pose` itself is
+  already close to a limit and any randomization on top will push past it,
+  so the home pose should be re-tuned.
+
+Each (joint, side) only warns once per entry into the danger band; the warning
+re-arms after the joint moves at least 0.10 rad back from the limit, so the
+log will not flap when a solution sits right at the boundary.
+
+See [IK Control § 关节限位接近告警](../ik-motion-control/ik_control.md) for the
+full warning-system contract.

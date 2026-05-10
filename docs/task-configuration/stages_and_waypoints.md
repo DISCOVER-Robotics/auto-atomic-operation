@@ -1,12 +1,15 @@
 # Stages & Waypoints
 
-This page documents two less-obvious fields on stage / waypoint
+This page documents three less-obvious fields on stage / waypoint
 configuration that are easy to miss but frequently needed:
 
 - `StageConfig.site` — re-base `object_world` / `object` references onto a
   site or geometry instead of the stage object's body origin.
 - `PoseControlConfig.static` — freeze a tracking reference at the first
   control tick so a rigidly-grasped object does not chase itself.
+- `StageControlConfig.displacement_threshold` — per-stage override of the
+  distance an object must move before the `displaced` post-condition is
+  satisfied.
 
 ## Stage reference site
 
@@ -87,6 +90,44 @@ Semantics:
   no-op for them.
 - `relative` waypoints operate against the current pose at their first
   tick regardless of this flag.
+
+## Stage displacement threshold
+
+Operations whose success constraint is `displaced` (notably `push` and
+`pull`) judge success by checking `||current_pos - initial_pos|| >
+threshold` on the stage object. The default threshold is `0.01` m
+(`MujocoObjectHandler.__init__`), which is fine for picking up a block
+from a table but easy to satisfy spuriously when the stage object
+articulates instead of translating — for example, a door whose lever
+rotates but whose body never opens.
+
+Set `displacement_threshold` under `param` to override the default for a
+single stage:
+
+```yaml
+stages:
+  - name: open_door
+    object: handle_body_phys
+    operation: push
+    operator: arm
+    param:
+      # Without this the default 1 cm threshold can be satisfied by the
+      # lever rotation alone, and the stage would report success even if
+      # the door body itself never moved.
+      displacement_threshold: 0.10
+      pre_move: ...
+      post_move: ...
+```
+
+Semantics:
+
+- The value (in metres) is forwarded into
+  `SceneBackend.is_object_displaced(...)` only for the single stage that
+  declares it; other stages keep using the backend default.
+- Only meaningful when the operation's success constraint is
+  `displaced`. On other operations the field is ignored.
+- See [Backend Conditions](../mujoco-backend/mujoco_backend_conditions.md#3-displaced-condition)
+  for how `displaced` is computed.
 
 ## Related
 

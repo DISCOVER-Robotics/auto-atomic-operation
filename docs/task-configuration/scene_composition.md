@@ -63,6 +63,9 @@ This is implemented in `MujocoBasis.reset()`. The same logic is mirrored in [`ex
 | `assets/xmls/robots/airbot_play_with_g2p.xml`   | Airbot Play + G2P gripper                                  |
 | `assets/xmls/robots/airbot_g2p.xml`             | Standalone G2P gripper assembly (used by `*_with_g2p.xml`) |
 | `assets/xmls/robots/xf9600_mocap.xml`           | Mocap-driven floating XFG-9600 gripper                     |
+| `assets/xmls/robots/p7_arm_v3_with_umi_gripper_v3.xml` | 7-DOF P7 arm v3 + UMI gripper v3 (driven by an analytical IK solver) |
+| `assets/xmls/robots/umi_gripper_v3.xml`         | Standalone UMI gripper v3 assembly (referenced by both the v3 arm and the mocap variant) |
+| `assets/xmls/robots/umi_gripper_v3_mocap.xml`   | Mocap-driven floating UMI gripper v3                       |
 
 Across all G2P variants the driven actuator joint is `eef_claw_joint`, the
 finger pad geoms are `eef_left_finger_pad_upper` / `eef_right_finger_pad_upper`,
@@ -83,13 +86,22 @@ Most tasks pick a robot via the basis config they extend:
 | `aao_configs/basis_p7_xf9600.yaml`    | P7 arm + XF9600                                                              |
 | `aao_configs/basis_p7_g2p.yaml`       | P7 arm + G2P                                                                 |
 | `aao_configs/basis_p7_xf9600_composable.yaml` | Composable variant of the P7 + XF9600 stack                          |
+| `aao_configs/basis_p7_v3_umi_v3.yaml`         | P7 arm v3 + UMI gripper v3 (analytical IK via `P7V3AnalyticalIKSolver`) |
 | `aao_configs/basis_mocap_eef_xf9600.yaml`     | Mocap-driven floating XF9600                                         |
+| `aao_configs/basis_mocap_eef_umi_v3.yaml`     | Mocap-driven floating UMI gripper v3                                 |
 | `aao_configs/basis_franka.yaml`       | Franka Panda + Robotiq                                                       |
 
 Task configs that bind to one of the new robots include
 `open_door_airbot_play_g2p`, `cup_on_coaster_airbot_p7`,
 `arrange_flowers_gs_airbot_p7`, `wipe_the_table_gs_airbot_p7`, and
 `press_{blue,green,pink}_button_airbot_p7`.
+
+Tasks that bind to the **P7 v3 + UMI v3** stack:
+
+- `cup_on_coaster_gs_airbot_p7` — joint-mode arm via `basis_p7_g2p`
+- `cup_on_coaster_gs_airbot_p7_umi` — joint-mode arm via `basis_p7_v3_umi_v3`
+- `open_door_p7_v3_umi_v3` — joint-mode arm via `basis_p7_v3_umi_v3`
+- `pick_and_place_umi_v3` — mocap variant via `basis_mocap_eef_umi_v3`
 
 ## Iterating with the viewer
 
