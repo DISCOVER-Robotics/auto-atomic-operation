@@ -1,5 +1,6 @@
 """Import-friendly runtime package for the Auto Atomic Operation framework."""
 
+from .config_loader import load_config, load_task_file, load_task_file_hydra
 from .framework import (
     AutoAtomConfig,
     EefControlConfig,
@@ -39,9 +40,6 @@ from .runtime import (
     TaskFlowBuilder,
     TaskRunner,
     TaskUpdate,
-    load_config,
-    load_task_file,
-    load_task_file_hydra,
 )
 from .utils.pose import PoseState
 

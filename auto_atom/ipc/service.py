@@ -17,8 +17,9 @@ import numpy as np
 import rpyc
 from rpyc.utils.server import ThreadedServer
 
+from ..config_loader import load_task_file, load_task_file_hydra
 from ..policy_eval import PolicyEvaluator
-from ..runtime import ExecutionContext, load_task_file, load_task_file_hydra
+from ..runtime import ExecutionContext
 from .serialize import (
     deserialize_value,
     serialize_execution_record,

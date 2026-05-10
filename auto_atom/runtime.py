@@ -11,8 +11,6 @@ from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional, Protocol, runtime_checkable
 
 import numpy as np
-from hydra.utils import instantiate
-from omegaconf import DictConfig, OmegaConf
 
 from .framework import (
     OPERATION_CONDITIONS,
@@ -620,6 +618,8 @@ class TaskRunner:
         )
 
     def from_yaml(self, path: str | Path) -> "TaskRunner":
+        from .config_loader import load_task_file
+
         return self.from_config(load_task_file(path))
 
     def from_config(self, config: TaskFileConfig) -> "TaskRunner":
@@ -1916,63 +1916,3 @@ def _resolve_policy_completion_pose(
         action=completion_action,
         reference_site=reference_site,
     )
-
-
-def load_yaml(path: str | Path) -> Dict[str, Any]:
-    config = OmegaConf.load(Path(path))
-    data = OmegaConf.to_container(config, resolve=True)
-    if not isinstance(data, dict):
-        raise TypeError(f"YAML root must be a mapping: {path}")
-    return data
-
-
-def load_config(path: str | Path) -> AutoAtomConfig:
-    return load_task_file(path).task
-
-
-def load_task_file(path: str | Path) -> TaskFileConfig:
-    config_path = Path(path)
-    config = OmegaConf.load(config_path)
-    if not isinstance(config, DictConfig):
-        raise TypeError(f"YAML root must be a mapping: {config_path}")
-
-    instantiate(config)
-    raw = OmegaConf.to_container(config, resolve=True)
-    if not isinstance(raw, dict):
-        raise TypeError(f"YAML root must be a mapping: {config_path}")
-    return TaskFileConfig.model_validate(raw)
-
-
-def load_task_file_hydra(
-    config_name: str,
-    config_dir: str | Path | None = None,
-    overrides: list[str] | None = None,
-) -> TaskFileConfig:
-    """Load a task file using Hydra compose API (supports ``defaults`` merging).
-
-    Unlike :func:`load_task_file` which only reads a single YAML file,
-    this function uses Hydra's compose API so that ``defaults`` lists are
-    properly resolved and merged.
-
-    Parameters
-    ----------
-    config_name:
-        Name of the config (without ``.yaml`` suffix), e.g. ``"pick_and_place"``.
-    config_dir:
-        Absolute or relative path to the config directory.
-        Defaults to ``<cwd>/aao_configs``.
-    overrides:
-        Optional Hydra override strings, e.g. ``["task.seed=123"]``.
-    """
-    from hydra import compose, initialize_config_dir
-    from hydra.utils import instantiate as hydra_instantiate
-
-    resolved_dir = str(Path(config_dir or (Path.cwd() / "aao_configs")).resolve())
-    with initialize_config_dir(config_dir=resolved_dir, version_base=None):
-        cfg = compose(config_name=config_name, overrides=overrides or [])
-
-    hydra_instantiate(cfg)
-    raw = OmegaConf.to_container(cfg, resolve=True)
-    if not isinstance(raw, dict):
-        raise TypeError("Config root must be a mapping.")
-    return TaskFileConfig.model_validate(raw)

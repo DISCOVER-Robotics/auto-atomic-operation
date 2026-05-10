@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
@@ -350,6 +351,13 @@ class MujocoOperatorHandler(OperatorHandler):
             [ControlSignal.RUNNING] * self.env.batch_size, dtype=object
         )
         details = [{} for _ in range(self.env.batch_size)]
+        # In ``solve_once_interpolate`` mode the env solves IK once for the
+        # final waypoint pose and then interpolates joint targets, so the
+        # handler must hand the unmodified target down — running cartesian
+        # step clamping (or adaptive step scaling) here would shift
+        # ``target_pos_in_base`` every frame and force the env to replan
+        # every step, defeating the single-shot semantics.
+        interp_mode = self.joint_control_mode == "solve_once_interpolate"
         for env_index in range(self.env.batch_size):
             if not mask[env_index]:
                 continue
@@ -370,60 +378,67 @@ class MujocoOperatorHandler(OperatorHandler):
             ori_err = quaternion_angular_distance(
                 current_eef.orientation[env_index], desired_ori[env_index]
             )
-            if self.control.adaptive_step_scaling:
-                improved = pos_err < (
-                    self._move_best_pos_error[env_index] - 1e-4
-                ) or ori_err < (self._move_best_ori_error[env_index] - 1e-3)
-                if improved:
-                    self._move_best_pos_error[env_index] = min(
-                        self._move_best_pos_error[env_index], pos_err
-                    )
-                    self._move_best_ori_error[env_index] = min(
-                        self._move_best_ori_error[env_index], ori_err
-                    )
-                    self._move_stall_count[env_index] = 0
-                    self._move_step_scale[env_index] = min(
-                        1.0, self._move_step_scale[env_index] * 1.1
-                    )
-                else:
-                    self._move_stall_count[env_index] += 1
-                    if self._move_stall_count[env_index] >= 8:
-                        self._move_step_scale[env_index] = max(
-                            0.1, self._move_step_scale[env_index] * 0.5
+
+            if interp_mode:
+                # Pass the final waypoint pose straight through; the env
+                # owns motion shaping via joint-space interpolation.
+                pos_goal = desired_pos[env_index].copy()
+                ori_goal = desired_ori[env_index].copy()
+            else:
+                if self.control.adaptive_step_scaling:
+                    improved = pos_err < (
+                        self._move_best_pos_error[env_index] - 1e-4
+                    ) or ori_err < (self._move_best_ori_error[env_index] - 1e-3)
+                    if improved:
+                        self._move_best_pos_error[env_index] = min(
+                            self._move_best_pos_error[env_index], pos_err
+                        )
+                        self._move_best_ori_error[env_index] = min(
+                            self._move_best_ori_error[env_index], ori_err
                         )
                         self._move_stall_count[env_index] = 0
+                        self._move_step_scale[env_index] = min(
+                            1.0, self._move_step_scale[env_index] * 1.1
+                        )
+                    else:
+                        self._move_stall_count[env_index] += 1
+                        if self._move_stall_count[env_index] >= 8:
+                            self._move_step_scale[env_index] = max(
+                                0.1, self._move_step_scale[env_index] * 0.5
+                            )
+                            self._move_stall_count[env_index] = 0
 
-            max_linear_step = (
-                float(
-                    pose.max_linear_step
-                    if pose.max_linear_step > 0.0
-                    else self.control.cartesian_max_linear_step
-                )
-                * self._move_step_scale[env_index]
-            )
-            max_angular_step = (
-                float(
-                    pose.max_angular_step
-                    if pose.max_angular_step > 0.0
-                    else self.control.cartesian_max_angular_step
-                )
-                * self._move_step_scale[env_index]
-            )
-            pos_goal = desired_pos[env_index].copy()
-            ori_goal = desired_ori[env_index].copy()
-            if max_linear_step > 0.0:
-                pos_delta = pos_goal - current_eef.position[env_index]
-                pos_dist = float(np.linalg.norm(pos_delta))
-                if pos_dist > max_linear_step:
-                    pos_goal = current_eef.position[env_index] + pos_delta * (
-                        max_linear_step / pos_dist
+                max_linear_step = (
+                    float(
+                        pose.max_linear_step
+                        if pose.max_linear_step > 0.0
+                        else self.control.cartesian_max_linear_step
                     )
-            if max_angular_step > 0.0 and ori_err > max_angular_step:
-                ori_goal = quaternion_slerp(
-                    current_eef.orientation[env_index],
-                    ori_goal,
-                    fraction=max_angular_step / ori_err,
+                    * self._move_step_scale[env_index]
                 )
+                max_angular_step = (
+                    float(
+                        pose.max_angular_step
+                        if pose.max_angular_step > 0.0
+                        else self.control.cartesian_max_angular_step
+                    )
+                    * self._move_step_scale[env_index]
+                )
+                pos_goal = desired_pos[env_index].copy()
+                ori_goal = desired_ori[env_index].copy()
+                if max_linear_step > 0.0:
+                    pos_delta = pos_goal - current_eef.position[env_index]
+                    pos_dist = float(np.linalg.norm(pos_delta))
+                    if pos_dist > max_linear_step:
+                        pos_goal = current_eef.position[env_index] + pos_delta * (
+                            max_linear_step / pos_dist
+                        )
+                if max_angular_step > 0.0 and ori_err > max_angular_step:
+                    ori_goal = quaternion_slerp(
+                        current_eef.orientation[env_index],
+                        ori_goal,
+                        fraction=max_angular_step / ori_err,
+                    )
 
             target_pos_b, target_quat_b = self.env.world_to_base(
                 self.operator_name, pos_goal, ori_goal
@@ -1908,14 +1923,8 @@ def build_mujoco_backend(
     env_op_bindings = getattr(env.envs[0], "_operators", {}) if env.envs else {}
     for operator in operator_configs:
         op_extra = operator.model_extra or {}
-        ik_extra = (
-            op_extra.get("ik", {}) if isinstance(op_extra.get("ik"), dict) else {}
-        )
-        control_extra = (
-            op_extra.get("control", {})
-            if isinstance(op_extra.get("control"), dict)
-            else {}
-        )
+        ik_extra = op_extra.get("ik") or {}
+        control_extra = op_extra.get("control") or {}
         control_cfg = MujocoControlConfig.model_validate(control_extra)
         # Inherit per-operator body/site/actuator names from the env's
         # OperatorBinding. This keeps the handler in sync with the env
@@ -1950,8 +1959,10 @@ def build_mujoco_backend(
             if ctrl_span > 0:
                 control_extra = dict(control_extra)
                 tol_block = control_extra.setdefault("tolerance", {})
-                if isinstance(tol_block, dict) and "eef" not in tol_block:
+                if isinstance(tol_block, Mapping) and "eef" not in tol_block:
+                    tol_block = dict(tol_block)
                     tol_block["eef"] = min(0.03, max(1e-4, ctrl_span * 0.2))
+                    control_extra["tolerance"] = tol_block
                     control_cfg = MujocoControlConfig.model_validate(control_extra)
         operator_handlers[operator.name] = MujocoOperatorHandler(
             operator_name=operator.name,

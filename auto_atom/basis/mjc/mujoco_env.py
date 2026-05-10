@@ -562,9 +562,24 @@ class UnifiedMujocoEnv(MujocoBasis):
     ) -> None:
         """Advance one control step toward the target EEF pose (base frame).
 
-        Joint mode: solve IK every step from current qpos. The solver's
-        ``max_joint_delta`` clamp limits per-step joint displacement, so
-        the arm smoothly converges without branch jumps.
+        Joint mode dispatches on ``joint_control_mode``:
+
+        ``per_step_ik``
+            Solve IK every step from the current qpos. ``max_joint_delta``
+            clamps per-step joint displacement to suppress branch jumps.
+            Designed for callers that feed a sliding cartesian sub-target.
+
+        ``solve_once_interpolate``
+            Treat ``target_pos_b/target_quat_b`` as the **final** waypoint
+            pose. IK is solved once at the moment the target changes; the
+            resulting joint solution is reached over
+            ``ceil(max|Δq| / joint_interp_speed)`` control steps via linear
+            joint-space interpolation. Subsequent calls with the same target
+            simply advance the precomputed plan, so no per-step IK and no
+            ``max_joint_delta`` clamp run inside a waypoint. Once progress
+            saturates, the final qpos is held until the caller supplies a
+            new target.
+
         Mocap mode: convert to world base-body pose → write mocap → update.
         """
         s = self._get_op(op_name)
@@ -584,13 +599,15 @@ class UnifiedMujocoEnv(MujocoBasis):
             if s.joint_control_mode == "solve_once_interpolate":
                 target_changed = (
                     s.planned_target_pos_in_base is None
+                    or s.planned_target_quat_in_base is None
+                    or s.planned_joint_target_qpos is None
+                    or s.planned_joint_start_qpos is None
                     or not np.allclose(
                         new_pos,
                         s.planned_target_pos_in_base,
                         atol=1e-6,
                         rtol=0.0,
                     )
-                    or s.planned_target_quat_in_base is None
                     or abs(
                         float(
                             np.dot(
@@ -601,21 +618,19 @@ class UnifiedMujocoEnv(MujocoBasis):
                     )
                     < (1.0 - 1e-6)
                 )
-                need_plan = (
-                    target_changed
-                    or s.planned_joint_target_qpos is None
-                    or s.planned_joint_start_qpos is None
-                    or s.planned_joint_progress >= s.planned_joint_steps_total
-                )
 
-                if need_plan:
+                if target_changed:
+                    # Plan once for the new final target. The interpolation
+                    # below bounds per-step joint motion via
+                    # ``joint_interp_speed``; the per-step branch-jump clamp
+                    # would conflict with that bound and is intentionally
+                    # skipped here.
                     joint_targets = s.ik_solver.solve(eef_in_base, current_arm_qpos)
                     if joint_targets is None:
+                        # Solver gave up on this target; hold and wait for
+                        # the caller to supply a different pose.
                         self.update()
                         return
-                    joint_targets = self._clamp_joint_delta(
-                        joint_targets, current_arm_qpos, s.max_joint_delta
-                    )
                     s.planned_joint_start_qpos = current_arm_qpos.copy()
                     s.planned_joint_target_qpos = np.asarray(
                         joint_targets, dtype=np.float64
@@ -634,6 +649,9 @@ class UnifiedMujocoEnv(MujocoBasis):
                     s.planned_target_pos_in_base = new_pos.copy()
                     s.planned_target_quat_in_base = new_quat.copy()
 
+                # Advance the precomputed plan by exactly one control step.
+                # ``progress`` saturates at ``steps_total``, so ``alpha``
+                # caps at 1.0 and the final solved qpos is held thereafter.
                 start_qpos = np.asarray(s.planned_joint_start_qpos, dtype=np.float64)
                 final_qpos = np.asarray(s.planned_joint_target_qpos, dtype=np.float64)
                 s.planned_joint_progress = min(

@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
+from .config_loader import load_task_file
 from .framework import (
     Operation,
     OperationConditionType,
@@ -36,7 +37,6 @@ from .runtime import (
     _check_stage_condition,
     _collect_reset_details,
     _EnvRuntimeState,
-    load_task_file,
 )
 from .utils.pose import PoseState
 
