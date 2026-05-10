@@ -58,10 +58,10 @@ task:
       y: [-0.1, 0.25]
       collision_radius: 0.04
       reference: arm.base
-    # arm:
-      # base:
-      #   x: [-0.015, 0.015]
-      #   y: [-0.015, 0.015]
+    arm:
+      base:
+        x: [-0.15, 0.1]
+        y: [-0.2, 0.08]
       # eef:
       #   x: [-0.03, 0.07]
       #   y: [-0.15, 0.20]
@@ -102,7 +102,7 @@ task:
         eef:
           close: false
         post_move:
-          - position: [0.0, 0.0, 0.1]
+          - position: [0.0, 0.0, 0.02]
             reference: eef_world
             max_linear_step: 0.05
             max_angular_step: 0.25
@@ -120,7 +120,7 @@ task_operators:
         # Derived from a verified real-arm joint config:
         # j = [-2.13088, -0.54817, 2.66519, -0.33772, 0.46073, -0.22401, -0.59409]
         # FK in p7_mount frame, cross-checked by P7V3 analytical IK.
-        position: [0.27858810, 0.0, 0.04732663]
+        position: [0.2785, 0.0, 0.0]
         orientation: [0.70710678, 0.0, -0.70710678, 0.0]
         reference: base
     control:
