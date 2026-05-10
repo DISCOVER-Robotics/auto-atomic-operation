@@ -84,13 +84,13 @@
                       <site name="umi_gripper_mount_site" pos="0 0 0" size="0.006" type="sphere" rgba="1 0 0 1"/>
 
                       <body name="tcp_frame" pos="0.1601 0 0" quat="1 0 0 0" gravcomp="1">
-                        <site name="tcp_site" pos="0 0 0" quat="1 0 0 0" size="0.008" type="sphere" rgba="0 1 0 1"/>
+                        <site name="tcp_site" pos="0 0 0" quat="1 0 0 0" size="0.001" type="sphere" rgba="0 1 0 1"/>
                         <!-- eef_pose is the IK / task target. Place it at the
                              actual finger-pad mid-line of the umi_gripper_v3
                              so task offsets follow the same TCP-relative
                              convention as the xf9600 gripper (pad ~2 cm
                              behind TCP at the home pose). -->
-                        <site name="eef_pose" pos="-0.057 0 0" quat="1 0 0 0" size="0.008" type="sphere" rgba="0 0 1 1"/>
+                        <site name="eef_pose" pos="-0.0115 0 0" quat="1 0 0 0" size="0.001" type="sphere" rgba="0 0 1 1"/>
                       </body>
 
                       <body name="umi_gripper_base_mount" quat="1 0 0 0" gravcomp="1">

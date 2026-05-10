@@ -1,0 +1,56 @@
+defaults:
+  - basis
+
+env:
+  # Inject the umi_gripper_v3 mocap into every task that inherits this base.
+  # Scene XMLs stay robot-less so the same scene can host different robots
+  # by swapping ``robot_paths``.
+  robot_paths:
+    - ${assets_dir}/xmls/robots/umi_gripper_v3_mocap.xml
+  # Home pose at reset. Gripper hangs 0.4m above the floor; the driven
+  # claw slide opens (qpos=0 = max open). Tasks can override
+  # ``umi_freejoint`` for task-specific homes.
+  initial_joint_positions:
+    # freejoint: pos(xyz) + quat(wxyz) — gripper hangs 0.4m above the floor.
+    umi_freejoint: [0.0, 0.0, 0.4, 1.0, 0.0, 0.0, 0.0]
+    # Single driven gripper joint (range 0..0.0165, 0 = fully open).
+    eef_claw_joint: 0.0
+  # umi_gripper_v3 has no wrist camera, so the basis camera list referencing
+  # ``wrist_cam`` has to be overridden.
+  cameras:
+    - name: env1_cam
+      width: ${cam_width}
+      height: ${cam_height}
+      enable_color: ${enable_color}
+      enable_depth: ${enable_depth}
+      enable_mask: ${enable_mask}
+      enable_heat_map: ${enable_heat_map}
+      is_static: true
+    - name: env0_cam
+      width: ${cam_width}
+      height: ${cam_height}
+      enable_color: ${enable_color}
+      enable_depth: ${enable_depth}
+      enable_mask: ${enable_mask}
+      enable_heat_map: ${enable_heat_map}
+      is_static: true
+  enabled_sensors:
+    - camera
+    - pose
+    - joint_position
+    - joint_velocity
+    - joint_effort
+  operators:
+    arm:
+      arm_actuators: []
+      eef_actuators: [eef_claw_joint]
+      eef_output_name: gripper
+      pose_site: eef_pose
+      root_body: umi_interface
+      mocap_body: umi_mocap
+      freejoint: umi_freejoint
+      imu_acc: imu_acc
+      imu_gyro: imu_gyro
+      imu_quat: imu_quat
+      pose_sensor_pos: global_gripper_pos
+      pose_sensor_quat: global_gripper_quat

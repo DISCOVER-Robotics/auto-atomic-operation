@@ -13,11 +13,20 @@
       <default class="visual">
         <geom type="mesh" group="2" contype="0" conaffinity="0" />
       </default>
+      <!-- Body-internal collision geoms keep contype=4 / conaffinity=0 so
+           they neither self-collide nor interfere with scene objects (the
+           original third-party design intent). Only the finger pads need
+           to grip the workpiece. -->
       <default class="collision">
-        <geom type="mesh" group="0" contype="1" conaffinity="0" condim="3" priority="1" solref="0.001 1" solimp="0.99 0.99 0.001" friction="1.0 0.1 0.005" margin="0" gap="0.0005" />
+        <geom type="mesh" group="0" contype="4" conaffinity="0" condim="3" priority="1" solref="0.001 1" solimp="0.99 0.99 0.001" friction="1.0 0.1 0.005" margin="0" gap="0.0005" />
       </default>
+      <!-- finger_collision keeps contype=2 (so it can be referenced by
+           explicit excludes if needed) and conaffinity=1 so it interacts
+           with default-affinity scene objects (e.g. the source_block at
+           contype=1). Non-finger gripper parts (contype=4) still don't
+           collide with the fingers because their conaffinity is 0. -->
       <default class="finger_collision">
-        <geom type="mesh" group="0" contype="2" conaffinity="0" condim="4" priority="2" solref="0.001 1" solimp="0.99 0.99 0.001" friction="1.0 0.1 0.005" margin="0" gap="0.0005" />
+        <geom type="mesh" group="0" contype="2" conaffinity="1" condim="4" priority="2" solref="0.001 1" solimp="0.99 0.99 0.001" friction="1.0 0.1 0.005" margin="0" gap="0.0005" />
       </default>
     </default>
   </default>

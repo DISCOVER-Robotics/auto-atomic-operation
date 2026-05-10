@@ -1,0 +1,61 @@
+<mujoco model="umi_gripper_v3 mocap">
+  <compiler angle="radian" autolimits="true"/>
+  <!-- Match the solver/integrator used by the gripper. The umi_gripper_v3
+       linkages are stiff (solref="0.0005 1.0") so an implicit integrator
+       with enough iterations is required. -->
+  <option integrator="implicitfast" iterations="80" noslip_iterations="1"/>
+
+  <asset>
+    <!-- Load the standalone gripper as a nested model. The gripper keeps its
+         own compiler/meshdir/assets — only the mocap+freejoint scaffolding
+         lives here. -->
+    <model name="umi_gripper_v3" file="umi_gripper_v3.xml"/>
+  </asset>
+
+  <worldbody>
+    <!-- Mocap body: kinematic target driven by code -->
+    <body name="umi_mocap" mocap="true">
+      <geom type="box" size="0.01 0.01 0.01" rgba="0 1 0 0" contype="0" conaffinity="0"/>
+    </body>
+
+    <!-- Physical body tracked via weld constraint -->
+    <body name="umi_interface" gravcomp="1" pos="0 0 0">
+      <freejoint name="umi_freejoint"/>
+      <inertial mass="0.1" pos="0 0 0" diaginertia="0.01 0.01 0.01"/>
+
+      <!-- IMU site sits at the interface origin so imu_quat reflects the
+           commanded mocap orientation directly. -->
+      <site name="imu"/>
+
+      <!-- Grasping frame. eef_pose sits at base_link + 0.1486 m along x
+           (= 0.1601 − 0.0115), matching the offset used in
+           ``p7_arm_v3_with_umi_gripper_v3.xml`` (tcp_frame at +0.1601 with
+           the eef_pose site at −0.0115 inside it). Identity orientation;
+           x_eef points along the gripper's +x approach axis, so the
+           top-down grasp orientation in task yamls remains
+           ``[0.707, 0, -0.707, 0]`` (xyzw, 180° around (1,0,-1)/√2). -->
+      <site name="eef_pose" pos="0.1486 0 0" quat="1 0 0 0"/>
+      <site name="gripper"  pos="0.1486 0 0" quat="1 0 0 0"/>
+
+      <!-- Attach the full umi_gripper_v3 (base_link + fingers) under this
+           interface body. The attach prefix ``eef_`` matches the
+           naming convention used by other arm + gripper assemblies. -->
+      <attach model="umi_gripper_v3" prefix="eef_"/>
+    </body>
+  </worldbody>
+
+  <equality>
+    <weld body1="umi_mocap" body2="umi_interface" solref="0.3 1" solimp="0.95 0.99 0.001"/>
+  </equality>
+
+  <sensor>
+    <!-- Global eef pose sensors (consumed by the arm operator) -->
+    <framepos  objtype="site" objname="eef_pose" name="global_gripper_pos"/>
+    <framequat objtype="site" objname="eef_pose" name="global_gripper_quat"/>
+
+    <!-- IMU sensors attached to the interface body -->
+    <accelerometer site="imu" name="imu_acc"/>
+    <gyro          site="imu" name="imu_gyro"/>
+    <framequat     objtype="site" objname="imu" name="imu_quat"/>
+  </sensor>
+</mujoco>
