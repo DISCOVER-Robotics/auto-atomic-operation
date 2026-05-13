@@ -62,6 +62,7 @@ class ReplayScriptConfig(DataReplayConfig):
     gif_width: int = Field(default=320)
     save_gif: bool = Field(default=False)
     save_mp4: bool = Field(default=False)
+    use_input: bool = Field(default=False)
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +172,14 @@ def main(cfg: DictConfig) -> None:
     )
 
     # --- Set replay overrides on DictConfig ---
-    script_only_keys = ("camera", "fps", "gif_width", "save_gif", "save_mp4")
+    script_only_keys = (
+        "camera",
+        "fps",
+        "gif_width",
+        "save_gif",
+        "save_mp4",
+        "use_input",
+    )
     with open_dict(cfg):
         if "replay" not in cfg:
             cfg.replay = {}
@@ -210,6 +218,8 @@ def main(cfg: DictConfig) -> None:
                 runner.get_observation()
             updates_used += 1
             print(f"Replay step {step}: {update.stage_name}")
+            if script_cfg.use_input:
+                input("Press Enter to continue to the next step...")
             if bool(np.all(update.done)):
                 break
 
