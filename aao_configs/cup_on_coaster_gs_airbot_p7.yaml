@@ -118,7 +118,12 @@ task_operators:
         position: [0.2, 0.0, 0.1]
         orientation: [0.0, 0.0, 0.0, 1.0]
       eef_pose:
-        position: [0.2, 0.0, 0.15]
+        # Aligned to the GT training data (zoyo/cup, 1100 episodes, identical
+        # initial joint = [1.347,-1.289,-1.432,-0.287,-2.849,-0.303,0.954]).
+        # FK on that joint gives the EEF position below; the previous
+        # [0.2,0,0.15] sat 14.4 cm away from the training distribution and
+        # produced OOD observations in closed-loop sim.
+        position: [0.2824, -0.0014, 0.0314]
         orientation: [0.70710678, 0.0, -0.70710678, 0.0]
         reference: base
     control:
