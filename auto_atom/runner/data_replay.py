@@ -1642,6 +1642,15 @@ class DataReplayRunner(RunnerBase):
         if not done_on_success and policy.remaining_steps > 0:
             task_update.done[task_update.success] = False
 
+        # Once the recorded trajectory is exhausted, any env that has not
+        # already succeeded is treated as a failed replay. Without this the
+        # evaluator only sets ``done`` for successes (or for failures detected
+        # mid-action via ``action_feedback``), so a recording whose final frame
+        # never satisfied the success condition would leave the FSM stuck in
+        # ``sampling`` forever, feeding ``action=None`` indefinitely.
+        if policy.remaining_steps == 0:
+            task_update.done[~task_update.success] = True
+
         return task_update
 
     def close(self) -> None:
