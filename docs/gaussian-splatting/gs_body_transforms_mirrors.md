@@ -50,6 +50,47 @@ first, then `body_mirrors`.** The mirror path can additionally bake a
 post-reflection rigid transform (see [Rotoreflections](#rotoreflections))
 for the common "mirror then rotate around the mirror plane" case.
 
+### Multi-PLY bodies (`body_gaussians` list values)
+
+`body_gaussians` values can be either a single PLY path or a list of PLY
+paths. When a list is given, the parts are concatenated into one merged
+PLY (cached under `.cache/gs_body_combos/`, keyed by sha1 of the sorted
+absolute source paths) *before* any `body_transforms` / `body_mirrors`
+operations run. After resolution the dict returned by
+`resolved_body_gaussians()` still has exactly one PLY per body — downstream
+code sees no difference between single-path and list-form entries.
+
+```yaml
+env:
+  gaussian_render:
+    body_gaussians:
+      door_body:                       # multi-part body → merged into one PLY
+        - ${assets_dir}/gs/objects/door/door_panel.ply
+        - ${assets_dir}/gs/objects/door/door_trim.ply
+      handle_gs_frame: ${assets_dir}/gs/objects/door/handle.ply
+    body_transforms:
+      door_body:                       # transform is applied to the merged PLY
+        position: [0.0, 0.0, 0.01]
+        center: [0.033, 0.007, 1.589]
+```
+
+Merged PLYs follow the same SH-degree padding rule as multi-part
+backgrounds (see `gs_background_assignment.md`): parts with lower SH
+degrees are zero-padded on the trailing coefficients so all parts agree
+on a single `(N, K*3)` SH layout. A single-element list short-circuits to
+the source path (no cache write). An empty list raises `ValueError`.
+
+The merging behavior above is the **default**. When the env config sets
+`gaussian_render.foreground_variant: true`, the same list-form values
+instead represent a *variant pool* — the entries are NOT merged; each
+batch picks one entry per body (cartesian product across bodies) and
+the chosen entry is then passed through `body_transforms` /
+`body_mirrors` like a single-path value. See the `foreground_variant`
+section in `gs_background_assignment.md` for the full FG-grouped
+round-robin schedule. The choice between merge mode and variant mode
+is per-env (not per-body): list values either all merge or all
+variant.
+
 ## `body_transforms`
 
 Rigid transform applied in the PLY's local GS coordinates.
@@ -152,6 +193,9 @@ door PLYs on the back side of the scene.
 
 Resolved PLYs are cached per (source path, operation, parameters):
 
+- `body_gaussians` list merges: `.cache/gs_body_combos/<stems>__merged_<hash>.ply`
+  — keyed by sha1 of the sorted absolute source paths. Single-element
+  lists bypass the cache and use the source path directly.
 - `body_transforms`: `.cache/gs_body_transforms/<stem>__body_xform_<hash>.ply`
   — keyed by `(path, pose, center)`.
 - `body_mirrors`: `.cache/gs_body_mirrors/<stem>__mirror_<hash>.ply`

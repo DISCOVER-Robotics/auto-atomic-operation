@@ -227,6 +227,7 @@ def test_batched_gs_reset_reassigns_multi_backgrounds_when_enabled(monkeypatch):
     )
     env = object.__new__(BatchedGSUnifiedMujocoEnv)
     env._is_multi_bg = True
+    env._foreground_variant_mode = False
     env._pending_gs_config = None
     env._share_physics = False
     env.config = SimpleNamespace(
@@ -248,6 +249,7 @@ def test_batched_gs_reset_keeps_multi_backgrounds_when_disabled(monkeypatch):
     )
     env = object.__new__(BatchedGSUnifiedMujocoEnv)
     env._is_multi_bg = True
+    env._foreground_variant_mode = False
     env._pending_gs_config = None
     env._share_physics = False
     env.config = SimpleNamespace(
@@ -724,3 +726,32 @@ def test_resolved_part_plys_applies_per_ply_transform(tmp_path):
     ys = sorted(merged.xyz[:, 1].tolist())
     assert xs == [0.0, 5.0]
     assert ys == [0.0, 7.0]
+
+
+def test_dict_position_randomization_max_combinations_none_returns_full_pool(tmp_path):
+    """Regression: ``max_combinations=None`` must return the full cartesian
+    product, not be silently capped to 1.
+
+    Previously ``_resolve_dict_with_position_randomization`` defaulted
+    ``batch`` to ``1`` when no cap was passed, which silently capped the
+    BG pool to a single combination — a problem for ``foreground_variant``
+    mode, which needs the full pool to validate ``N >= batch_size``.
+    """
+    walls = [tmp_path / f"wall{i}.ply" for i in range(4)]
+    insides = [tmp_path / "inside0.ply"]
+    for p in walls + insides:
+        _write_dummy_ply_with_offset(p, 0.0)
+
+    cfg = GaussianRenderConfig(
+        background_ply={
+            "wall": str(tmp_path / "wall*.ply"),
+            "inside": str(insides[0]),
+        },
+        # Triggers _resolve_dict_with_position_randomization (the buggy path).
+        background_transform_randomization={"inside": {"y": [-0.5, 0.5]}},
+    )
+    # max_combinations=None should yield 4*1 = 4 distinct combinations.
+    plys = cfg.resolved_background_plys(
+        max_combinations=None, rng=np.random.default_rng(0)
+    )
+    assert len(plys) == 4
