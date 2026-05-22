@@ -419,8 +419,13 @@ def _run_gs_synced_viewer(
                 cv2.LINE_AA,
             )
         draw_reload_button(frame)
-        cv2.imshow(win, frame)
-        cv2.waitKey(1)
+        try:
+            cv2.imshow(win, frame)
+            cv2.waitKey(1)
+        except cv2.error:
+            # Window was closed (X) — silently skip; outer loop will detect
+            # via getWindowProperty and exit cleanly.
+            pass
 
     reload_event = threading.Event()
     startup_start = time.perf_counter()
@@ -636,7 +641,15 @@ def _run_gs_synced_viewer(
                     break  # ESC exits both windows
                 if reload_callback is not None and key in (ord("R"), ord("r")):
                     reload_event.set()
-                if cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
+                # Detect the user clicking the X on the cv2 window. After the
+                # Qt backend destroys the window, ``getWindowProperty`` itself
+                # raises ``NULL guiReceiver`` instead of returning <1, so treat
+                # any error here as "window gone".
+                try:
+                    win_visible = cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE)
+                except cv2.error:
+                    win_visible = 0.0
+                if win_visible < 1:
                     v.close()
                     break  # GS window closed via X
                 elapsed = time.time() - step_start
@@ -680,7 +693,10 @@ def _run_gs_synced_viewer(
             )
             print("[reload] keeping previous scene", flush=True)
         reload_event.clear()
-    cv2.destroyAllWindows()
+    try:
+        cv2.destroyAllWindows()
+    except cv2.error:
+        pass
 
 
 @hydra.main(
