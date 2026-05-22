@@ -34,7 +34,7 @@ replay:
       offset:
         # Expressed in the movable entity's (operator_base) local frame.
         # -x means "pull back from the handle" regardless of which side.
-        position: [ -0.03, -0.04, 0.0 ]
+        position: [ -0.03, -0.04, -0.005 ]
         orientation: [ 0.0, 0.0, 0.0, 1.0 ]
 
   # Per-actuator clamp for the recorded trajectory.  In kinematic replay
@@ -63,7 +63,7 @@ env:
       handle_joint: handle_hinge
       kp: 80.0
       kd: 8.0
-      unlock_threshold: 0.12
+      unlock_threshold: 0.07
       lock_zone: 0.05
   viewer:
     lookat: [ 1.25, 0.15, -0.2 ]
@@ -106,6 +106,11 @@ task:
       operation: push
       operator: arm
       param:
+        # Require the handle body to translate at least 10 cm from its initial
+        # pose before the stage is considered successful. The default 1 cm
+        # threshold can be satisfied by the lever rotation alone, which would
+        # let the stage report success even if the door itself never opens.
+        # displacement_threshold: 0.10
         pre_move:
           # Use `reference: object` (full site pose) so that when
           # `door_side` is switched to `back`, the site's 180°-z rotation
