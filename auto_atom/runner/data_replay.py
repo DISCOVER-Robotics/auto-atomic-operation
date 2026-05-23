@@ -1651,6 +1651,21 @@ class DataReplayRunner(RunnerBase):
             _apply_transform_resets(evaluator, self._replay_cfg, env_mask)
             if self._replay_cfg.reset_from_first_frame:
                 _apply_first_frame_reset(evaluator, policy)
+        # Zero data.time so the first sampling-tick capture (which runs in
+        # SelfManager BEFORE AutoAtomManager applies the per-action override
+        # in update()) starts from MCAP's zero-anchored clock instead of the
+        # ~1s left over by env.reset()'s 500-step equality-constraint settle
+        # loop (mujoco_basis.py:941-942). Without this, the very first
+        # encoded frame's PTS is ~1.0s and every subsequent (correctly
+        # overridden) frame looks non-monotonic to the video encoder.
+        try:
+            envs = evaluator.get_env().envs
+        except AttributeError:
+            envs = ()
+        for sub_env in envs:
+            data = getattr(sub_env, "data", None)
+            if data is not None:
+                data.time = 0.0
         return update
 
     def update(self, env_mask: Optional[np.ndarray] = None) -> TaskUpdate:
@@ -1668,19 +1683,15 @@ class DataReplayRunner(RunnerBase):
             self._action_step = 0
 
         self._action_step += 1
-        # print(f"action={self._current_action}")
-        # input("Press Enter to continue to the next step...")
-        task_update = evaluator.update(self._current_action, env_mask)
 
-        # Re-stamp the simulator clock with the MCAP log time of the action
-        # we just applied. Downstream code (``UnifiedMujocoEnv._collect_obs``
-        # and ``GSUnifiedMujocoEnv._inject_gs_renders``) reads ``data.time``
-        # to fill each observation's ``"t"`` field, which the video sampler
-        # then uses as PTS — so this single override makes saved videos span
-        # the original MCAP-recorded duration instead of the simulator's
-        # ``num_steps * dt``. ``mj_step`` will re-increment ``data.time`` on
-        # the next step; we overwrite again so the override is always fresh
-        # by the time the next observation is captured.
+        # Stamp data.time with the MCAP log time of the action we're about
+        # to apply, BEFORE evaluator.update() runs mj_step + _collect_obs.
+        # Downstream code (``UnifiedMujocoEnv._collect_obs`` and
+        # ``GSUnifiedMujocoEnv._inject_gs_renders``) reads ``data.time`` to
+        # fill each observation's ``"t"`` field, which the video sampler
+        # then uses as PTS. Overriding after update() would leave the first
+        # captured frame with the warmup-leftover clock and cause every
+        # subsequent frame to look non-monotonic to the encoder.
         log_time_ns = policy.current_log_time_ns()
         if log_time_ns is not None:
             t_seconds = log_time_ns * 1e-9
@@ -1696,6 +1707,8 @@ class DataReplayRunner(RunnerBase):
                 data = getattr(sub_env, "data", None)
                 if data is not None:
                     data.time = t_seconds
+
+        task_update = evaluator.update(self._current_action, env_mask)
 
         # Defer done for successful envs until replay data is exhausted.
         done_on_success = self._replay_cfg.done_on_success if self._replay_cfg else True
