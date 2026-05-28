@@ -364,7 +364,7 @@ class _EnvRuntimeState:
     stage_cursor: int = 0
     active: Optional[ActiveStageState] = None
     done: bool = False
-    success: Optional[bool] = None
+    success: bool = False
     phase: Optional[str] = None
     phase_step: Optional[int] = None
     latest_status: StageExecutionStatus = StageExecutionStatus.PENDING
@@ -1444,7 +1444,7 @@ class TaskRunner:
         stage_name: List[str] = []
         status: List[StageExecutionStatus] = []
         done: List[bool] = []
-        success: List[Optional[bool]] = []
+        success: List[bool] = []
         details: List[Dict[str, Any]] = []
         phase: List[Optional[str]] = []
         phase_step: List[int] = []
@@ -1469,7 +1469,7 @@ class TaskRunner:
             stage_name=stage_name,
             status=np.asarray(status, dtype=object),
             done=np.asarray(done, dtype=bool),
-            success=np.asarray(success, dtype=object),
+            success=np.asarray(success, dtype=bool),
             details=details,
             phase=phase,
             phase_step=np.asarray(phase_step, dtype=np.int64),
