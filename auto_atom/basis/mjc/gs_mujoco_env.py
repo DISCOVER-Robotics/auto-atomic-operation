@@ -87,13 +87,18 @@ def _is_dict_background(value: Any) -> bool:
     return isinstance(value, dict)
 
 
-def _merge_background_plys(plys: Sequence[str]) -> str:
-    """Concatenate several PLYs into one merged background PLY (cached on disk).
+def _merge_background_plys(
+    plys: Sequence[str], cache_subdir: str = "gs_background_combos"
+) -> str:
+    """Concatenate several PLYs into one merged PLY (cached on disk).
 
     Each combination of part PLYs becomes a single ``GaussianData`` whose
     arrays are the concatenation of the sources along axis 0. Cached under
-    ``.cache/gs_background_combos/`` keyed by sha1 of the sorted absolute
+    ``.cache/<cache_subdir>/`` keyed by sha1 of the sorted absolute
     source paths so re-runs reuse the merged file.
+
+    Used for both multi-part backgrounds (default ``gs_background_combos``)
+    and list-valued ``body_gaussians`` (caller passes ``gs_body_combos``).
     """
     if not plys:
         raise ValueError("_merge_background_plys requires at least one PLY")
@@ -104,7 +109,7 @@ def _merge_background_plys(plys: Sequence[str]) -> str:
     key_src = "|".join(sorted(abs_paths))
     cache_key = hashlib.sha1(key_src.encode("utf-8")).hexdigest()[:12]
     stems = "+".join(Path(p).stem for p in plys)
-    cache_dir = Path(".cache/gs_background_combos")
+    cache_dir = Path(".cache") / cache_subdir
     cache_path = cache_dir / f"{stems}__merged_{cache_key}.ply"
     if cache_path.exists():
         return str(cache_path)
@@ -248,6 +253,140 @@ def _sample_env_background_indices(
     if batch_size <= num_backgrounds:
         return np.asarray(rng.permutation(num_backgrounds)[:batch_size], dtype=np.int64)
     return rng.integers(0, num_backgrounds, size=batch_size, dtype=np.int64)
+
+
+def _fg_variant_lengths(body_gaussians: Dict[str, str | list[str]]) -> Dict[str, int]:
+    """For each body, length of its variant list (1 for str values).
+
+    Returns an empty dict when ``body_gaussians`` is empty.
+    """
+    out: Dict[str, int] = {}
+    for body_name, value in body_gaussians.items():
+        if isinstance(value, str):
+            out[body_name] = 1
+        else:
+            n = len(list(value))
+            if n == 0:
+                raise ValueError(
+                    f"body_gaussians['{body_name}'] is an empty list; "
+                    f"provide at least one PLY path"
+                )
+            out[body_name] = n
+    return out
+
+
+def _fg_variant_count(body_gaussians: Dict[str, str | list[str]]) -> int:
+    """Cartesian-product count over per-body variant lists.
+
+    Returns ``1`` when all values are single-string (degenerate, single FG).
+    Returns ``0`` only when ``body_gaussians`` is empty.
+    """
+    if not body_gaussians:
+        return 0
+    total = 1
+    for n in _fg_variant_lengths(body_gaussians).values():
+        total *= n
+    return total
+
+
+def _fg_variant_at(
+    body_gaussians: Dict[str, str | list[str]], variant_idx: int
+) -> Dict[str, str]:
+    """Return the ``body_gaussians`` dict for variant index ``variant_idx``.
+
+    Variant indices are decoded against the per-body list sizes via
+    ``np.unravel_index``; body iteration order matches the source dict's
+    insertion order (Python 3.7+ guaranteed) so the mapping is stable.
+    Single-string body entries contribute a constant value across all
+    variants. The total variant count is ``_fg_variant_count``.
+    """
+    sizes_dict = _fg_variant_lengths(body_gaussians)
+    body_order = list(body_gaussians.keys())
+    sizes = [sizes_dict[b] for b in body_order]
+    total = 1
+    for s in sizes:
+        total *= s
+    if not 0 <= variant_idx < total:
+        raise IndexError(f"variant_idx={variant_idx} out of range [0, {total})")
+    multi = np.unravel_index(int(variant_idx), sizes) if sizes else ()
+    out: Dict[str, str] = {}
+    for i, body_name in enumerate(body_order):
+        value = body_gaussians[body_name]
+        if isinstance(value, str):
+            out[body_name] = value
+        else:
+            out[body_name] = list(value)[int(multi[i])]
+    return out
+
+
+class _FGBGCombinationCursor:
+    """FG-grouped round-robin cursor over the M*N (fg, bg) combination space.
+
+    Each ``next_batch()`` returns ``(fg_idx, [bg_idx_0, ..., bg_idx_{B-1}])``
+    where all ``B`` background indices are distinct and the foreground index
+    is the same. Within one round, every (fg, bg) combo appears at most
+    once. When the current FG's BG pool has fewer than ``B`` indices left,
+    the trailing remainder is dropped for the round and the cursor
+    advances to the next FG. After all ``M`` foregrounds are exhausted,
+    the round restarts with a fresh random permutation of both axes.
+
+    The cursor reuses the env's ``np.random.Generator`` so the entire
+    sampling sequence is reproducible under a fixed seed.
+    """
+
+    def __init__(
+        self,
+        num_fg: int,
+        num_bg: int,
+        batch_size: int,
+        rng: np.random.Generator,
+    ) -> None:
+        if num_fg <= 0:
+            raise ValueError(f"num_fg must be > 0; got {num_fg}")
+        if num_bg <= 0:
+            raise ValueError(f"num_bg must be > 0; got {num_bg}")
+        if batch_size <= 0:
+            raise ValueError(f"batch_size must be > 0; got {batch_size}")
+        if num_bg < batch_size:
+            raise ValueError(
+                f"foreground_variant mode requires num_bg >= batch_size "
+                f"(no duplicates allowed per batch); got num_bg={num_bg}, "
+                f"batch_size={batch_size}"
+            )
+        self.M = num_fg
+        self.N = num_bg
+        self.B = batch_size
+        self.rng = rng
+        self._start_new_round()
+
+    def _start_new_round(self) -> None:
+        self._fg_order: list[int] = [int(i) for i in self.rng.permutation(self.M)]
+        # Per-FG BG ordering, freshly shuffled at round start.
+        self._bg_orders: Dict[int, list[int]] = {
+            fg: [int(i) for i in self.rng.permutation(self.N)] for fg in range(self.M)
+        }
+        self._fg_cursor = 0
+        self._bg_cursor = 0
+
+    def next_batch(self) -> tuple[int, list[int]]:
+        """Return one (fg_idx, bg_idxs) pair, advancing the cursor.
+
+        Skips per-FG remainders smaller than ``batch_size`` and reshuffles
+        when the round is exhausted.
+        """
+        while True:
+            if self._fg_cursor >= len(self._fg_order):
+                self._start_new_round()
+            current_fg = self._fg_order[self._fg_cursor]
+            bg_order = self._bg_orders[current_fg]
+            remaining = len(bg_order) - self._bg_cursor
+            if remaining >= self.B:
+                bgs = bg_order[self._bg_cursor : self._bg_cursor + self.B]
+                self._bg_cursor += self.B
+                return current_fg, list(bgs)
+            # Drop the trailing remainder for this FG and advance.
+            self._fg_cursor += 1
+            self._bg_cursor = 0
 
 
 def _resolve_background_transform(
@@ -649,8 +788,18 @@ def _materialize_transformed_background_ply(
 class GaussianRenderConfig(BaseModel):
     model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
-    body_gaussians: Dict[str, str] = Field(default_factory=dict)
-    """Mapping from MuJoCo body name to PLY file path."""
+    body_gaussians: Dict[str, str | list[str]] = Field(default_factory=dict)
+    """Mapping from MuJoCo body name to PLY file path(s).
+
+    Each value is either:
+
+    - ``str`` — a single PLY path for the body.
+    - ``list[str]`` — multiple PLYs that are concatenated into one merged
+      PLY (cached under ``.cache/gs_body_combos/`` keyed by sha1 of the
+      sorted absolute source paths). All subsequent ``body_transforms`` /
+      ``body_mirrors`` operations treat the merged PLY as the body's
+      source, so a multi-part body still shows up as one rigid asset.
+      The same SH-degree-padding rule as background merging applies."""
     background_ply: str | list[str] | Dict[str, str | list[str]] | None = None
     """Optional background PLY. Three accepted forms:
 
@@ -740,6 +889,35 @@ class GaussianRenderConfig(BaseModel):
     render across the whole batch; only the composited background differs per
     env. Requires ``background_ply`` to be multi-valued (list, glob, or parts
     dict) and ``batch_size > 1``. Validated on ``GSEnvConfig``."""
+    foreground_variant: bool = False
+    """Enable FG-grouped round-robin sampling over the foreground × background
+    combination space.
+
+    When ``True``:
+
+    - Any ``list[str]`` value in ``body_gaussians`` is treated as a pool of
+      *variants* for that body (not merged). The total foreground variant
+      count ``M`` is the cartesian product of per-body list lengths
+      (non-list entries contribute a factor of 1, shared across all variants).
+    - The background pool has ``N`` entries (existing list / glob / parts
+      dict resolution).
+    - At init and on every ``reset`` (when
+      ``randomize_background_on_reset=true``), a single foreground variant
+      is selected for the entire batch and ``batch_size`` distinct
+      backgrounds are assigned to the envs without replacement. The cursor
+      consumes ``floor(N / batch_size) * batch_size`` backgrounds per FG
+      before advancing to the next foreground; the trailing ``N % batch_size``
+      backgrounds are skipped within the current round. After all ``M``
+      foregrounds are exhausted the combination space reshuffles.
+    - Requires ``N >= batch_size`` so each batch can have distinct
+      backgrounds without replacement. Validated in
+      ``_setup_gs_render_state``.
+    - GPU renderers for FG variants, mask renderers, and BG entries are
+      built lazily on first use and cached for the lifetime of the env.
+
+    Default ``False`` preserves the existing semantics: ``body_gaussians``
+    list values are *merged* and the per-env background assignment uses
+    independent sampling from the BG pool."""
 
     @model_validator(mode="after")
     def _validate_background_transform_randomization(
@@ -815,19 +993,53 @@ class GaussianRenderConfig(BaseModel):
         """Whether any entry of ``background_transform_randomization`` is set."""
         return bool(self.background_transform_randomization)
 
-    def resolved_body_gaussians(self) -> Dict[str, str]:
+    def resolved_body_gaussians(self, variant_idx: int | None = None) -> Dict[str, str]:
         """Return ``body_gaussians`` with any configured transforms / mirrors
-        substituted by the corresponding cached PLY paths."""
-        if not self.body_transforms and not self.body_mirrors:
-            return dict(self.body_gaussians)
+        substituted by the corresponding cached PLY paths.
 
-        unknown = (set(self.body_transforms) | set(self.body_mirrors)) - set(
-            self.body_gaussians
-        )
+        Two ways to choose the per-body PLY source:
+
+        - ``variant_idx is None`` (default) — *merge* mode. List-valued
+          entries are merged into a single PLY per body via
+          ``_merge_background_plys`` (cached under
+          ``.cache/gs_body_combos/``). Used by the standard rendering
+          path that treats list values as multi-part bodies.
+        - ``variant_idx`` is an ``int`` — *variant* mode used by
+          ``foreground_variant``: each list-valued body picks its
+          ``np.unravel_index``-decoded variant via ``_fg_variant_at``,
+          producing one of ``M = ∏ len(list)`` distinct per-body
+          combinations. No merging occurs.
+
+        ``body_transforms`` / ``body_mirrors`` then operate on whichever
+        per-body source was selected. The returned dict always maps each
+        body name to a single PLY path.
+        """
+        if variant_idx is None:
+            sources: Dict[str, str] = {}
+            for body_name, value in self.body_gaussians.items():
+                if isinstance(value, str):
+                    sources[body_name] = value
+                else:
+                    paths = list(value)
+                    if not paths:
+                        raise ValueError(
+                            f"body_gaussians['{body_name}'] is an empty list; "
+                            f"provide at least one PLY path"
+                        )
+                    sources[body_name] = _merge_background_plys(
+                        paths, cache_subdir="gs_body_combos"
+                    )
+        else:
+            sources = _fg_variant_at(self.body_gaussians, variant_idx)
+
+        if not self.body_transforms and not self.body_mirrors:
+            return sources
+
+        unknown = (set(self.body_transforms) | set(self.body_mirrors)) - set(sources)
         if unknown:
             raise ValueError(
                 f"body_transforms/body_mirrors reference unknown body(s): {sorted(unknown)}. "
-                f"Keys must appear in body_gaussians: {sorted(self.body_gaussians)}"
+                f"Keys must appear in body_gaussians: {sorted(sources)}"
             )
 
         centroids: Dict[tuple[str, str], np.ndarray] = {}
@@ -861,7 +1073,7 @@ class GaussianRenderConfig(BaseModel):
             return _centroid(paths, target)
 
         transformed: Dict[str, str] = {}
-        for body_name, src_ply in self.body_gaussians.items():
+        for body_name, src_ply in sources.items():
             spec = self.body_transforms.get(body_name)
             if spec is None:
                 transformed[body_name] = src_ply
@@ -871,14 +1083,14 @@ class GaussianRenderConfig(BaseModel):
             if spec.center is not None:
                 center = _explicit_center(spec, "body_transforms", body_name)
             elif spec.share_center_with is not None:
-                if spec.share_center_with not in self.body_gaussians:
+                if spec.share_center_with not in sources:
                     raise ValueError(
                         f"body_transforms['{body_name}'].share_center_with="
                         f"'{spec.share_center_with}' is not in body_gaussians"
                     )
                 center = _share_center(
                     spec.share_center_with,
-                    self.body_gaussians,
+                    sources,
                     self.body_transforms,
                     "body_transforms",
                 )
@@ -899,7 +1111,7 @@ class GaussianRenderConfig(BaseModel):
             if spec.center is not None:
                 center = _explicit_center(spec, "body_mirrors", body_name)
             elif spec.share_center_with is not None:
-                if spec.share_center_with not in self.body_gaussians:
+                if spec.share_center_with not in sources:
                     raise ValueError(
                         f"body_mirrors['{body_name}'].share_center_with="
                         f"'{spec.share_center_with}' is not in body_gaussians"
@@ -1173,7 +1385,11 @@ class GaussianRenderConfig(BaseModel):
         parts = list(part_pools.keys())
         sizes = [len(part_pools[p]) for p in parts]
         n_files = int(np.prod(sizes))
-        batch = max_combinations if max_combinations is not None else 1
+        # ``max_combinations=None`` means "no cap" — return all distinct file
+        # combinations, no overflow needed.  Previously this defaulted to 1
+        # which silently capped foreground_variant's BG pool to a single
+        # combination.
+        batch = max_combinations if max_combinations is not None else n_files
         n_distinct = min(batch, n_files)
         n_overflow = batch - n_distinct
 
@@ -1356,6 +1572,13 @@ class GSUnifiedMujocoEnv(UnifiedMujocoEnv):
 
         self._gs_background_source_ply = gs_cfg.background_ply
         self._is_multi_bg = gs_cfg.is_multi_background()
+        if bool(gs_cfg.foreground_variant):
+            raise ValueError(
+                "foreground_variant=True is only supported on "
+                "BatchedGSUnifiedMujocoEnv (batched class); the single-env "
+                "GSUnifiedMujocoEnv has no batch dimension to amortize FG "
+                "renderer reuse across."
+            )
         self._gs_body_gaussians = gs_cfg.resolved_body_gaussians()
         self._fg_gs_renderer = MjxBatchSplatRenderer(
             BatchSplatConfig(
@@ -1907,10 +2130,24 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         self._env_bg_idx: np.ndarray = np.zeros(self.batch_size, dtype=np.int64)
         self._bg_cache.clear()
         self._gs_mask_renderers = {}
+        # Per-variant lazy caches used in foreground_variant mode. Always
+        # initialised (cleared on each setup) so accessor helpers can read
+        # them unconditionally.
+        self._fg_renderer_cache: Dict[int, MjxBatchSplatRenderer] = {}
+        self._mask_renderer_cache: Dict[int, Dict[str, MjxBatchSplatRenderer]] = {}
+        self._bg_renderer_cache: Dict[int, MjxBatchSplatRenderer] = {}
+        self._combo_cursor: _FGBGCombinationCursor | None = None
+        self._active_fg_idx: int = 0
         gc.collect()
 
         self._gs_background_source = gs_cfg.background_ply
         self._is_multi_bg = gs_cfg.is_multi_background()
+        self._foreground_variant_mode = bool(gs_cfg.foreground_variant)
+
+        if self._foreground_variant_mode:
+            self._setup_foreground_variant_mode(gs_cfg)
+            return
+
         self._gs_body_gaussians = gs_cfg.resolved_body_gaussians()
 
         self._fg_gs_renderer = MjxBatchSplatRenderer(
@@ -1953,6 +2190,139 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         self.get_logger().info(
             f"GS renderer initialised with {n_bodies} body gaussian(s){bg_str}"
         )
+
+    def _setup_foreground_variant_mode(self, gs_cfg: GaussianRenderConfig) -> None:
+        """Initialise FG-grouped round-robin combination sampling.
+
+        Resolves the FG variant count ``M`` (cartesian product over
+        ``body_gaussians`` list values) and the BG pool size ``N``
+        (existing ``resolved_background_plys`` resolution, no
+        ``max_combinations`` cap since BG renderers are built lazily).
+        Validates ``N >= batch_size`` so each batch can use distinct
+        backgrounds without replacement, then primes the
+        ``_FGBGCombinationCursor`` and selects the first combination
+        through ``_advance_combination_cursor``.
+        """
+        if not self._is_multi_bg:
+            raise ValueError(
+                "foreground_variant=True requires a multi-valued "
+                "background_ply (list, glob, or parts dict)"
+            )
+        if not gs_cfg.body_gaussians:
+            raise ValueError(
+                "foreground_variant=True requires non-empty body_gaussians"
+            )
+
+        # FG variant count from body_gaussians cartesian product. Single-string
+        # entries contribute factor 1 (constant across variants).
+        self._fg_variant_count = _fg_variant_count(gs_cfg.body_gaussians)
+
+        # BG pool: enumerate the FULL multi-background space, no batch cap.
+        # ``_FGBGCombinationCursor`` cycles through every BG before
+        # advancing FG, so we want the full N renderers available.
+        self._bg_source_plys = gs_cfg.resolved_background_plys(
+            max_combinations=None,
+            rng=self._bg_rng,
+        )
+        n_bg = len(self._bg_source_plys)
+        if n_bg < self.batch_size:
+            raise ValueError(
+                f"foreground_variant=True requires the background pool to "
+                f"have at least batch_size entries; got {n_bg} backgrounds "
+                f"vs batch_size={self.batch_size}"
+            )
+
+        self._combo_cursor = _FGBGCombinationCursor(
+            num_fg=self._fg_variant_count,
+            num_bg=n_bg,
+            batch_size=self.batch_size,
+            rng=self._bg_rng,
+        )
+
+        # Cache the first variant's resolved body_gaussians so existing
+        # accessors (mask-name lookup, log messages) work.
+        self._gs_body_gaussians = gs_cfg.resolved_body_gaussians(variant_idx=0)
+
+        # First combination: builds FG/mask renderers for variant 0 and BG
+        # renderers for the chosen batch on demand.
+        self._advance_combination_cursor()
+
+        reset_mode = (
+            "randomized FG×BG combo on reset"
+            if gs_cfg.randomize_background_on_reset
+            else "fixed FG×BG combo after initial assignment"
+        )
+        self.get_logger().info(
+            f"GS renderer initialised with foreground_variant mode: "
+            f"M={self._fg_variant_count} FG variant(s) × N={n_bg} background(s) "
+            f"({reset_mode})"
+        )
+
+    def _get_fg_renderer(self, fg_idx: int) -> MjxBatchSplatRenderer:
+        """Lazy-build the FG splat renderer for ``fg_idx``; cache for later."""
+        cached = self._fg_renderer_cache.get(fg_idx)
+        if cached is not None:
+            return cached
+        gs_cfg = self.config.gaussian_render
+        body_gaussians = gs_cfg.resolved_body_gaussians(variant_idx=fg_idx)
+        renderer = MjxBatchSplatRenderer(
+            BatchSplatConfig(
+                body_gaussians=dict(body_gaussians),
+                background_ply=None,
+                minibatch=gs_cfg.minibatch,
+            ),
+            self.envs[0].model,
+        )
+        self._fg_renderer_cache[fg_idx] = renderer
+        return renderer
+
+    def _get_mask_renderers_for_variant(
+        self, fg_idx: int
+    ) -> Dict[str, MjxBatchSplatRenderer]:
+        """Lazy-build per-object mask renderers for FG variant ``fg_idx``."""
+        cached = self._mask_renderer_cache.get(fg_idx)
+        if cached is not None:
+            return cached
+        gs_cfg = self.config.gaussian_render
+        body_gaussians = gs_cfg.resolved_body_gaussians(variant_idx=fg_idx)
+        renderers = self._build_shared_mask_renderers(dict(body_gaussians))
+        self._mask_renderer_cache[fg_idx] = renderers
+        return renderers
+
+    def _lookup_bg_renderer(self, bg_idx: int) -> MjxBatchSplatRenderer:
+        """Return the BG renderer for ``bg_idx``, building it lazily in
+        foreground_variant mode and indexing the eager list otherwise."""
+        if self._foreground_variant_mode:
+            cached = self._bg_renderer_cache.get(int(bg_idx))
+            if cached is not None:
+                return cached
+            renderer = self._make_bg_renderer(self._bg_source_plys[int(bg_idx)])
+            self._bg_renderer_cache[int(bg_idx)] = renderer
+            return renderer
+        return self._bg_gs_renderers[int(bg_idx)]
+
+    def _advance_combination_cursor(self) -> tuple[int, np.ndarray]:
+        """Pick the next ``(fg_idx, bg_idxs)`` from ``_combo_cursor``, swap
+        the active FG/mask renderers, update ``_env_bg_idx``, and pre-build
+        the BG renderers for the chosen batch so the next ``render`` does
+        not pay JIT cost mid-call.
+
+        Returns ``(fg_idx, env_bg_idx)`` for tests / logging.
+        """
+        assert self._combo_cursor is not None, (
+            "_advance_combination_cursor called outside foreground_variant mode"
+        )
+        fg_idx, bg_idxs = self._combo_cursor.next_batch()
+        self._active_fg_idx = fg_idx
+        self._env_bg_idx = np.asarray(bg_idxs, dtype=np.int64)
+        self._fg_gs_renderer = self._get_fg_renderer(fg_idx)
+        self._gs_mask_renderers = self._get_mask_renderers_for_variant(fg_idx)
+        # Pre-build the BG renderers used by this batch.
+        for bg_idx in bg_idxs:
+            self._lookup_bg_renderer(bg_idx)
+        # Cached bg tensors are keyed by the prior env→bg mapping.
+        self._bg_cache.clear()
+        return fg_idx, self._env_bg_idx
 
     def update_gaussian_render(
         self,
@@ -2072,7 +2442,7 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         """
         self._env_bg_idx = _sample_env_background_indices(
             batch_size=self.batch_size,
-            num_backgrounds=len(self._bg_gs_renderers),
+            num_backgrounds=len(self._bg_source_plys),
             rng=self._bg_rng,
         )
         self._bg_cache.clear()
@@ -2098,7 +2468,10 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
             self._is_multi_bg
             and self.config.gaussian_render.randomize_background_on_reset
         ):
-            self._randomize_env_bg_assignment()
+            if self._foreground_variant_mode:
+                self._advance_combination_cursor()
+            else:
+                self._randomize_env_bg_assignment()
 
     def refresh_viewer(self) -> None:
         if self._share_physics:
@@ -2465,14 +2838,14 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         renderer is invoked only on the subset of envs that use it and the
         per-env results are scattered back into the full ``(Nenv, …)`` tensor.
         """
-        if not self._bg_gs_renderers:
+        if not self._bg_source_plys:
             return None
         cache_key = (tuple(cam_ids), width, height)
         if use_cache and cache_key in self._bg_cache:
             return self._bg_cache[cache_key]
 
-        if len(self._bg_gs_renderers) == 1:
-            bg_rend = self._bg_gs_renderers[0]
+        if len(self._bg_source_plys) == 1:
+            bg_rend = self._lookup_bg_renderer(0)
             bg_gsb = bg_rend.batch_update_gaussians(body_pos, body_quat)
             bg_rgb, bg_depth = bg_rend.batch_env_render(
                 bg_gsb, cam_pos, cam_xmat, height, width, fovy
@@ -2506,7 +2879,7 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         for bg_idx in unique_bg_idxs:
             env_mask = self._env_bg_idx == bg_idx
             env_sel = np.nonzero(env_mask)[0]
-            bg_rend = self._bg_gs_renderers[int(bg_idx)]
+            bg_rend = self._lookup_bg_renderer(int(bg_idx))
             sub_body_pos = body_pos[env_sel]
             sub_body_quat = body_quat[env_sel]
             sub_cam_pos = cam_pos[env_sel]
@@ -2780,7 +3153,7 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
             # bg assignment changes (on reset with randomize=True) clear the cache.
             bg_rgb_N: torch.Tensor | None = None
             bg_depth_N: torch.Tensor | None = None
-            if self._bg_gs_renderers:
+            if self._bg_source_plys:
                 bg_rgb_N, bg_depth_N = self._render_shared_per_env_backgrounds(
                     cam_pos,
                     cam_xmat,
@@ -2919,7 +3292,7 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         unique_bg_idxs = np.unique(self._env_bg_idx)
         for bg_idx in unique_bg_idxs:
             rows = np.nonzero(self._env_bg_idx == bg_idx)[0]
-            bg_rend = self._bg_gs_renderers[int(bg_idx)]
+            bg_rend = self._lookup_bg_renderer(int(bg_idx))
             gsb = bg_rend.batch_update_gaussians(body_pos, body_quat)
             sub_rgb, sub_depth = bg_rend.batch_env_render(
                 gsb, cam_pos, cam_xmat, height, width, fovy
@@ -3040,6 +3413,10 @@ class BatchedGSUnifiedMujocoEnv(BatchedUnifiedMujocoEnv):
         self._fg_gs_renderer = None
         self._bg_gs_renderers = []
         self._gs_mask_renderers = {}
+        self._fg_renderer_cache = {}
+        self._mask_renderer_cache = {}
+        self._bg_renderer_cache = {}
+        self._combo_cursor = None
         self._bg_cache.clear()
         self._pending_gs_config = None
         super().close()

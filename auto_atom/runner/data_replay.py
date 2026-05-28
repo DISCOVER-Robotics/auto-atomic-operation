@@ -316,6 +316,7 @@ class McapDemo:
 
     joint: np.ndarray  # (T, n_arm + n_grip)
     joint_names: list[str]
+    joint_times: np.ndarray | None
     base_position: np.ndarray | None
     base_orientation: np.ndarray | None
     scene_joint: np.ndarray | None
@@ -326,6 +327,7 @@ class McapDemo:
         joint: np.ndarray,
         joint_names: list[str],
         *,
+        joint_times: np.ndarray | None = None,
         base_position: np.ndarray | None = None,
         base_orientation: np.ndarray | None = None,
         scene_joint: np.ndarray | None = None,
@@ -333,6 +335,7 @@ class McapDemo:
     ) -> None:
         self.joint = joint
         self.joint_names = joint_names
+        self.joint_times = joint_times
         self.base_position = base_position
         self.base_orientation = base_orientation
         self.scene_joint = scene_joint
@@ -629,9 +632,14 @@ def _load_mcap_demo(
 
     joint = np.concatenate([arm, grip], axis=-1)
     joint_names = (arm_names or []) + (gripper_names or [])
+    # Zero-anchor the MCAP times so the resulting video starts at t=0 instead
+    # of the absolute ROS epoch (which would produce a hours-long initial gap
+    # in the encoder's PTS).
+    joint_times = arm_t - int(arm_t[0]) if arm_t.size > 0 else None
     return McapDemo(
         joint=joint,
         joint_names=joint_names,
+        joint_times=joint_times,
         base_position=base_position,
         base_orientation=base_orientation,
         scene_joint=scene_joint,
@@ -887,6 +895,11 @@ def normalize_demo_for_batch(
         result["scene_joint"] = normalize_series(demo["scene_joint"], "scene_joint")
         result["scene_joint_names"] = list(demo["scene_joint_names"])
 
+    def attach_optional_joint_times(result: Dict[str, Any]) -> None:
+        # Per-step times are 1D (T,) and shared across the batch — never sliced.
+        if "joint_times" in demo and demo["joint_times"] is not None:
+            result["joint_times"] = np.asarray(demo["joint_times"])
+
     if mode == "pose":
         result: Dict[str, np.ndarray] = {
             "position": normalize_series(demo["position"], "pose position"),
@@ -896,6 +909,7 @@ def normalize_demo_for_batch(
             result["gripper"] = normalize_series(demo["gripper"], "gripper")
         attach_optional_base_pose(result)
         attach_optional_scene_joint(result)
+        attach_optional_joint_times(result)
         return result
 
     if mode == "joint":
@@ -907,11 +921,13 @@ def normalize_demo_for_batch(
         )
         attach_optional_base_pose(result)
         attach_optional_scene_joint(result)
+        attach_optional_joint_times(result)
         return result
 
     result = {"ctrl": normalize_series(demo["ctrl"], "ctrl")}
     attach_optional_base_pose(result)
     attach_optional_scene_joint(result)
+    attach_optional_joint_times(result)
     return result
 
 
@@ -933,6 +949,25 @@ class ReplayPolicy:
         else:
             self._max = len(demo["ctrl"]) - 1
         self._step = 0
+        # Zero-anchored per-step log times (ns). Present only for MCAP-sourced
+        # demos; npz/ctrl replays leave this None so callers fall back to the
+        # simulator clock.
+        times = demo.get("joint_times") if isinstance(demo, dict) else None
+        self._times: np.ndarray | None = (
+            np.asarray(times, dtype=np.int64) if times is not None else None
+        )
+
+    def current_log_time_ns(self) -> int | None:
+        """Zero-anchored MCAP log time (ns) for the most recently emitted action.
+
+        Returns ``None`` when no times were loaded (e.g. npz replay) or when
+        no action has been emitted yet. The first frame (after ``act()`` once)
+        returns ``0``; the last frame returns the total recorded duration.
+        """
+        if self._times is None or self._step <= 0:
+            return None
+        idx = min(self._step - 1, len(self._times) - 1)
+        return int(self._times[idx])
 
     def reset(self, start_step: int = 0) -> None:
         self._step = max(0, int(start_step))
@@ -1616,6 +1651,21 @@ class DataReplayRunner(RunnerBase):
             _apply_transform_resets(evaluator, self._replay_cfg, env_mask)
             if self._replay_cfg.reset_from_first_frame:
                 _apply_first_frame_reset(evaluator, policy)
+        # Zero data.time so the first sampling-tick capture (which runs in
+        # SelfManager BEFORE AutoAtomManager applies the per-action override
+        # in update()) starts from MCAP's zero-anchored clock instead of the
+        # ~1s left over by env.reset()'s 500-step equality-constraint settle
+        # loop (mujoco_basis.py:941-942). Without this, the very first
+        # encoded frame's PTS is ~1.0s and every subsequent (correctly
+        # overridden) frame looks non-monotonic to the video encoder.
+        try:
+            envs = evaluator.get_env().envs
+        except AttributeError:
+            envs = ()
+        for sub_env in envs:
+            data = getattr(sub_env, "data", None)
+            if data is not None:
+                data.time = 0.0
         return update
 
     def update(self, env_mask: Optional[np.ndarray] = None) -> TaskUpdate:
@@ -1633,8 +1683,31 @@ class DataReplayRunner(RunnerBase):
             self._action_step = 0
 
         self._action_step += 1
-        # print(f"action={self._current_action}")
-        # input("Press Enter to continue to the next step...")
+
+        # Stamp data.time with the MCAP log time of the action we're about
+        # to apply, BEFORE evaluator.update() runs mj_step + _collect_obs.
+        # Downstream code (``UnifiedMujocoEnv._collect_obs`` and
+        # ``GSUnifiedMujocoEnv._inject_gs_renders``) reads ``data.time`` to
+        # fill each observation's ``"t"`` field, which the video sampler
+        # then uses as PTS. Overriding after update() would leave the first
+        # captured frame with the warmup-leftover clock and cause every
+        # subsequent frame to look non-monotonic to the encoder.
+        log_time_ns = policy.current_log_time_ns()
+        if log_time_ns is not None:
+            t_seconds = log_time_ns * 1e-9
+            try:
+                envs = evaluator.get_env().envs
+            except AttributeError:
+                envs = ()
+            # ``BatchedGSUnifiedMujocoEnv`` may share a single physics env
+            # across batch slots (``self.envs`` is N aliases of one object),
+            # so writing through every slot is harmless even when they're
+            # the same object.
+            for sub_env in envs:
+                data = getattr(sub_env, "data", None)
+                if data is not None:
+                    data.time = t_seconds
+
         task_update = evaluator.update(self._current_action, env_mask)
 
         # Defer done for successful envs until replay data is exhausted.
@@ -1642,6 +1715,15 @@ class DataReplayRunner(RunnerBase):
         if not done_on_success and policy.remaining_steps > 0:
             success_mask = np.asarray(task_update.success, dtype=bool)
             task_update.done[success_mask] = False
+
+        # Once the recorded trajectory is exhausted, any env that has not
+        # already succeeded is treated as a failed replay. Without this the
+        # evaluator only sets ``done`` for successes (or for failures detected
+        # mid-action via ``action_feedback``), so a recording whose final frame
+        # never satisfied the success condition would leave the FSM stuck in
+        # ``sampling`` forever, feeding ``action=None`` indefinitely.
+        if policy.remaining_steps == 0:
+            task_update.done[~task_update.success] = True
 
         return task_update
 
@@ -1728,6 +1810,8 @@ class DataReplayRunner(RunnerBase):
             if mcap_demo.scene_joint is not None:
                 demo["scene_joint"] = mcap_demo.scene_joint
                 demo["scene_joint_names"] = list(mcap_demo.scene_joint_names)
+            if mcap_demo.joint_times is not None:
+                demo["joint_times"] = mcap_demo.joint_times
         else:
             demo_name = rcfg.demo_name or "demo"
             demo_dir = rcfg.demo_dir or os.path.join(

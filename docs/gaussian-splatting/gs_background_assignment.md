@@ -411,6 +411,73 @@ _bg_gs_renderer = _bg_gs_renderers_list[_active_bg_idx]
 
 单环境没有“batch 内不重复”的问题。
 
+## `foreground_variant`：FG×BG 组合的 round-robin 模式
+
+当 `body_gaussians` 用 *列表* 表达每个 body 的多张可选 PLY 时，默认行为是把同一 body 的多张 PLY 合并成一张（`gs_body_combos` 缓存）。`foreground_variant: true` 切换到另一套语义：**列表表示 *变体池*，不合并**；每张组合 = 各 body 各挑一张 PLY 的笛卡尔积。
+
+设计目标是：在 batched 渲染时，**一个 batch 内所有 env 共享同一前景 GS renderer**（避免按 env 切前景 → JIT/GPU buffer 损耗），但每个 env 各自的背景不同；多次 reset 之后再循环到下一个前景变体。
+
+```yaml
+env:
+  gaussian_render:
+    foreground_variant: true            # 启用本模式（默认 false）
+    randomize_background_on_reset: true # reset 时推进 cursor
+    body_gaussians:
+      door_body:                        # 列表 = 变体池
+        - ${assets_dir}/gs/objects/door/door_a.ply
+        - ${assets_dir}/gs/objects/door/door_b.ply
+      handle_gs_frame: ${assets_dir}/gs/objects/door/handle.ply  # 常量
+    background_ply:
+      wall:   ${bg3dgs_dir}/wall/wall*.ply     # 部件字典 → N 张组合背景
+      inside: ${bg3dgs_dir}/inside/inside*.ply
+```
+
+### 变体计数
+
+- **M = 前景变体数** = `body_gaussians` 内各 list 长度的笛卡尔积，单字符串项贡献因子 1。
+  上例 M = 2 × 1 = 2。
+- **N = 背景池大小** = `resolved_background_plys(max_combinations=None)` 的返回长度。
+  在部件字典模式下 N = 各部件 PLY 数的笛卡尔积，这一步沿用既有的合并/缓存路径。
+
+### 采样规则：`_FGBGCombinationCursor`
+
+每次 `reset()`（在 `randomize_background_on_reset=true` 时）按以下规则推进游标：
+
+1. 当前 FG 下，从该 FG 的 BG 排列里取 `batch_size` 个**不重复**索引返回。
+2. 当前 FG 的 BG 剩余不足 `batch_size` 时（`N % batch_size` 的尾部），**直接丢弃尾部**，
+   切到下一个 FG，BG 排列从头开始。
+3. 一轮内所有 M 个 FG 都用完后，重新洗牌 FG 顺序和每个 FG 的 BG 顺序，开始下一轮。
+4. 一轮内每对 (fg, bg) 至多出现一次；跨轮可以重复。
+
+效果：每个 batch 内**所有 env 共享同一 FG**，但 BG 互不相同；连续 `floor(N / batch_size)` 次 reset 都用同一个 FG，之后切换到下一个 FG。
+
+### 约束
+
+- 必须配合多背景配置（list / glob / 部件字典）；单背景下抛 `ValueError`。
+- 必须有非空 `body_gaussians`；空字典抛 `ValueError`。
+- 必须 `N >= batch_size`，否则 batch 内无法做 BG 不放回采样，抛 `ValueError`。
+- 单环境 `GSUnifiedMujocoEnv` 不支持该模式（没有 batch 维度可分摊 FG 复用收益）；启用会抛 `ValueError`。
+
+### Renderer 生命周期：懒构建 + 缓存
+
+为避免初始化时一次性构建 M 套前景 renderer + N 套背景 renderer（最坏 M × N 套 GPU 上下文）：
+
+- 每个 FG 变体的前景 renderer 和 mask renderer **在该 variant 第一次被选中时才构建**，之后缓存在 `_fg_renderer_cache` / `_mask_renderer_cache` 中复用。
+- 每个 BG 索引对应的背景 renderer 也是懒构建 + 缓存 (`_bg_renderer_cache`)；只为当前 batch 实际选中的 BG 构建。
+- 缓存按 env 生命周期持有；`close()` 时与其他 renderer 一并释放。
+
+### 与现有开关的关系
+
+- `share_physics`：可以与 `foreground_variant` 同时启用——共享物理 + 共享 FG renderer + per-env BG renderer，渲染路径走 `_render_shared_per_env_backgrounds`。
+- `randomize_background_on_reset=false`：初始化时仍会跑一次 cursor 抽样确定 batch 的 (fg, bg) 分配，但 reset 不再推进，直到下一次重新初始化。
+- `background_transforms` / `background_transform_randomization`：BG 池构造阶段照常生效，dict 模式下也照常合并；FG 变体的 `body_transforms` / `body_mirrors` 同样按 variant 解析后的单 PLY 应用。
+
+### 默认行为（`foreground_variant: false`，向后兼容）
+
+- 列表型 `body_gaussians` 仍按 *多部件合并* 处理（`gs_body_combos` 缓存）。
+- BG 分配走 `_randomize_env_bg_assignment` 的独立采样。
+- 不构建 cursor、不持有 variant 缓存。
+
 ## 渲染生命周期
 
 多背景模式下，初始化会为所有背景创建 renderer，但不会一次性把所有背景都渲染出来。
